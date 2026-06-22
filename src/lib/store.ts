@@ -203,6 +203,14 @@ export function addCasaAposta(casa: CasaAposta): void {
   setState(state)
 }
 
+export function updateCasaAposta(id: string, data: Partial<CasaAposta>): void {
+  const state = getState()
+  if (state.casasAposta[id]) {
+    state.casasAposta[id] = { ...state.casasAposta[id], ...data }
+    setState(state)
+  }
+}
+
 export function deletarDisparo(id: string): void {
   const state = getState()
   delete state.disparos[id]

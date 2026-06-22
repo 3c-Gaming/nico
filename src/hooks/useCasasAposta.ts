@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getState, addCasaAposta, setState } from '@/lib/store'
+import { getState, addCasaAposta, updateCasaAposta, setState } from '@/lib/store'
 import type { CasaAposta } from '@/types'
 
 function hashCode(str: string): number {
@@ -56,6 +56,10 @@ export function useCasasAposta() {
     return casa
   }, [])
 
+  const update = useCallback((id: string, data: Partial<CasaAposta>) => {
+    updateCasaAposta(id, data)
+  }, [])
+
   const remove = useCallback((id: string) => {
     const state = getState()
     delete state.casasAposta[id]
@@ -65,5 +69,5 @@ export function useCasasAposta() {
   const list = Object.values(casas)
   const getById = useCallback((id: string) => casas[id] ?? null, [casas])
 
-  return { casas, list, getById, add, remove }
+  return { casas, list, getById, add, update, remove }
 }

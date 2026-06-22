@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, List, GitBranch, Plus, Menu } from 'lucide-react'
+import { Calendar, List, GitBranch, Building2, Plus, Menu } from 'lucide-react'
 import { useState } from 'react'
 
 const LINKS = [
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/disparos', label: 'Disparos', icon: List },
   { href: '/esteiras', label: 'Esteiras', icon: GitBranch },
+  { href: '/casas', label: 'Casas', icon: Building2 },
 ]
 
 export function Sidebar() {
