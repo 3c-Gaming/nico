@@ -28,16 +28,13 @@ export function slugify(nome: string): string {
 }
 
 export function useCasasAposta() {
-  const [casas, setCasas] = useState<Record<string, CasaAposta>>({})
-  const [loading, setLoading] = useState(true)
+  const [casas, setCasas] = useState<Record<string, CasaAposta>>(() => getState().casasAposta)
 
   const sync = useCallback(() => {
     setCasas({ ...getState().casasAposta })
-    setLoading(false)
   }, [])
 
   useEffect(() => {
-    sync()
     window.addEventListener('nico:state-changed', sync)
     return () => window.removeEventListener('nico:state-changed', sync)
   }, [sync])
@@ -68,5 +65,5 @@ export function useCasasAposta() {
   const list = Object.values(casas)
   const getById = useCallback((id: string) => casas[id] ?? null, [casas])
 
-  return { casas, list, getById, add, remove, loading }
+  return { casas, list, getById, add, remove }
 }

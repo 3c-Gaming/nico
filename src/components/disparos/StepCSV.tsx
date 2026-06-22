@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Download, Database, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import { Download, Database, AlertTriangle, CheckCircle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
-import type { BaseCSV, StatusBase } from '@/types'
+import type { BaseCSV } from '@/types'
 
 interface StepCSVProps {
   base: BaseCSV

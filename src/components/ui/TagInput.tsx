@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Chip } from './Chip'
 
 interface TagInputProps {
@@ -40,7 +40,7 @@ export function TagInput({
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && input.trim()) {
       e.preventDefault()
-      const casa = onAdd(input.trim())
+      onAdd(input.trim())
       setInput('')
       setShowSuggestions(false)
     }

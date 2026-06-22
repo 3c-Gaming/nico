@@ -71,8 +71,6 @@ export function CalendarioTimeline() {
               hoje={hoje}
               disparos={disparosPorDia.get(data.toISOString().split('T')[0]) ?? []}
               index={index}
-              indexHoje={indexHoje}
-              totalDias={diasVisiveis.length}
             />
           ))}
         </div>

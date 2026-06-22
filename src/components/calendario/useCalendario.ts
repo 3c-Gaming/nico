@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import type { Disparo, TipoDisparo, StatusDisparo } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
-import { useEsteiras } from '@/hooks/useEsteiras'
 import { gerarRangeDias, isMesmaData, adicionarDias, parsearDataISO } from '@/lib/datas'
 
 export interface FiltrosCalendario {
@@ -33,7 +32,6 @@ export function useCalendario() {
   })
 
   const { list: todosDisparos } = useDisparos()
-  const { list: esteiras } = useEsteiras()
 
   const fimRange = useMemo(() => adicionarDias(inicioRange, DIAS_ANTES + DIAS_DEPOIS), [inicioRange])
 

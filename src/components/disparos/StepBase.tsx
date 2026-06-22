@@ -1,6 +1,6 @@
 'use client'
 
-import type { TipoDisparo, CasaAposta } from '@/types'
+import type { TipoDisparo } from '@/types'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { TagInput } from '../ui/TagInput'
 

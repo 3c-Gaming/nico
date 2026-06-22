@@ -5,16 +5,13 @@ import { getState, patchDisparos, deletarDisparo, setState } from '@/lib/store'
 import type { Disparo } from '@/types'
 
 export function useDisparos() {
-  const [disparos, setDisparos] = useState<Record<string, Disparo>>({})
-  const [loading, setLoading] = useState(true)
+  const [disparos, setDisparos] = useState<Record<string, Disparo>>(() => getState().disparos)
 
   const sync = useCallback(() => {
     setDisparos({ ...getState().disparos })
-    setLoading(false)
   }, [])
 
   useEffect(() => {
-    sync()
     window.addEventListener('nico:state-changed', sync)
     return () => window.removeEventListener('nico:state-changed', sync)
   }, [sync])
@@ -36,5 +33,5 @@ export function useDisparos() {
   const list = Object.values(disparos)
   const getById = useCallback((id: string) => disparos[id] ?? null, [disparos])
 
-  return { disparos, list, getById, update, remove, create, loading }
+  return { disparos, list, getById, update, remove, create }
 }

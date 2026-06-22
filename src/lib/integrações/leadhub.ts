@@ -1,5 +1,3 @@
-import type { BaseCSV } from '@/types'
-
 // TODO: [INTEGRATION PENDING] Implementar cliente real do LeadHub com credenciais
 
 export async function listarBases(): Promise<{ id: string; nome: string; totalRegistros: number; criadoEm: string }[]> {

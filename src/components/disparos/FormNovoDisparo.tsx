@@ -90,17 +90,6 @@ export function FormNovoDisparo() {
       if (tipo === 'D1') {
         const esteira = criarEsteira(disparoData, Object.values(casasDisponiveis))
         createDisparo(disparoData)
-        for (const filho of [
-          esteira.disparos.d3,
-          esteira.disparos.d5,
-          esteira.disparos.d7,
-        ].filter(Boolean)) {
-          const estado = localStorage.getItem('nico_app_state')
-          if (estado) {
-            const parsed = JSON.parse(estado)
-            // Os filhos já foram adicionados ao store por criarEsteira via patchDisparos
-          }
-        }
         createEsteira(esteira)
       } else {
         createDisparo(disparoData)

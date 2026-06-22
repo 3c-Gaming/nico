@@ -1,4 +1,4 @@
-import type { Disparo, Esteira, TipoDisparo } from '@/types'
+import type { Disparo, Esteira } from '@/types'
 import { adicionarDias } from './datas'
 import { gerarNomenclatura } from './nomenclatura'
 

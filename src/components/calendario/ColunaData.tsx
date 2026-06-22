@@ -1,20 +1,17 @@
 'use client'
 
 import type { Disparo } from '@/types'
-import { formatarData, isMesmaData, parsearDataISO } from '@/lib/datas'
+import { isMesmaData } from '@/lib/datas'
 import { CardDisparo } from './CardDisparo'
-import { Link2 } from 'lucide-react'
 
 interface ColunaDataProps {
   data: Date
   hoje: Date
   disparos: Disparo[]
   index: number
-  indexHoje: number
-  totalDias: number
 }
 
-export function ColunaData({ data, hoje, disparos, index, indexHoje, totalDias }: ColunaDataProps) {
+export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
   const isHoje = isMesmaData(data, hoje)
   const isFimDeSemana = data.getDay() === 0 || data.getDay() === 6
 

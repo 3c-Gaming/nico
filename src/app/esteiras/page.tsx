@@ -4,11 +4,9 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { useEsteiras } from '@/hooks/useEsteiras'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
-import { Badge } from '@/components/ui/Badge'
 import { Chip } from '@/components/ui/Chip'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { formatarData, parsearDataISO } from '@/lib/datas'
-import { Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function EsteirasPage() {

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { ExternalLink, AlertTriangle } from 'lucide-react'
-import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
 import { Input } from '../ui/Input'
 import type { TemplateDaxx } from '@/types'
