@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# data (cache persistente em disco)
+/data/
+
+# artifacts
+0
+/AI/

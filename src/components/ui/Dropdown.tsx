@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 interface DropdownProps {
-  label: string
+  label: React.ReactNode
   children: React.ReactNode
   align?: 'left' | 'right'
 }

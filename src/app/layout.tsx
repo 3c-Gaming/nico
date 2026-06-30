@@ -14,8 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nico — Gestão de Esteiras WhatsApp",
+  title: "Nico",
   description: "Gestão de esteiras de disparo WhatsApp — do D1 ao D7, tudo sob controle.",
+  icons: {
+    icon: [
+      { url: "/logo.png", media: "(prefers-color-scheme: light)" },
+      { url: "/logo-white.png", media: "(prefers-color-scheme: dark)" },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -27,7 +33,10 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+
+      <head />
       <body className="h-full">
         <ClientLayout>{children}</ClientLayout>
       </body>

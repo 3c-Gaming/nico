@@ -15,7 +15,7 @@ interface StepAgendamentoProps {
   nomenclatura: string
   base: BaseCSV
   template?: TemplateDaxx
-  numero?: NumeroSendpulse
+  numeros: NumeroSendpulse[]
   onChangeData: (data: string) => void
   onChangeHorario: (horario: string) => void
   onChangeNomenclatura: (nome: string) => void
@@ -30,7 +30,7 @@ export function StepAgendamento({
   nomenclatura,
   base,
   template,
-  numero,
+  numeros,
   onChangeData,
   onChangeHorario,
   onChangeNomenclatura,
@@ -84,8 +84,8 @@ export function StepAgendamento({
           <span>{base.status === 'disponivel' ? base.nomeArquivo || 'Selecionada' : 'Pendente'}</span>
           <span className="text-[var(--text-muted)]">Template:</span>
           <span>{template?.nome || 'Não selecionado'}</span>
-          <span className="text-[var(--text-muted)]">Número:</span>
-          <span>{numero?.numero || 'Não selecionado'}</span>
+          <span className="text-[var(--text-muted)]">Números:</span>
+          <span>{numeros.map((n) => n.numero).join(', ') || 'Nenhum'}</span>
         </div>
       </div>
     </div>

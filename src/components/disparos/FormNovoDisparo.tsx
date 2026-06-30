@@ -11,7 +11,7 @@ import { gerarNomenclatura } from '@/lib/nomenclatura'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { StepBase } from './StepBase'
-import { StepCSV } from './StepCSV'
+import { StepBaseDrive } from './StepBaseDrive'
 import { StepTemplate } from './StepTemplate'
 import { StepNumero } from './StepNumero'
 import { StepAgendamento } from './StepAgendamento'
@@ -31,7 +31,7 @@ export function FormNovoDisparo() {
   const [notas, setNotas] = useState('')
   const [base, setBase] = useState<BaseCSV>({ status: 'pendente' })
   const [template, setTemplate] = useState<TemplateDaxx | undefined>()
-  const [numero, setNumero] = useState<NumeroSendpulse | undefined>()
+  const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [dataDisparo, setDataDisparo] = useState('')
   const [horarioDisparo, setHorarioDisparo] = useState('09:30')
   const [nomenclatura, setNomenclatura] = useState('')
@@ -81,7 +81,7 @@ export function FormNovoDisparo() {
         horarioDisparo,
         base,
         templateDaxx: template,
-        numeroSendpulse: numero,
+        numerosSendpulse: numeros.length > 0 ? numeros : undefined,
         criadoEm: now.toISOString(),
         atualizadoEm: now.toISOString(),
         notas: notas || undefined,
@@ -148,9 +148,9 @@ export function FormNovoDisparo() {
             onChangeNotas={setNotas}
           />
         )}
-        {step === 2 && <StepCSV base={base} onChange={setBase} />}
+        {step === 2 && <StepBaseDrive base={base} onChange={setBase} />}
         {step === 3 && <StepTemplate template={template} onChange={setTemplate} />}
-        {step === 4 && <StepNumero numero={numero} onChange={setNumero} />}
+        {step === 4 && <StepNumero numeros={numeros} onChange={setNumeros} />}
         {step === 5 && (
           <StepAgendamento
             tipo={tipo!}
@@ -161,7 +161,7 @@ export function FormNovoDisparo() {
             nomenclatura={nomenclatura}
             base={base}
             template={template}
-            numero={numero}
+            numeros={numeros}
             onChangeData={setDataDisparo}
             onChangeHorario={setHorarioDisparo}
             onChangeNomenclatura={setNomenclatura}

@@ -1,4 +1,4 @@
-import type { Disparo, Esteira } from '@/types'
+import type { Disparo, Esteira, CasaAposta } from '@/types'
 import { adicionarDias } from './datas'
 import { gerarNomenclatura } from './nomenclatura'
 
@@ -8,7 +8,7 @@ export function calcularDataFilho(dataD1: Date, tipo: 'D3' | 'D5' | 'D7'): Date 
   return adicionarDias(dataD1, OFFSET[tipo])
 }
 
-export function criarEsteira(disparoD1: Disparo, casasAposta: { id: string; nome: string; slug: string; cor: string }[]): Esteira {
+export function criarEsteira(disparoD1: Disparo, casasAposta: CasaAposta[]): Esteira {
   const dataCriacao = new Date(disparoD1.criadoEm)
   const dataD1 = parseData(disparoD1.dataDisparo)
 
@@ -38,7 +38,7 @@ export function criarEsteira(disparoD1: Disparo, casasAposta: { id: string; nome
     horarioDisparo: disparoD1.horarioDisparo,
     base: { ...disparoD1.base },
     templateDaxx: disparoD1.templateDaxx ? { ...disparoD1.templateDaxx } : undefined,
-    numeroSendpulse: disparoD1.numeroSendpulse ? { ...disparoD1.numeroSendpulse } : undefined,
+    numerosSendpulse: disparoD1.numerosSendpulse?.map((n) => ({ ...n })),
     esteiraPaiId: esteiraId,
     criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),

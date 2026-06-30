@@ -1,20 +1,35 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useSyncExternalStore, useCallback } from 'react'
 import { getState, patchEsteiras, setState } from '@/lib/store'
 import type { Esteira } from '@/types'
 
+let cachedJson = ''
+let cachedEsteiras: Record<string, Esteira> = {}
+
+function subscribe(callback: () => void) {
+  window.addEventListener('nico:state-changed', callback)
+  return () => window.removeEventListener('nico:state-changed', callback)
+}
+
+function getSnapshot() {
+  const state = getState()
+  const json = JSON.stringify(state.esteiras)
+  if (json !== cachedJson) {
+    cachedJson = json
+    cachedEsteiras = JSON.parse(json)
+  }
+  return cachedEsteiras
+}
+
+const SNAPSHOT_VAZIO: Record<string, Esteira> = {}
+
+function getServerSnapshot() {
+  return SNAPSHOT_VAZIO
+}
+
 export function useEsteiras() {
-  const [esteiras, setEsteiras] = useState<Record<string, Esteira>>(() => getState().esteiras)
-
-  const sync = useCallback(() => {
-    setEsteiras({ ...getState().esteiras })
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('nico:state-changed', sync)
-    return () => window.removeEventListener('nico:state-changed', sync)
-  }, [sync])
+  const esteiras = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
   const update = useCallback((id: string, data: Partial<Esteira>) => {
     patchEsteiras({ [id]: data as Esteira })

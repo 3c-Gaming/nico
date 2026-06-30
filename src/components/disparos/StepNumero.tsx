@@ -1,21 +1,36 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Phone, AlertTriangle } from 'lucide-react'
+import { Phone, AlertTriangle, Wifi, WifiOff, Check } from 'lucide-react'
 import { Spinner } from '../ui/Spinner'
 import { Input } from '../ui/Input'
 import type { NumeroSendpulse } from '@/types'
 
-interface StepNumeroProps {
-  numero?: NumeroSendpulse
-  onChange: (numero?: NumeroSendpulse) => void
+function StatusNumero({ status, inboxNaoLidas }: { status: NumeroSendpulse['status']; inboxNaoLidas: number }) {
+  return (
+    <span className={`flex items-center gap-1 text-xs ${status === 'ativo' ? 'text-green-500' : 'text-red-400'}`}>
+      {status === 'ativo' ? <Wifi size={10} /> : <WifiOff size={10} />}
+      {status === 'ativo' ? 'Ativo' : 'Inativo'}
+      {inboxNaoLidas > 0 && (
+        <span className="ml-1 px-1 py-0.5 rounded-full text-[10px] leading-none font-medium bg-[var(--d1)]/20 text-[var(--d1)]">
+          {inboxNaoLidas} não lida(s)
+        </span>
+      )}
+    </span>
+  )
 }
 
-export function StepNumero({ numero, onChange }: StepNumeroProps) {
+interface StepNumeroProps {
+  numeros: NumeroSendpulse[]
+  onChange: (numeros: NumeroSendpulse[]) => void
+}
+
+export function StepNumero({ numeros: selected, onChange }: StepNumeroProps) {
   const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
   const [manual, setManual] = useState(false)
+  const [manualInput, setManualInput] = useState('')
 
   useEffect(() => {
     async function fetch() {
@@ -28,9 +43,9 @@ export function StepNumero({ numero, onChange }: StepNumeroProps) {
       } catch {
         setOffline(true)
         setNumeros([
-          { id: 'num_001', numero: '+5511999990000', chatbotId: 'chat_001', descricao: 'SB Receptivo ODD 100x' },
-          { id: 'num_002', numero: '+5511999991111', chatbotId: 'chat_002', descricao: 'MGM Geral' },
-          { id: 'num_003', numero: '+5511999992222', chatbotId: 'chat_003', descricao: 'Esportiva Bet VIP' },
+          { id: 'num_001', numero: '+5511999990000', nome: 'SB Receptivo ODD 100x', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
+          { id: 'num_002', numero: '+5511999991111', nome: 'MGM Geral', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
+          { id: 'num_003', numero: '+5511999992222', nome: 'Esportiva Bet VIP', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
         ])
       } finally {
         setLoading(false)
@@ -38,6 +53,30 @@ export function StepNumero({ numero, onChange }: StepNumeroProps) {
     }
     fetch()
   }, [])
+
+  function toggleNumero(num: NumeroSendpulse) {
+    const idx = selected.findIndex((n) => n.id === num.id)
+    if (idx >= 0) {
+      onChange(selected.filter((_, i) => i !== idx))
+    } else {
+      onChange([...selected, num])
+    }
+  }
+
+  function addManual() {
+    const val = manualInput.trim()
+    if (!val) return
+    const novo: NumeroSendpulse = {
+      id: crypto.randomUUID(),
+      numero: val,
+      nome: '',
+      status: 'inativo',
+      inboxTotal: 0,
+      inboxNaoLidas: 0,
+    }
+    onChange([...selected, novo])
+    setManualInput('')
+  }
 
   if (loading) {
     return <div className="flex items-center justify-center py-12"><Spinner size={24} /></div>
@@ -52,27 +91,53 @@ export function StepNumero({ numero, onChange }: StepNumeroProps) {
         </div>
       )}
 
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((n) => (
+            <span
+              key={n.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-[var(--d1)]/10 border border-[var(--d1)]/30 text-[var(--d1)]"
+            >
+              {n.numero}
+              <button onClick={() => toggleNumero(n)} className="hover:text-[var(--error)] transition-colors">
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2">
-        {numeros.map((num) => (
-          <button
-            key={num.id}
-            onClick={() => { onChange(num); setManual(false) }}
-            className={`w-full flex items-center gap-3 p-3 rounded-md border text-left transition-colors ${
-              numero?.id === num.id
-                ? 'border-[var(--d1)] bg-[var(--d1)]/5'
-                : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
-            }`}
-          >
-            <Phone size={16} className="text-[var(--text-muted)] flex-shrink-0" />
-            <div>
-              <span className="text-sm text-[var(--text-primary)]">{num.numero}</span>
-              {num.descricao && (
-                <p className="text-xs text-[var(--text-muted)]">{num.descricao}</p>
-              )}
-              <p className="text-xs text-[var(--text-muted)]">Chatbot: {num.chatbotId}</p>
-            </div>
-          </button>
-        ))}
+        {numeros.map((num) => {
+          const ativo = selected.some((n) => n.id === num.id)
+          return (
+            <button
+              key={num.id}
+              onClick={() => toggleNumero(num)}
+              className={`w-full flex items-center gap-3 p-3 rounded-md border text-left transition-colors ${
+                ativo
+                  ? 'border-[var(--d1)] bg-[var(--d1)]/5'
+                  : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
+              }`}
+            >
+              <span className={`flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full border transition-colors ${
+                ativo
+                  ? 'bg-[var(--d1)] border-[var(--d1)] text-white'
+                  : 'border-[var(--border)]'
+              }`}>
+                {ativo && <Check size={10} />}
+              </span>
+              <Phone size={16} className="text-[var(--text-muted)] flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-[var(--text-primary)] font-medium truncate">{num.nome}</span>
+                  <StatusNumero status={num.status} inboxNaoLidas={num.inboxNaoLidas} />
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{num.numero}</p>
+              </div>
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex items-center gap-2">
@@ -82,32 +147,28 @@ export function StepNumero({ numero, onChange }: StepNumeroProps) {
       </div>
 
       <button
-        onClick={() => { setManual(!manual); if (!manual) onChange(undefined) }}
+        onClick={() => setManual(!manual)}
         className={`text-xs ${manual ? 'text-[var(--d1)]' : 'text-[var(--text-secondary)]'} hover:text-[var(--text-primary)]`}
       >
         {manual ? 'Usar lista de números' : 'Inserir número manualmente'}
       </button>
 
       {manual && (
-        <div className="space-y-3">
+        <div className="flex items-center gap-2">
           <Input
             label="Número"
             placeholder="+5511999990000"
-            value={numero?.numero ?? ''}
-            onChange={(e) => onChange({ id: crypto.randomUUID(), numero: e.target.value, chatbotId: numero?.chatbotId ?? '' })}
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManual() } }}
           />
-          <Input
-            label="Chatbot ID"
-            placeholder="chat_001"
-            value={numero?.chatbotId ?? ''}
-            onChange={(e) => onChange({ id: crypto.randomUUID(), numero: numero?.numero ?? '', chatbotId: e.target.value })}
-          />
-          <Input
-            label="Descrição (opcional)"
-            placeholder="Ex: SB Receptivo"
-            value={numero?.descricao ?? ''}
-            onChange={(e) => onChange({ ...numero!, descricao: e.target.value })}
-          />
+          <button
+            onClick={addManual}
+            disabled={!manualInput.trim()}
+            className="self-end h-8 px-3 rounded text-xs font-medium text-white bg-[var(--d1)] disabled:opacity-50"
+          >
+            Adicionar
+          </button>
         </div>
       )}
     </div>

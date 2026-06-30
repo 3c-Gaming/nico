@@ -22,16 +22,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
-:root {
-  --bg-base: #0D0F12;
-  --bg-surface: #14171C;
-  --bg-elevated: #1C2028;
-  --border: #252A33;
-  --border-strong: #2E3540;
+:root,
+[data-theme="dark"] {
+  --bg-base: #1a1a1a;
+  --bg-surface: #222222;
+  --bg-elevated: #2a2a2a;
+  --border: #333333;
+  --border-strong: #444444;
 
-  --text-primary: #E8ECF0;
-  --text-secondary: #7A8599;
-  --text-muted: #4A5568;
+  --text-primary: #E0E0E0;
+  --text-secondary: #808080;
+  --text-muted: #505050;
 
   --d1: #3B82F6;
   --d3: #8B5CF6;
@@ -43,6 +44,29 @@
   --warning: #F59E0B;
   --error: #EF4444;
   --info: #3B82F6;
+}
+
+[data-theme="light"] {
+  --bg-base: #F5F5F0;
+  --bg-surface: #FAFAF5;
+  --bg-elevated: #FFFFFF;
+  --border: #E0DDD5;
+  --border-strong: #C0BDB5;
+
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B6B6B;
+  --text-muted: #999999;
+
+  --d1: #2563EB;
+  --d3: #7C3AED;
+  --d5: #D97706;
+  --d7: #059669;
+  --pontual: #DB2777;
+
+  --success: #059669;
+  --warning: #D97706;
+  --error: #DC2626;
+  --info: #2563EB;
 }
 
 * {
