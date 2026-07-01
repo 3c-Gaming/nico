@@ -16,175 +16,6 @@ const ESTADO_INICIAL: AppState = {
   pinnedFunis: [],
 }
 
-function hashCode(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash |= 0
-  }
-  return hash
-}
-
-function gerarCor(nome: string): string {
-  return `hsl(${Math.abs(hashCode(nome)) % 360}, 65%, 55%)`
-}
-
-function criarSeedData(): AppState {
-  const hoje = new Date()
-  const hojeStr = hoje.toISOString().split('T')[0]
-  const d1Data = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1).toISOString().split('T')[0]
-  const d3Data = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 3).toISOString().split('T')[0]
-  const d5Data = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 5).toISOString().split('T')[0]
-  const d7Data = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 7).toISOString().split('T')[0]
-  const agora = new Date().toISOString()
-
-  const numerosSeed: NumeroSendpulse[] = [
-    { id: 'num_001', numero: '+5511999990000', nome: 'SB Receptivo ODD 100x', descricao: 'WhatsApp SuperBet', status: 'ativo', inboxTotal: 127, inboxNaoLidas: 3 },
-    { id: 'num_002', numero: '+5511999991111', nome: 'MGM Geral', descricao: 'WhatsApp BetMGM', status: 'ativo', inboxTotal: 58, inboxNaoLidas: 0 },
-    { id: 'num_003', numero: '+5511999992222', nome: 'Esportiva Bet VIP', descricao: 'WhatsApp EsportivaBet', status: 'ativo', inboxTotal: 34, inboxNaoLidas: 7 },
-  ]
-
-  const casaSB: CasaAposta = { id: 'casa_superbet', nome: 'SuperBet', slug: 'superbet', cor: gerarCor('SuperBet'), variaveis: { siteid: '12345', c: 'super_abc' }, paineisCPA: [], funilIds: ['F26.02'] }
-  const casaMGM: CasaAposta = { id: 'casa_betmgm', nome: 'BetMGM', slug: 'betmgm', cor: gerarCor('BetMGM'), variaveis: { siteid: '67890', c: 'mgm_xyz' }, paineisCPA: [], funilIds: ['F27.01'] }
-  const casaEB: CasaAposta = { id: 'casa_esportivabet', nome: 'EsportivaBet', slug: 'esportivabet', cor: gerarCor('EsportivaBet'), variaveis: { siteid: '55555', c: 'esport_abc' }, paineisCPA: [], funilIds: [] }
-
-  const casas: Record<string, CasaAposta> = {
-    [casaSB.id]: casaSB,
-    [casaMGM.id]: casaMGM,
-    [casaEB.id]: casaEB,
-  }
-
-  const esteira1Id = 'esteira_001'
-
-  const disparos: Record<string, Disparo> = {
-    seed_d1: {
-      id: 'seed_d1',
-      tipo: 'D1',
-      nomenclatura: `[${hojeStr.slice(5)}] D1 ${d1Data.slice(5)} BASE SB`,
-      status: 'pronto',
-      casasAposta: [casaSB.id],
-      dataDisparo: d1Data,
-      horarioDisparo: '09:30',
-      base: { status: 'disponivel', nomeArquivo: 'base_superbet.csv', totalRegistros: 4821 },
-      templateDaxx: { id: 'tpl_001', nome: 'Template ODD 100x', url: 'https://daxx.example.com/tpl/001' },
-      numerosSendpulse: [numerosSeed[0]],
-      esteiraPaiId: esteira1Id,
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    seed_d3: {
-      id: 'seed_d3',
-      tipo: 'D3',
-      nomenclatura: `[${hojeStr.slice(5)}] D3 ${d3Data.slice(5)} BASE SB`,
-      status: 'rascunho',
-      casasAposta: [casaSB.id],
-      dataDisparo: d3Data,
-      horarioDisparo: '09:30',
-      base: { status: 'disponivel', nomeArquivo: 'base_superbet_d3.csv', totalRegistros: 4231 },
-      esteiraPaiId: esteira1Id,
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    seed_d5: {
-      id: 'seed_d5',
-      tipo: 'D5',
-      nomenclatura: `[${hojeStr.slice(5)}] D5 ${d5Data.slice(5)} BASE SB`,
-      status: 'rascunho',
-      casasAposta: [casaSB.id],
-      dataDisparo: d5Data,
-      horarioDisparo: '09:30',
-      base: { status: 'pendente' },
-      esteiraPaiId: esteira1Id,
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    seed_d7: {
-      id: 'seed_d7',
-      tipo: 'D7',
-      nomenclatura: `[${hojeStr.slice(5)}] D7 ${d7Data.slice(5)} BASE SB`,
-      status: 'rascunho',
-      casasAposta: [casaSB.id],
-      dataDisparo: d7Data,
-      horarioDisparo: '09:30',
-      base: { status: 'pendente' },
-      esteiraPaiId: esteira1Id,
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    seed_pontual: {
-      id: 'seed_pontual',
-      tipo: 'PONTUAL',
-      nomenclatura: `[${hojeStr.slice(5)}] PONTUAL ${hojeStr.slice(5)} BASE MGM`,
-      status: 'pronto',
-      casasAposta: [casaMGM.id],
-      dataDisparo: hojeStr,
-      horarioDisparo: '14:00',
-      base: { status: 'disponivel', nomeArquivo: 'base_betmgm.csv', totalRegistros: 2150 },
-      templateDaxx: { id: 'tpl_002', nome: 'Template Promo Geral', url: 'https://daxx.example.com/tpl/002' },
-      numerosSendpulse: [numerosSeed[1]],
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-  }
-
-  const esteira: Esteira = {
-    id: esteira1Id,
-    nome: `[${hojeStr.slice(5)}] SB`,
-    casasAposta: [casaSB.id],
-    disparos: { d1: 'seed_d1', d3: 'seed_d3', d5: 'seed_d5', d7: 'seed_d7' },
-    criadaEm: agora,
-    atualizadoEm: agora,
-    ativa: true,
-  }
-
-  const linkTemplates: Record<string, LinkTemplate> = {
-    link_sb_cadastro: {
-      id: 'link_sb_cadastro',
-      casaId: casaSB.id,
-      nome: 'Cadastro',
-      urlTemplate: 'https://wlsuperbet.adsrv.eacdn.com/C.ashx?btag=a_{{siteid}}b_431c_&affid=761&siteid={{siteid}}&adid=431&c={{c}}',
-      tipos: ['D1', 'D3', 'D5', 'D7'],
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    link_sb_fluxo: {
-      id: 'link_sb_fluxo',
-      casaId: casaSB.id,
-      nome: 'Link do Fluxo',
-      urlTemplate: 'https://wa.me/5511999990000?text=use{{siteid}}',
-      tipos: ['D1'],
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-    link_mgm_cadastro: {
-      id: 'link_mgm_cadastro',
-      casaId: casaMGM.id,
-      nome: 'Cadastro',
-      urlTemplate: 'https://mgm.adsrv.com/C.ashx?btag=a_{{siteid}}b_431c_&siteid={{siteid}}&c={{c}}',
-      tipos: ['D1', 'D3', 'PONTUAL'],
-      criadoEm: agora,
-      atualizadoEm: agora,
-    },
-  }
-
-  return {
-    disparos,
-    esteiras: { [esteira1Id]: esteira },
-    casasAposta: casas,
-    linkTemplates,
-    numerosDisponiveis: numerosSeed,
-    flowTagConfigs: {},
-    pinnedNumeros: [],
-    pinnedFunis: [],
-    templatesDisponiveis: [
-      { id: 'tpl_001', nome: 'Template ODD 100x', url: 'https://daxx.example.com/tpl/001' },
-      { id: 'tpl_002', nome: 'Template Promo Geral', url: 'https://daxx.example.com/tpl/002' },
-      { id: 'tpl_003', nome: 'Template Esportivas', url: 'https://daxx.example.com/tpl/003' },
-    ],
-  }
-}
-
 let cachedJson = ''
 let cachedState: AppState | null = null
 
@@ -194,11 +25,11 @@ export function getState(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) {
-      const seed = criarSeedData()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
-      cachedJson = JSON.stringify(seed)
-      cachedState = seed
-      return seed
+      const vazio = { ...ESTADO_INICIAL }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(vazio))
+      cachedJson = JSON.stringify(vazio)
+      cachedState = vazio
+      return vazio
     }
     if (raw !== cachedJson) {
       cachedJson = raw
@@ -210,7 +41,6 @@ export function getState(): AppState {
       for (const c of Object.values(parsed.casasAposta)) {
         if (!c.paineisCPA) (c as unknown as Record<string, unknown>).paineisCPA = []
       }
-      // migrar numeroSendpulse (singular) → numerosSendpulse (array)
       for (const d of Object.values(parsed.disparos)) {
         const old = d as unknown as Record<string, unknown>
         if (old.numeroSendpulse && !old.numerosSendpulse) {
@@ -222,8 +52,7 @@ export function getState(): AppState {
     }
     return cachedState!
   } catch {
-    const seed = criarSeedData()
-    return seed
+    return { ...ESTADO_INICIAL }
   }
 }
 
