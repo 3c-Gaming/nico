@@ -4,6 +4,11 @@
     "sendpulse": {
       "type": "remote",
       "url": "https://mcp.sendpulse.com/mcp"
+    },
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref=gqzltwjuaeirahtlutcl",
+      "enabled": true
     }
   }
 }

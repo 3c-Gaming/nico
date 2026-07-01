@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Esteira } from '@/types'
-import { getApiStore } from '@/lib/api-store'
+import { listarEsteiras, criarEsteira } from '@/lib/api-store'
 
 export async function GET() {
-  const store = getApiStore()
-  return NextResponse.json({ esteiras: Object.values(store.esteiras).filter((e: Esteira) => e.ativa) })
+  const esteiras = await listarEsteiras()
+  return NextResponse.json({ esteiras })
 }
 
 export async function POST(request: NextRequest) {
@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
     ativa: true,
   }
 
-  const store = getApiStore()
-  store.esteiras[id] = esteira
+  await criarEsteira(esteira)
   return NextResponse.json({ esteira })
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Disparo, Esteira, TipoDisparo } from '@/types'
-import { getApiStore } from '@/lib/api-store'
+import { criarDisparo, criarEsteira } from '@/lib/api-store'
 import { downloadArquivo } from '@/lib/integrações/googleDrive'
 
 interface ImportarItem {
@@ -26,12 +26,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nenhum item para importar' }, { status: 400 })
     }
 
-    const store = getApiStore()
     const agora = new Date().toISOString()
     const disparosCriados: Disparo[] = []
     const esteirasCriadas: Esteira[] = []
 
-    // Agrupar por data para criar esteiras
     const porData = new Map<string, ImportarItem[]>()
     for (const item of items) {
       const prev = porData.get(item.data) ?? []
@@ -45,7 +43,6 @@ export async function POST(request: NextRequest) {
       const d5 = itens.find((i) => i.tipo === 'D5')
       const d7 = itens.find((i) => i.tipo === 'D7')
 
-      // Criar um disparo para cada item
       const disparosDoGrupo: Map<string, Disparo> = new Map()
 
       for (const item of itens) {
@@ -75,10 +72,9 @@ export async function POST(request: NextRequest) {
         }
         disparosDoGrupo.set(item.tipo, dis)
         disparosCriados.push(dis)
-        store.disparos[id] = dis
+        await criarDisparo(dis)
       }
 
-      // Contar linhas de cada CSV em paralelo
       await Promise.all(
         itens.map(async (item) => {
           const dis = disparosDoGrupo.get(item.tipo)
@@ -94,7 +90,6 @@ export async function POST(request: NextRequest) {
         })
       )
 
-      // Criar esteira se tiver D1
       if (d1) {
         const disD1 = disparosDoGrupo.get('D1')
         if (disD1) {
@@ -116,9 +111,8 @@ export async function POST(request: NextRequest) {
             ativa: true,
           }
           esteirasCriadas.push(esteira)
-          store.esteiras[esteira.id] = esteira
+          await criarEsteira(esteira)
 
-          // Vincular disparos à esteira
           for (const [, dis] of disparosDoGrupo) {
             dis.esteiraPaiId = esteira.id
           }
@@ -133,7 +127,6 @@ export async function POST(request: NextRequest) {
 }
 
 function parseDataFolder(data: string): string {
-  // data é "DDMM" — converter para ISO "YYYY-MM-DD"
   if (data.length !== 4) return data
   const dia = data.slice(0, 2)
   const mes = data.slice(2, 4)
