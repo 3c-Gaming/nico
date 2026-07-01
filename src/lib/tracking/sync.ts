@@ -105,7 +105,7 @@ export async function sincronizarDisparosServer(
   disparos: Disparo[],
   date?: string,
 ): Promise<Record<string, TrackingResultado>> {
-  const TRACKING_BASE = 'https://3cgg-tracking-system-production.up.railway.app'
+  const TRACKING_BASE = 'https://3cgg-tracking-system.up.railway.app'
   const API_KEY = process.env.TRACKING_API_KEY
 
   if (!API_KEY) {

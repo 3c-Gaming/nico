@@ -13,6 +13,7 @@ const globalForSupabase = globalThis as unknown as {
 }
 
 function getSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null
   if (!globalForSupabase.supabase) {
     globalForSupabase.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false },
@@ -32,6 +33,7 @@ function row<T>(data: unknown): T | null {
 }
 
 function tb(name: string) {
+  if (!supabase) throw new Error('Supabase não disponível')
   return supabase.from(name) as any
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const TRACKING_BASE = 'https://3cgg-tracking-system-production.up.railway.app'
+const TRACKING_BASE = 'https://3cgg-tracking-system.up.railway.app'
 const API_KEY = process.env.TRACKING_API_KEY
 
 const CASAS = ['superbet', 'betmgm'] as const
