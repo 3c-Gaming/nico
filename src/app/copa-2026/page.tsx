@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { Search, Sparkles, Check, Link2, ChevronDown, ChevronUp, RefreshCw, Trophy, Newspaper, ExternalLink, MapPin, Clock, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Search, Sparkles, Check, Link2, ChevronDown, ChevronUp, RefreshCw, Trophy, Newspaper, ExternalLink, MapPin, Clock, ChevronRight, BarChart3, Users } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { getState } from '@/lib/store'
 import { montarLinkWhatsApp } from '@/lib/copa-2026/url'
 import { salvarPreferencia, listarPreferencias, removerPreferencia, getResumoPreferencias } from '@/lib/copa-2026/preferencias'
-import type { CopaMatch, CopaNoticia, SugestaoCopa, PreferenciaCopa } from '@/types'
+import type { CopaMatch, CopaNoticia, SugestaoCopa, PreferenciaCopa, GroupStanding, TeamInfo, RecentMatch } from '@/types'
 
 function amanhaISO(): string {
   const d = new Date()
@@ -18,6 +18,16 @@ function amanhaISO(): string {
 function formatarDataBr(iso: string): string {
   const [ano, mes, dia] = iso.split('-')
   return `${dia}/${mes}/${ano}`
+}
+
+function gerarDatas( inicio: string, dias: number): string[] {
+  const datas: string[] = []
+  const d = new Date(inicio + 'T12:00:00')
+  for (let i = 0; i < dias; i++) {
+    datas.push(d.toISOString().split('T')[0])
+    d.setDate(d.getDate() + 1)
+  }
+  return datas
 }
 
 function formatarHorarioBrasilia(utcIso: string): string {
@@ -49,9 +59,29 @@ function tempoRelativo(dataStr: string): string {
   return `${diffD}d atrás`
 }
 
+function FormBadge({ form }: { form: string }) {
+  if (!form) return null
+  return (
+    <div className="flex items-center gap-0.5">
+      {form.slice(0, 5).split('').map((c, i) => (
+        <span
+          key={i}
+          className={`inline-block w-2 h-2 rounded-full ${
+            c === 'W' ? 'bg-green-500' : c === 'D' ? 'bg-yellow-500' : c === 'L' ? 'bg-red-500' : 'bg-gray-500'
+          }`}
+          title={
+            c === 'W' ? 'Vitória' : c === 'D' ? 'Empate' : c === 'L' ? 'Derrota' : ''
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
 export default function Copa2026Page() {
   const { data: monitoramento } = useMonitoramento()
   const [date, setDate] = useState(amanhaISO())
+  const [calendarRange, setCalendarRange] = useState(1)
   const [numeroId, setNumeroId] = useState('')
   const [flowId, setFlowId] = useState('')
   const [matches, setMatches] = useState<CopaMatch[]>([])
@@ -67,6 +97,11 @@ export default function Copa2026Page() {
   const [expandedMatchId, setExpandedMatchId] = useState<number | null>(null)
   const [noticias, setNoticias] = useState<Record<number, CopaNoticia[]>>({})
   const [loadingNoticias, setLoadingNoticias] = useState<Record<number, boolean>>({})
+  const [standings, setStandings] = useState<GroupStanding[]>([])
+  const [standingsOpen, setStandingsOpen] = useState(false)
+  const [loadingStandings, setLoadingStandings] = useState(false)
+  const [teamCache, setTeamCache] = useState<Record<string, { info: TeamInfo; recent: RecentMatch[] }>>({})
+  const [loadingTeam, setLoadingTeam] = useState<Record<string, boolean>>({})
 
   const numeros = useMemo(() => {
     return monitoramento?.numeros ?? []
@@ -97,25 +132,65 @@ export default function Copa2026Page() {
 
   useEffect(() => { buscarJogos() }, [])
 
+  useEffect(() => {
+    if (standings.length === 0 && !loadingStandings) {
+      buscarStandings()
+    }
+  }, [])
+
+  async function buscarStandings() {
+    setLoadingStandings(true)
+    try {
+      const res = await fetch('/api/copa-2026/standings')
+      if (res.ok) {
+        const json = await res.json()
+        setStandings(json.standings ?? [])
+      }
+    } catch {
+    } finally {
+      setLoadingStandings(false)
+    }
+  }
+
   async function buscarJogos() {
     setLoadingMatches(true)
     setError(null)
     setSugestoes([])
+    setMatches([])
     try {
-      const res = await fetch(`/api/copa-2026/fixtures?date=${date}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error((err as any).error ?? `Erro ${res.status}`)
+      const dates = gerarDatas(date, calendarRange)
+      const results = await Promise.all(
+        dates.map(async (d) => {
+          const res = await fetch(`/api/copa-2026/fixtures?date=${d}`)
+          if (!res.ok) return [] as CopaMatch[]
+          const json = await res.json()
+          return (json.matches ?? []) as CopaMatch[]
+        }),
+      )
+      const todos = results.flat()
+      if (todos.length === 0) {
+        setError('Nenhum jogo encontrado para o período.')
       }
-      const json = await res.json()
-      setMatches(json.matches ?? [])
-      if (!json.matches?.length) {
-        setError('Nenhum jogo encontrado para esta data.')
-      }
+      setMatches(todos)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setLoadingMatches(false)
+    }
+  }
+
+  async function buscarTime(nome: string) {
+    if (teamCache[nome]) return
+    setLoadingTeam((prev) => ({ ...prev, [nome]: true }))
+    try {
+      const res = await fetch(`/api/copa-2026/team?name=${encodeURIComponent(nome)}`)
+      if (res.ok) {
+        const json = await res.json()
+        setTeamCache((prev) => ({ ...prev, [nome]: json }))
+      }
+    } catch {
+    } finally {
+      setLoadingTeam((prev) => ({ ...prev, [nome]: false }))
     }
   }
 
@@ -139,7 +214,35 @@ export default function Copa2026Page() {
     } else {
       setExpandedMatchId(match.id)
       buscarNoticias(match.id, match.homeTeam, match.awayTeam)
+      buscarTime(match.homeTeam)
+      buscarTime(match.awayTeam)
     }
+  }
+
+  function getForm(teamName: string): string {
+    const entry = standings.find((s) => s.teamName === teamName)
+    return entry?.form ?? ''
+  }
+
+  function getRecentEncounters(homeName: string, awayName: string): RecentMatch[] {
+    const homeData = teamCache[homeName]
+    const awayData = teamCache[awayName]
+    const allRecent = [
+      ...(homeData?.recent ?? []),
+      ...(awayData?.recent ?? []),
+    ]
+    const seen = new Set<number>()
+    return allRecent
+      .filter((m) => {
+        const bothTeams = (m.homeTeam === homeName && m.awayTeam === awayName) ||
+                          (m.homeTeam === awayName && m.awayTeam === homeName)
+        if (!bothTeams) return false
+        const key = m.id + m.homeScore + m.awayScore
+        if (seen.has(Number(m.id))) return false
+        seen.add(Number(m.id))
+        return true
+      })
+      .slice(0, 5)
   }
 
   async function gerarSugestoes() {
@@ -231,6 +334,15 @@ export default function Copa2026Page() {
     return editandoCopy[sugestao.id] ?? sugestao.copyBlocos
   }
 
+  const grupos = useMemo(() => {
+    const map = new Map<string, GroupStanding[]>()
+    for (const s of standings) {
+      if (!map.has(s.group)) map.set(s.group, [])
+      map.get(s.group)!.push(s)
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [standings])
+
   return (
     <>
       <PageHeader
@@ -255,13 +367,25 @@ export default function Copa2026Page() {
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 space-y-4">
           <div className="flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Data</label>
+              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Data início</label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Período</label>
+              <select
+                value={calendarRange}
+                onChange={(e) => setCalendarRange(Number(e.target.value))}
+                className="h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+              >
+                <option value={1}>1 dia</option>
+                <option value={3}>3 dias</option>
+                <option value={7}>7 dias</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Número</label>
@@ -311,11 +435,89 @@ export default function Copa2026Page() {
           )}
         </div>
 
+        {/* Classificação */}
+        {standings.length > 0 && (
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+            <button
+              onClick={() => setStandingsOpen(!standingsOpen)}
+              className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium text-[var(--text-primary)]"
+            >
+              <span className="flex items-center gap-2">
+                <BarChart3 size={16} className="text-[var(--d1)]" />
+                Classificação por Grupo
+                <span className="text-xs font-normal text-[var(--text-muted)]">({standings.length} times)</span>
+              </span>
+              {standingsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {standingsOpen && (
+              <div className="border-t border-[var(--border)] px-4 pb-4 pt-3 space-y-4">
+                {grupos.map(([grupo, times]) => (
+                  <div key={grupo}>
+                    <h4 className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                      {grupo}
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[var(--border)]/50">
+                            <th className="text-left py-1.5 pr-2 text-[10px] font-medium text-[var(--text-muted)] w-6">#</th>
+                            <th className="text-left py-1.5 px-2 text-[10px] font-medium text-[var(--text-muted)]">Time</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">P</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">V</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">E</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">D</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">GP</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">GC</th>
+                            <th className="text-center py-1.5 px-1 text-[10px] font-medium text-[var(--text-muted)]">SG</th>
+                            <th className="text-center py-1.5 px-2 text-[10px] font-medium text-[var(--text-muted)]">Pts</th>
+                            <th className="text-left py-1.5 pl-2 text-[10px] font-medium text-[var(--text-muted)]">Forma</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {times.map((t) => (
+                            <tr key={t.teamId} className="border-b border-[var(--border)]/30 hover:bg-[var(--bg-elevated)]/30 transition-colors">
+                              <td className="py-1.5 pr-2 text-center text-[var(--text-muted)] font-mono">{t.rank}</td>
+                              <td className="py-1.5 px-2">
+                                <div className="flex items-center gap-1.5">
+                                  {t.badge && <img src={t.badge} alt="" className="w-4 h-4 object-contain" />}
+                                  <span className="text-[var(--text-primary)] font-medium truncate">{t.teamName}</span>
+                                </div>
+                              </td>
+                              <td className="py-1.5 px-1 text-center text-[var(--text-muted)] font-mono">{t.played}</td>
+                              <td className="py-1.5 px-1 text-center text-green-500 font-mono">{t.win}</td>
+                              <td className="py-1.5 px-1 text-center text-yellow-500 font-mono">{t.draw}</td>
+                              <td className="py-1.5 px-1 text-center text-red-500 font-mono">{t.loss}</td>
+                              <td className="py-1.5 px-1 text-center text-[var(--text-muted)] font-mono">{t.goalsFor}</td>
+                              <td className="py-1.5 px-1 text-center text-[var(--text-muted)] font-mono">{t.goalsAgainst}</td>
+                              <td className={`py-1.5 px-1 text-center font-mono ${
+                                t.goalDifference > 0 ? 'text-green-500' : t.goalDifference < 0 ? 'text-red-500' : 'text-[var(--text-muted)]'
+                              }`}>{t.goalDifference > 0 ? `+${t.goalDifference}` : t.goalDifference}</td>
+                              <td className="py-1.5 px-2 text-center font-bold text-[var(--text-primary)]">{t.points}</td>
+                              <td className="py-1.5 pl-2"><FormBadge form={t.form} /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {loadingStandings && (
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] py-2">
+            <RefreshCw size={12} className="animate-spin" /> Carregando classificação…
+          </div>
+        )}
+
+        {/* Lista de Jogos */}
         {matches.length > 0 && (
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                Jogos de {formatarDataBr(date)}
+                Jogos {calendarRange > 1 ? `(${calendarRange} dias)` : `de ${formatarDataBr(date)}`}
               </h2>
               <span className="text-xs text-[var(--text-muted)]">{matches.length} jogo(s)</span>
             </div>
@@ -326,6 +528,13 @@ export default function Copa2026Page() {
                 const loadingNews = loadingNoticias[m.id]
                 const brDate = formatarHorarioBrasilia(m.date)
                 const temPlacar = m.homeScore != null && m.awayScore != null
+                const homeForm = getForm(m.homeTeam)
+                const awayForm = getForm(m.awayTeam)
+                const homeData = teamCache[m.homeTeam]
+                const awayData = teamCache[m.awayTeam]
+                const loadingHomeTeam = loadingTeam[m.homeTeam]
+                const loadingAwayTeam = loadingTeam[m.awayTeam]
+                const encounters = getRecentEncounters(m.homeTeam, m.awayTeam)
                 return (
                   <div key={m.id} className="rounded bg-[var(--bg-base)] border border-[var(--border)] overflow-hidden">
                     <button
@@ -337,9 +546,12 @@ export default function Copa2026Page() {
                           <img src={m.homeLogo} alt="" className="w-8 h-8 object-contain shrink-0" />
                         )}
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                            {m.homeTeam}
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                              {m.homeTeam}
+                            </span>
+                            {homeForm && <FormBadge form={homeForm} />}
+                          </div>
                           {temPlacar ? (
                             <span className="text-sm font-bold text-[var(--text-primary)] shrink-0">
                               {m.homeScore} × {m.awayScore}
@@ -347,9 +559,12 @@ export default function Copa2026Page() {
                           ) : (
                             <span className="text-xs text-[var(--text-muted)] shrink-0">vs</span>
                           )}
-                          <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                            {m.awayTeam}
-                          </span>
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                              {m.awayTeam}
+                            </span>
+                            {awayForm && <FormBadge form={awayForm} />}
+                          </div>
                         </div>
                         {m.awayLogo && (
                           <img src={m.awayLogo} alt="" className="w-8 h-8 object-contain shrink-0" />
@@ -366,7 +581,8 @@ export default function Copa2026Page() {
                     </button>
 
                     {expanded && (
-                      <div className="border-t border-[var(--border)] px-3 pb-3 pt-2 space-y-2">
+                      <div className="border-t border-[var(--border)] px-3 pb-3 pt-2 space-y-3">
+                        {/* Info básica */}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
                           {m.venue && (
                             <span className="flex items-center gap-1">
@@ -384,6 +600,71 @@ export default function Copa2026Page() {
                           </span>
                         </div>
 
+                        {/* Info dos times */}
+                        <div className="grid grid-cols-2 gap-3">
+                          {[m.homeTeam, m.awayTeam].map((teamName) => {
+                            const data = teamCache[teamName]
+                            const loading = loadingTeam[teamName]
+                            return (
+                              <div key={teamName} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded p-2 space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Users size={11} className="text-[var(--text-muted)]" />
+                                  <span className="text-[11px] font-medium text-[var(--text-primary)]">{teamName}</span>
+                                </div>
+                                {loading && (
+                                  <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                                    <RefreshCw size={9} className="animate-spin" /> Carregando…
+                                  </div>
+                                )}
+                                {data?.info && (
+                                  <div className="text-[10px] text-[var(--text-muted)] space-y-0.5">
+                                    {data.info.stadium && (
+                                      <div className="flex items-center gap-1">
+                                        <MapPin size={9} />
+                                        {data.info.stadium}{data.info.location ? ` (${data.info.location})` : ''}
+                                      </div>
+                                    )}
+                                    {data.info.capacity > 0 && (
+                                      <div>Capacidade: {data.info.capacity.toLocaleString('pt-BR')}</div>
+                                    )}
+                                    {data.info.formedYear && <div>Fundação: {data.info.formedYear}</div>}
+                                    {data.info.description && (
+                                      <div className="line-clamp-2 mt-1 leading-tight">{data.info.description}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Head-to-Head */}
+                        {encounters.length > 0 && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                              <Trophy size={11} />
+                              Confrontos Anteriores
+                            </div>
+                            <div className="space-y-0.5">
+                              {encounters.map((enc) => {
+                                const encBrDate = formatarHorarioBrasilia(enc.date + 'T12:00:00')
+                                return (
+                                  <div key={enc.id} className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] py-0.5">
+                                    <span className="text-[10px] text-[var(--text-muted)] shrink-0">{encBrDate || enc.date}</span>
+                                    <span className="font-medium">{enc.homeTeam}</span>
+                                    <span className="font-bold text-[var(--text-primary)]">
+                                      {enc.homeScore != null ? `${enc.homeScore} × ${enc.awayScore}` : '—'}
+                                    </span>
+                                    <span className="font-medium">{enc.awayTeam}</span>
+                                    <span className="text-[10px] text-[var(--text-muted)]">{enc.round}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notícias */}
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
                             <Newspaper size={11} />
@@ -433,6 +714,7 @@ export default function Copa2026Page() {
           </div>
         )}
 
+        {/* Sugestões geradas */}
         {sugestoes.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">

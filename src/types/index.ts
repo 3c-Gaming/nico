@@ -257,6 +257,47 @@ export interface SugestaoCopa {
   criadaEm: string
 }
 
+export interface GroupStanding {
+  rank: number
+  teamId: string
+  teamName: string
+  badge: string
+  group: string
+  played: number
+  win: number
+  draw: number
+  loss: number
+  goalsFor: number
+  goalsAgainst: number
+  goalDifference: number
+  points: number
+  form: string
+}
+
+export interface TeamInfo {
+  id: string
+  name: string
+  shortName: string
+  badge: string
+  stadium: string
+  location: string
+  capacity: number
+  description: string
+  formedYear: string
+}
+
+export interface RecentMatch {
+  id: string
+  date: string
+  homeTeam: string
+  awayTeam: string
+  homeScore: number | null
+  awayScore: number | null
+  round: string
+  league: string
+  status: string
+}
+
 export interface PreferenciaCopa {
   id: string
   sugestaoId: string
