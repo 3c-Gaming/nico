@@ -120,3 +120,23 @@ export async function listarFlowTagConfigs(): Promise<FlowTagConfig[]> {
   const { data } = await tb('flow_tag_configs').select('*')
   return rows<FlowTagConfig>(data)
 }
+
+export async function criarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
+  const { data } = await tb('flow_tag_configs').insert(config).select().single()
+  return row<FlowTagConfig>(data)!
+}
+
+export async function bulkInsertFlowTagConfigs(configs: FlowTagConfig[]): Promise<FlowTagConfig[]> {
+  const { data } = await tb('flow_tag_configs').insert(configs).select()
+  return rows<FlowTagConfig>(data)
+}
+
+export async function bulkInsertCasas(casas: CasaAposta[]): Promise<CasaAposta[]> {
+  const { data } = await tb('casas_aposta').insert(casas).select()
+  return rows<CasaAposta>(data)
+}
+
+export async function bulkInsertLinkTemplates(templates: LinkTemplate[]): Promise<LinkTemplate[]> {
+  const { data } = await tb('link_templates').insert(templates).select()
+  return rows<LinkTemplate>(data)
+}
