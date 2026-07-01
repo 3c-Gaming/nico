@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers } from 'lucide-react'
+import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
@@ -55,6 +55,30 @@ function formatarTempoRelativo(iso: string | null): { texto: string; cor: string
   return { texto: `${dd}/${mm} ${hh}:${mi}`, cor: 'text-[var(--text-muted)]/60' }
 }
 
+interface FunilBotDetail {
+  botId: string
+  botNome: string
+  flowNomes: string[]
+  tags: string[]
+  leadsHoje: number
+  total: number
+  ultimoLeadAt: string | null
+  registros: number
+  ftds: number
+}
+
+interface FunilRow {
+  funilNome: string
+  botNomes: string[]
+  tags: string[]
+  leadsHoje: number
+  total: number
+  ultimoLeadAt: string | null
+  registros: number
+  ftds: number
+  bots: FunilBotDetail[]
+}
+
 export default function HomePage() {
   const router = useRouter()
   const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao } = useMonitoramento()
@@ -68,6 +92,7 @@ export default function HomePage() {
   const [pinnedFunis, setPinnedFunis] = useState<string[]>([])
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(new Date().toISOString().split('T')[0])
+  const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const s = getState()
@@ -154,7 +179,7 @@ export default function HomePage() {
         const utm = c.utm!
         const matches = todos.filter((e) => e.acid?.includes(utm) || String(e.pid) === utm)
         novo[fid] = {
-          registros: matches.filter((e) => e.event === 'registration').length,
+          registros: matches.filter((e) => e.event === 'reg').length,
           ftds: matches.filter((e) => e.event === 'ftd').length,
         }
       }
@@ -167,7 +192,7 @@ export default function HomePage() {
     return () => clearInterval(interval)
   }, [pinnedFunis, pinVersion, trackingData])
 
-  const funilRows = useMemo(() => {
+  const funilRows = useMemo<FunilRow[]>(() => {
     if (!pinnedFunis.length) return []
     const configs = getState().flowTagConfigs
 
@@ -193,15 +218,52 @@ export default function HomePage() {
       const registros = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
       const ftds = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
 
-      return { funilNome, botNomes, tags, leadsHoje, total, ultimoLeadAt, registros, ftds }
+      // per-bot breakdown
+      const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string> }>()
+      for (const [flowId, c] of flows) {
+        if (!porBot.has(c.botId)) porBot.set(c.botId, { flowIds: [], tagsSet: new Set() })
+        const bot = porBot.get(c.botId)!
+        bot.flowIds.push(flowId)
+        for (const tag of (c.tags ?? [])) bot.tagsSet.add(tag)
+      }
+      const fluxosPorBot = fluxosMap
+      const monitoramentoNum = monitoramento?.numeros ?? []
+      const bots: FunilBotDetail[] = [...porBot.entries()].map(([botId, data]) => {
+        const botTags = [...data.tagsSet]
+        const botFluxos = fluxosPorBot[botId]?.filter((f) => data.flowIds.includes(f.id)) ?? []
+        const found = monitoramentoNum.find((n) => n.numero.id === botId)
+        const botNome = found?.numero.numero ?? botId
+        return {
+          botId,
+          botNome,
+          flowNomes: botFluxos.map((f) => f.nome).filter(Boolean),
+          tags: botTags,
+          leadsHoje: botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0),
+          total: botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0),
+          ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
+            const ts = ultimoLeadMap[t] ?? null
+            if (!ts) return best
+            if (!best || ts > best) return ts
+            return best
+          }, null),
+          registros: data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.registros ?? 0), 0),
+          ftds: data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.ftds ?? 0), 0),
+        }
+      })
+
+      return { funilNome, botNomes, tags, leadsHoje, total, ultimoLeadAt, registros, ftds, bots }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0
 
   function handleToggleFunil(nome: string) {
     togglePinFunil(nome)
     forceUpdate()
+  }
+
+  function toggleExpand(funilNome: string) {
+    setExpandedFunis((prev) => ({ ...prev, [funilNome]: !prev[funilNome] }))
   }
 
   return (
@@ -351,68 +413,153 @@ export default function HomePage() {
                 </thead>
                 <tbody>
                   {funilRows.map((row) => (
-                    <tr key={row.funilNome} className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-[var(--d1)]/15 border border-[var(--d1)]/30 text-[var(--d1)]">
-                            {row.funilNome}
+                    <Fragment key={row.funilNome}>
+                      <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5">
+                            {row.bots.length > 1 && (
+                              <button
+                                onClick={() => toggleExpand(row.funilNome)}
+                                className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                                title={expandedFunis[row.funilNome] ? 'Recolher' : 'Expandir'}
+                              >
+                                {expandedFunis[row.funilNome] ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
+                              </button>
+                            )}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-[var(--d1)]/15 border border-[var(--d1)]/30 text-[var(--d1)]">
+                              {row.funilNome}
+                            </span>
+                            <button
+                              onClick={() => handleToggleFunil(row.funilNome)}
+                              className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                              title="Desafixar da Home"
+                            >
+                              <Pin size={11} className="text-amber-400" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="flex flex-wrap gap-1">
+                            {row.botNomes.length === 0 ? (
+                              <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                            ) : (
+                              row.botNomes.map((nome) => (
+                                <span key={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
+                                  {nome}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                            {row.leadsHoje}
                           </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-semibold ${row.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                            {row.total}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                            {row.registros}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
+                            {row.ftds}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
+                            {formatarTempoRelativo(row.ultimoLeadAt).texto}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           <button
-                            onClick={() => handleToggleFunil(row.funilNome)}
-                            className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
-                            title="Desafixar da Home"
+                            onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
+                            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
                           >
-                            <Pin size={11} className="text-amber-400" />
+                            ver fluxos
                           </button>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex flex-wrap gap-1">
-                          {row.botNomes.length === 0 ? (
-                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
-                          ) : (
-                            row.botNomes.map((nome) => (
-                              <span key={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
-                                {nome}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
-                          {row.leadsHoje}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`font-semibold ${row.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                          {row.total}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                          {row.registros}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
-                          {row.ftds}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
-                          {formatarTempoRelativo(row.ultimoLeadAt).texto}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
-                          className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
-                        >
-                          ver fluxos
-                        </button>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                      {row.bots.length > 1 && expandedFunis[row.funilNome] && (
+                        <tr key={`${row.funilNome}-expand`}>
+                          <td colSpan={8} className="p-0">
+                            <div className="bg-[var(--bg-elevated)]/20 border-b border-[var(--border)]">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="border-b border-[var(--border)]/50">
+                                    <th className="text-left py-2 px-3 pl-8 text-[10px] font-medium text-[var(--text-muted)]">Número</th>
+                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Fluxos</th>
+                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Tags</th>
+                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Leads hoje</th>
+                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Total</th>
+                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Reg</th>
+                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">FTDs</th>
+                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Último lead</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {row.bots.map((bot) => (
+                                    <tr key={bot.botId} className="border-b border-[var(--border)]/30 hover:bg-[var(--bg-elevated)]/40 transition-colors">
+                                      <td className="py-2 px-3 pl-8">
+                                        <span className="font-mono text-[var(--text-primary)]">{bot.botNome}</span>
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <div className="flex flex-wrap gap-0.5">
+                                          {bot.flowNomes.length === 0 ? (
+                                            <span className="text-[var(--text-muted)]/40">—</span>
+                                          ) : (
+                                            bot.flowNomes.map((fn) => (
+                                              <span key={fn} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]">
+                                                {fn}
+                                              </span>
+                                            ))
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <div className="flex flex-wrap gap-0.5">
+                                          {bot.tags.length === 0 ? (
+                                            <span className="text-[var(--text-muted)]/40">—</span>
+                                          ) : (
+                                            bot.tags.map((t) => (
+                                              <span key={t} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--d3)]/10 border border-[var(--d3)]/20 text-[var(--d3)]">
+                                                {t}
+                                              </span>
+                                            ))
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <span className={`font-semibold ${bot.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{bot.leadsHoje}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <span className={`font-semibold ${bot.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.total}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <span className={`font-semibold font-mono ${bot.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{bot.ftds}</span>
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <span className={`text-xs font-mono ${formatarTempoRelativo(bot.ultimoLeadAt).cor}`}>
+                                          {formatarTempoRelativo(bot.ultimoLeadAt).texto}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

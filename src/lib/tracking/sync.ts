@@ -55,7 +55,7 @@ export function agregarPorDisparo(
       acc[match.id] = { registros: 0, ftds: 0 }
     }
 
-    if (ev.event === 'registration') acc[match.id].registros++
+    if (ev.event === 'reg') acc[match.id].registros++
     else if (ev.event === 'ftd') acc[match.id].ftds++
   }
 
