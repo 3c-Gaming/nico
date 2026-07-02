@@ -197,17 +197,17 @@ export async function criarFlowTagConfig(config: FlowTagConfig): Promise<FlowTag
 }
 
 export async function bulkInsertFlowTagConfigs(configs: FlowTagConfig[]): Promise<FlowTagConfig[]> {
-  const { data } = await tb('flow_tag_configs').insert(configs.map((c) => toSnakeCase(c as any))).select()
+  const { data } = await tb('flow_tag_configs').upsert(configs.map((c) => toSnakeCase(c as any))).select()
   return rows<FlowTagConfig>(data)
 }
 
 export async function bulkInsertCasas(casas: CasaAposta[]): Promise<CasaAposta[]> {
-  const { data } = await tb('casas_aposta').insert(casas.map((c) => toSnakeCase(c as any))).select()
+  const { data } = await tb('casas_aposta').upsert(casas.map((c) => toSnakeCase(c as any))).select()
   return rows<CasaAposta>(data)
 }
 
 export async function bulkInsertLinkTemplates(templates: LinkTemplate[]): Promise<LinkTemplate[]> {
-  const { data } = await tb('link_templates').insert(templates.map((t) => toSnakeCase(t as any))).select()
+  const { data } = await tb('link_templates').upsert(templates.map((t) => toSnakeCase(t as any))).select()
   return rows<LinkTemplate>(data)
 }
 
