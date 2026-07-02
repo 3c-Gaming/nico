@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { getState, setState } from '@/lib/store'
 
 function snakeToCamel(str: string): string {
+  if (str === 'paineis_cpa') return 'paineisCPA'
   return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase())
 }
 

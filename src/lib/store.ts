@@ -47,15 +47,22 @@ export function getState(): AppState {
       if (!parsed.pinnedNumeros) parsed.pinnedNumeros = []
       if (!parsed.pinnedFunis) parsed.pinnedFunis = []
       for (const c of Object.values(parsed.casasAposta)) {
-        if (!c.paineisCPA) (c as unknown as Record<string, unknown>).paineisCPA = []
+        if (!Array.isArray(c.paineisCPA)) (c as unknown as Record<string, unknown>).paineisCPA = []
+        if (!Array.isArray(c.funilIds)) (c as unknown as Record<string, unknown>).funilIds = []
       }
       for (const d of Object.values(parsed.disparos)) {
+        if (!Array.isArray(d.casasAposta)) (d as unknown as Record<string, unknown>).casasAposta = []
         const old = d as unknown as Record<string, unknown>
         if (old.numeroSendpulse && !old.numerosSendpulse) {
           old.numerosSendpulse = [old.numeroSendpulse]
           delete old.numeroSendpulse
         }
       }
+      for (const e of Object.values(parsed.esteiras)) {
+        if (!Array.isArray(e.casasAposta)) (e as unknown as Record<string, unknown>).casasAposta = []
+      }
+      if (!Array.isArray(parsed.pinnedNumeros)) parsed.pinnedNumeros = []
+      if (!Array.isArray(parsed.pinnedFunis)) parsed.pinnedFunis = []
       cachedState = parsed
     }
     return cachedState!

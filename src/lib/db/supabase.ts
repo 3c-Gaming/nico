@@ -95,8 +95,8 @@ export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: s
   await tb('user_preferences')
     .upsert({
       id: 'global',
-      pinned_numeros: JSON.stringify(pinnedNumeros),
-      pinned_funis: JSON.stringify(pinnedFunis),
+      pinned_numeros: pinnedNumeros,
+      pinned_funis: pinnedFunis,
       updated_at: new Date().toISOString(),
     })
 }
