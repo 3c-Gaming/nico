@@ -62,6 +62,7 @@ interface FunilBotDetail {
   tags: string[]
   leadsHoje: number
   total: number
+  baseCusto: number
   ultimoLeadAt: string | null
   registros: number
   ftds: number
@@ -73,6 +74,7 @@ interface FunilRow {
   tags: string[]
   leadsHoje: number
   total: number
+  baseCusto: number
   ultimoLeadAt: string | null
   registros: number
   ftds: number
@@ -228,6 +230,12 @@ export default function HomePage() {
       const registros = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
       const ftds = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
 
+      // baseCusto: sum valorTotalBase from disparos that match this funil's flowIds
+      const funilFlowIds = new Set(flows.map(([fid]) => fid))
+      const disparos = Object.values(getState().disparos)
+      const disparosDoFunil = disparos.filter((d) => (d.flowIds ?? []).some((fid) => funilFlowIds.has(fid)))
+      const baseCusto = disparosDoFunil.reduce((acc, d) => acc + (d.valorTotalBase ?? 0), 0)
+
       // per-bot breakdown
       const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string> }>()
       for (const [flowId, c] of flows) {
@@ -235,6 +243,28 @@ export default function HomePage() {
         const bot = porBot.get(c.botId)!
         bot.flowIds.push(flowId)
         for (const tag of (c.tags ?? [])) bot.tagsSet.add(tag)
+      }
+
+      // per-bot baseCusto with proportional split:
+      // each disparo is divided equally among the bots in this funil that it reaches
+      const botIdList = [...porBot.keys()]
+      const botFlowIdsMap = new Map<string, Set<string>>()
+      for (const [botId, data] of porBot) {
+        botFlowIdsMap.set(botId, new Set(data.flowIds))
+      }
+      const baseCustoPorBot = new Map<string, number>()
+      for (const botId of botIdList) baseCustoPorBot.set(botId, 0)
+      for (const d of disparosDoFunil) {
+        const dFlowIds = new Set(d.flowIds ?? [])
+        const matchingBots = botIdList.filter((b) =>
+          [...(botFlowIdsMap.get(b) ?? [])].some((fid) => dFlowIds.has(fid))
+        )
+        if (matchingBots.length > 0) {
+          const share = (d.valorTotalBase ?? 0) / matchingBots.length
+          for (const botId of matchingBots) {
+            baseCustoPorBot.set(botId, (baseCustoPorBot.get(botId) ?? 0) + share)
+          }
+        }
       }
       const fluxosPorBot = fluxosMap
       const monitoramentoNum = monitoramento?.numeros ?? []
@@ -250,6 +280,7 @@ export default function HomePage() {
           tags: botTags,
           leadsHoje: botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0),
           total: botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0),
+          baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
           ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
             const ts = ultimoLeadMap[t] ?? null
             if (!ts) return best
@@ -261,7 +292,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, leadsHoje, total, ultimoLeadAt, registros, ftds, bots }
+      return { funilNome, botNomes, tags, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, ultimoLeadAt, registros, ftds, bots }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
 
@@ -415,6 +446,7 @@ export default function HomePage() {
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Total</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
@@ -472,6 +504,11 @@ export default function HomePage() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
+                          <span className={`font-semibold font-mono ${row.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                            {row.baseCusto > 0 ? `R$ ${row.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
                             {row.registros}
                           </span>
@@ -497,7 +534,7 @@ export default function HomePage() {
                       </tr>
                       {row.bots.length > 1 && expandedFunis[row.funilNome] && (
                         <tr key={`${row.funilNome}-expand`}>
-                          <td colSpan={8} className="p-0">
+                          <td colSpan={9} className="p-0">
                             <div className="bg-[var(--bg-elevated)]/20 border-b border-[var(--border)]">
                               <table className="w-full text-xs">
                                 <thead>
@@ -507,6 +544,7 @@ export default function HomePage() {
                                     <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Tags</th>
                                     <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Leads hoje</th>
                                     <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Total</th>
+                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Base</th>
                                     <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Reg</th>
                                     <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">FTDs</th>
                                     <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Último lead</th>
@@ -549,6 +587,11 @@ export default function HomePage() {
                                       </td>
                                       <td className="py-2 px-3 text-right">
                                         <span className={`font-semibold ${bot.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.total}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <span className={`font-semibold font-mono ${bot.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                                          {bot.baseCusto > 0 ? `R$ ${bot.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
+                                        </span>
                                       </td>
                                       <td className="py-2 px-3 text-right">
                                         <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
