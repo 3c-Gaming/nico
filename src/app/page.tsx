@@ -63,6 +63,7 @@ interface FunilBotDetail {
   leadsHoje: number
   total: number
   baseCusto: number
+  baseLinhas: number
   ultimoLeadAt: string | null
   registros: number
   ftds: number
@@ -75,6 +76,7 @@ interface FunilRow {
   leadsHoje: number
   total: number
   baseCusto: number
+  baseLinhas: number
   ultimoLeadAt: string | null
   registros: number
   ftds: number
@@ -230,42 +232,59 @@ export default function HomePage() {
       const registros = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
       const ftds = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
 
-      // baseCusto: sum valorTotalBase from disparos that match this funil's flowIds
-      const funilFlowIds = new Set(flows.map(([fid]) => fid))
-      const disparos = Object.values(getState().disparos)
-      const disparosDoFunil = disparos.filter((d) => (d.flowIds ?? []).some((fid) => funilFlowIds.has(fid)))
-      const baseCusto = disparosDoFunil.reduce((acc, d) => acc + (d.valorTotalBase ?? 0), 0)
-
-      // per-bot breakdown
-      const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string> }>()
+      // per-bot breakdown (also carries UTM info for base cost matching)
+      const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string>; utms: Set<string> }>()
       for (const [flowId, c] of flows) {
-        if (!porBot.has(c.botId)) porBot.set(c.botId, { flowIds: [], tagsSet: new Set() })
+        if (!porBot.has(c.botId)) porBot.set(c.botId, { flowIds: [], tagsSet: new Set(), utms: new Set() })
         const bot = porBot.get(c.botId)!
         bot.flowIds.push(flowId)
         for (const tag of (c.tags ?? [])) bot.tagsSet.add(tag)
+        if (c.utm) bot.utms.add(c.utm)
       }
 
-      // per-bot baseCusto with proportional split:
-      // each disparo is divided equally among the bots in this funil that it reaches
-      const botIdList = [...porBot.keys()]
-      const botFlowIdsMap = new Map<string, Set<string>>()
-      for (const [botId, data] of porBot) {
-        botFlowIdsMap.set(botId, new Set(data.flowIds))
+      // base cost via UTM matching
+      // pre-compute how many funis each UTM reaches (across ALL configs)
+      const utmParaFunis = new Map<string, Set<string>>()
+      for (const c of Object.values(configs)) {
+        if (c.utm && c.funil) {
+          if (!utmParaFunis.has(c.utm)) utmParaFunis.set(c.utm, new Set())
+          utmParaFunis.get(c.utm)!.add(c.funil)
+        }
       }
+
+      const disparos = Object.values(getState().disparos)
+      const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
+      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm))
+
       const baseCustoPorBot = new Map<string, number>()
-      for (const botId of botIdList) baseCustoPorBot.set(botId, 0)
+      const baseLinhasPorBot = new Map<string, number>()
+      for (const botId of porBot.keys()) {
+        baseCustoPorBot.set(botId, 0)
+        baseLinhasPorBot.set(botId, 0)
+      }
+
       for (const d of disparosDoFunil) {
-        const dFlowIds = new Set(d.flowIds ?? [])
-        const matchingBots = botIdList.filter((b) =>
-          [...(botFlowIdsMap.get(b) ?? [])].some((fid) => dFlowIds.has(fid))
-        )
+        const baseLinhas = d.base?.totalRegistros ?? 0
+        const custoTotal = baseLinhas * 0.13
+        const numFunis = utmParaFunis.get(d.utm!)?.size ?? 1
+        const custoPorFunil = custoTotal / numFunis
+        const linhasPorFunil = baseLinhas / numFunis
+
+        const matchingBots = [...porBot.entries()]
+          .filter(([_, data]) => data.utms.has(d.utm!))
+          .map(([botId]) => botId)
         if (matchingBots.length > 0) {
-          const share = (d.valorTotalBase ?? 0) / matchingBots.length
+          const shareCusto = custoPorFunil / matchingBots.length
+          const shareLinhas = linhasPorFunil / matchingBots.length
           for (const botId of matchingBots) {
-            baseCustoPorBot.set(botId, (baseCustoPorBot.get(botId) ?? 0) + share)
+            baseCustoPorBot.set(botId, (baseCustoPorBot.get(botId) ?? 0) + shareCusto)
+            baseLinhasPorBot.set(botId, (baseLinhasPorBot.get(botId) ?? 0) + shareLinhas)
           }
         }
       }
+
+      const baseCusto = [...baseCustoPorBot.values()].reduce((a, b) => a + b, 0)
+      const baseLinhas = Math.round([...baseLinhasPorBot.values()].reduce((a, b) => a + b, 0))
       const fluxosPorBot = fluxosMap
       const monitoramentoNum = monitoramento?.numeros ?? []
       const bots: FunilBotDetail[] = [...porBot.entries()].map(([botId, data]) => {
@@ -281,6 +300,7 @@ export default function HomePage() {
           leadsHoje: botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0),
           total: botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0),
           baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
+          baseLinhas: Math.round(baseLinhasPorBot.get(botId) ?? 0),
           ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
             const ts = ultimoLeadMap[t] ?? null
             if (!ts) return best
@@ -292,7 +312,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, ultimoLeadAt, registros, ftds, bots }
+      return { funilNome, botNomes, tags, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
 
@@ -504,7 +524,10 @@ export default function HomePage() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className={`font-semibold font-mono ${row.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                          <span
+                            className={`font-semibold font-mono ${row.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
+                            title={row.baseLinhas > 0 ? `${row.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
+                          >
                             {row.baseCusto > 0 ? `R$ ${row.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
                           </span>
                         </td>
@@ -589,7 +612,10 @@ export default function HomePage() {
                                         <span className={`font-semibold ${bot.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.total}</span>
                                       </td>
                                       <td className="py-2 px-3 text-right">
-                                        <span className={`font-semibold font-mono ${bot.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                                        <span
+                                          className={`font-semibold font-mono ${bot.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
+                                          title={bot.baseLinhas > 0 ? `${bot.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
+                                        >
                                           {bot.baseCusto > 0 ? `R$ ${bot.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
                                         </span>
                                       </td>
