@@ -82,9 +82,15 @@ function tb(name: string) {
 export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[] }> {
   try {
     const { data } = await tb('user_preferences').select('*').eq('id', 'global').single()
+    const raw = data as any
+    const parse = (v: unknown): string[] => {
+      if (Array.isArray(v)) return v
+      if (typeof v === 'string') try { return JSON.parse(v) } catch { return [] }
+      return []
+    }
     return {
-      pinnedNumeros: (data as any)?.pinned_numeros ?? [],
-      pinnedFunis: (data as any)?.pinned_funis ?? [],
+      pinnedNumeros: parse(raw?.pinned_numeros),
+      pinnedFunis: parse(raw?.pinned_funis),
     }
   } catch {
     return { pinnedNumeros: [], pinnedFunis: [] }
