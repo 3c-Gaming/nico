@@ -30,22 +30,24 @@ export function DataInitializer() {
     async function load() {
       const state = getState()
 
-      const [disparosRes, esteirasRes, casasRes, templatesRes, configsRes] = await Promise.all([
+      const [disparosRes, esteirasRes, casasRes, templatesRes, configsRes, prefsRes] = await Promise.all([
         fetch('/api/disparos'),
         fetch('/api/esteiras'),
         fetch('/api/casas'),
         fetch('/api/link-templates'),
         fetch('/api/flow-tag-configs'),
+        fetch('/api/preferencias'),
       ])
 
       if (cancel) return
 
-      const [disparosData, esteirasData, casasData, templatesData, configsData] = await Promise.all([
+      const [disparosData, esteirasData, casasData, templatesData, configsData, prefsData] = await Promise.all([
         disparosRes.json(),
         esteirasRes.json(),
         casasRes.json(),
         templatesRes.json(),
         configsRes.json(),
+        prefsRes.json().catch(() => ({ pinnedNumeros: [], pinnedFunis: [] })),
       ])
 
       const novosDisparos = arrayToRecord(disparosData.disparos ?? [], 'id')
@@ -54,6 +56,10 @@ export function DataInitializer() {
       const novosTemplates = arrayToRecord(templatesData.templates ?? [], 'id')
       const novosConfigs = arrayToRecord(configsData.configs ?? [], 'flowId')
 
+      const prefs = prefsData as any
+      const pinnedNumeros: string[] = prefs?.pinnedNumeros ?? state.pinnedNumeros
+      const pinnedFunis: string[] = prefs?.pinnedFunis ?? state.pinnedFunis
+
       const merged = {
         ...state,
         disparos: { ...state.disparos, ...novosDisparos },
@@ -61,6 +67,8 @@ export function DataInitializer() {
         casasAposta: { ...state.casasAposta, ...novasCasas },
         linkTemplates: { ...state.linkTemplates, ...novosTemplates },
         flowTagConfigs: { ...state.flowTagConfigs, ...novosConfigs },
+        pinnedNumeros,
+        pinnedFunis,
         ultimaSync: new Date().toISOString(),
       }
 

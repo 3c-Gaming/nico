@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import { getState, setState, togglePinFunil } from '@/lib/store'
+import { getState, setState, updateFlowTagConfig, togglePinFunil } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse } from '@/types'
 
 interface FlowRow {
@@ -99,9 +99,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    const state = getState()
-    state.flowTagConfigs[flow.id] = { flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags }
-    setState(state)
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()

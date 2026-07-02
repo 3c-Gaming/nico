@@ -22,8 +22,6 @@ function getSupabase() {
   return globalForSupabase.supabase
 }
 
-export const supabase = getSupabase()
-
 function rows<T>(data: unknown): T[] {
   return (data ?? []) as T[]
 }
@@ -33,8 +31,32 @@ function row<T>(data: unknown): T | null {
 }
 
 function tb(name: string) {
-  if (!supabase) throw new Error('Supabase não disponível')
-  return supabase.from(name) as any
+  if (!getSupabase()) throw new Error('Supabase não disponível')
+  return getSupabase()!.from(name) as any
+}
+
+// --- Preferências (pins) ---
+
+export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[] }> {
+  try {
+    const { data } = await tb('user_preferences').select('*').eq('id', 'global').single()
+    return {
+      pinnedNumeros: (data as any)?.pinned_numeros ?? [],
+      pinnedFunis: (data as any)?.pinned_funis ?? [],
+    }
+  } catch {
+    return { pinnedNumeros: [], pinnedFunis: [] }
+  }
+}
+
+export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[]): Promise<void> {
+  await tb('user_preferences')
+    .upsert({
+      id: 'global',
+      pinned_numeros: JSON.stringify(pinnedNumeros),
+      pinned_funis: JSON.stringify(pinnedFunis),
+      updated_at: new Date().toISOString(),
+    })
 }
 
 // --- Disparos ---
@@ -139,4 +161,61 @@ export async function bulkInsertCasas(casas: CasaAposta[]): Promise<CasaAposta[]
 export async function bulkInsertLinkTemplates(templates: LinkTemplate[]): Promise<LinkTemplate[]> {
   const { data } = await tb('link_templates').insert(templates).select()
   return rows<LinkTemplate>(data)
+}
+
+// --- Casas CRUD ---
+
+export async function criarCasa(casa: CasaAposta): Promise<CasaAposta> {
+  const { data } = await tb('casas_aposta').insert(casa).select().single()
+  return row<CasaAposta>(data)!
+}
+
+export async function atualizarCasa(id: string, updates: Partial<CasaAposta>): Promise<CasaAposta | null> {
+  const { data } = await tb('casas_aposta')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  return row<CasaAposta>(data)
+}
+
+export async function deletarCasa(id: string): Promise<boolean> {
+  const { error } = await tb('casas_aposta').delete().eq('id', id)
+  return !error
+}
+
+// --- Link Templates CRUD ---
+
+export async function criarLinkTemplate(template: LinkTemplate): Promise<LinkTemplate> {
+  const { data } = await tb('link_templates').insert(template).select().single()
+  return row<LinkTemplate>(data)!
+}
+
+export async function atualizarLinkTemplate(id: string, updates: Partial<LinkTemplate>): Promise<LinkTemplate | null> {
+  const { data } = await tb('link_templates')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  return row<LinkTemplate>(data)
+}
+
+export async function deletarLinkTemplate(id: string): Promise<boolean> {
+  const { error } = await tb('link_templates').delete().eq('id', id)
+  return !error
+}
+
+// --- Flow Tag Configs CRUD ---
+
+export async function atualizarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
+  const { data } = await tb('flow_tag_configs')
+    .upsert(config)
+    .select()
+    .single()
+  return row<FlowTagConfig>(data)!
+}
+
+export async function deletarFlowTagConfig(flowId: string): Promise<boolean> {
+  const { error } = await tb('flow_tag_configs').delete().eq('flow_id', flowId)
+  return !error
 }

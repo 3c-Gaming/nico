@@ -19,6 +19,14 @@ const ESTADO_INICIAL: AppState = {
 let cachedJson = ''
 let cachedState: AppState | null = null
 
+function syncToApi(path: string, method: string, body?: unknown) {
+  fetch(path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(() => {})
+}
+
 export function getState(): AppState {
   if (typeof window === 'undefined') return { ...ESTADO_INICIAL }
 
@@ -67,6 +75,7 @@ export function patchDisparos(disparos: Partial<Record<string, Disparo>>): void 
   for (const [id, data] of Object.entries(disparos)) {
     if (data) {
       state.disparos[id] = { ...state.disparos[id], ...data, atualizadoEm: new Date().toISOString() }
+      syncToApi(`/api/disparos/${id}`, 'PUT', data)
     }
   }
   setState(state)
@@ -86,6 +95,7 @@ export function addCasaAposta(casa: CasaAposta): void {
   const state = getState()
   state.casasAposta[casa.id] = casa
   setState(state)
+  syncToApi('/api/casas', 'POST', casa)
 }
 
 export function updateCasaAposta(id: string, data: Partial<CasaAposta>): void {
@@ -93,6 +103,7 @@ export function updateCasaAposta(id: string, data: Partial<CasaAposta>): void {
   if (state.casasAposta[id]) {
     state.casasAposta[id] = { ...state.casasAposta[id], ...data }
     setState(state)
+    syncToApi('/api/casas', 'PUT', { id, ...data })
   }
 }
 
@@ -100,6 +111,7 @@ export function addLinkTemplate(template: LinkTemplate): void {
   const state = getState()
   state.linkTemplates[template.id] = template
   setState(state)
+  syncToApi('/api/link-templates', 'POST', template)
 }
 
 export function updateLinkTemplate(id: string, data: Partial<LinkTemplate>): void {
@@ -107,6 +119,7 @@ export function updateLinkTemplate(id: string, data: Partial<LinkTemplate>): voi
   if (state.linkTemplates[id]) {
     state.linkTemplates[id] = { ...state.linkTemplates[id], ...data, atualizadoEm: new Date().toISOString() }
     setState(state)
+    syncToApi('/api/link-templates', 'PUT', { id, ...data })
   }
 }
 
@@ -114,18 +127,21 @@ export function deletarLinkTemplate(id: string): void {
   const state = getState()
   delete state.linkTemplates[id]
   setState(state)
+  syncToApi(`/api/link-templates?id=${id}`, 'DELETE')
 }
 
 export function updateFlowTagConfig(config: FlowTagConfig): void {
   const state = getState()
   state.flowTagConfigs[config.flowId] = config
   setState(state)
+  syncToApi('/api/flow-tag-configs', 'POST', config)
 }
 
 export function deleteFlowTagConfig(flowId: string): void {
   const state = getState()
   delete state.flowTagConfigs[flowId]
   setState(state)
+  syncToApi(`/api/flow-tag-configs?flowId=${flowId}`, 'DELETE')
 }
 
 export function updatePaineisCPA(casaId: string, paineis: PainelCPA[]): void {
@@ -133,6 +149,7 @@ export function updatePaineisCPA(casaId: string, paineis: PainelCPA[]): void {
   if (state.casasAposta[casaId]) {
     state.casasAposta[casaId].paineisCPA = paineis
     setState(state)
+    syncToApi('/api/casas', 'PUT', { id: casaId, paineisCPA: paineis })
   }
 }
 
@@ -141,6 +158,7 @@ export function updateVariaveisCasa(casaId: string, variaveis: Record<string, st
   if (state.casasAposta[casaId]) {
     state.casasAposta[casaId].variaveis = variaveis
     setState(state)
+    syncToApi('/api/casas', 'PUT', { id: casaId, variaveis })
   }
 }
 
@@ -157,6 +175,11 @@ export function deletarDisparo(id: string): void {
     }
   }
   setState(state)
+  syncToApi(`/api/disparos/${id}`, 'DELETE')
+}
+
+function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[]) {
+  syncToApi('/api/preferencias', 'PUT', { pinnedNumeros, pinnedFunis })
 }
 
 export function togglePinNumero(id: string): void {
@@ -168,6 +191,7 @@ export function togglePinNumero(id: string): void {
     state.pinnedNumeros.push(id)
   }
   setState(state)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis)
 }
 
 export function togglePinFunil(nome: string): void {
@@ -179,6 +203,7 @@ export function togglePinFunil(nome: string): void {
     state.pinnedFunis.push(nome)
   }
   setState(state)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis)
 }
 
 export async function syncNumerosSendpulse(): Promise<NumeroSendpulse[]> {

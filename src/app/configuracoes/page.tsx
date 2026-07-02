@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, Plus, X, Check, AlertTriangle } from 'lucide-react'
-import { getState, setState } from '@/lib/store'
+import { getState, updateFlowTagConfig } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig } from '@/types'
 
 function TagChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -44,9 +44,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    const state = getState()
-    state.flowTagConfigs[flow.id] = { flowId: flow.id, botId, tags }
-    setState(state)
+    updateFlowTagConfig({ flowId: flow.id, botId, tags })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
