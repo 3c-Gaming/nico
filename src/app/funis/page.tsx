@@ -6,7 +6,7 @@ import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, setState, updateFlowTagConfig, togglePinFunil } from '@/lib/store'
-import type { NumeroSendpulse, FluxoSendpulse } from '@/types'
+import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
 interface FlowRow {
   botId: string
@@ -16,6 +16,7 @@ interface FlowRow {
   funil?: string
   utm?: string
   tags: string[]
+  casas: string[]
   leadsHoje: number
   total: number
   ultimoLeadAt: string | null
@@ -44,9 +45,16 @@ function TagChip({ label }: { label: string }) {
   )
 }
 
-function FunilChip({ label }: { label: string }) {
+function FunilChip({ label, cor }: { label: string; cor?: string }) {
+  const c = cor ?? 'var(--d1)'
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-[var(--d1)]/15 border border-[var(--d1)]/30 text-[var(--d1)]">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold font-mono"
+      style={{
+        backgroundColor: `${c}20`,
+        border: `1px solid ${c}30`,
+        color: c,
+      }}
+    >
       {label}
     </span>
   )
@@ -78,8 +86,11 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const [funil, setFunil] = useState(existing?.funil ?? '')
   const [utm, setUtm] = useState(existing?.utm ?? '')
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
+  const [casas, setCasas] = useState<string[]>(existing?.casas ?? [])
   const [input, setInput] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const casasAposta = Object.values(getState().casasAposta)
 
   function addTag() {
     const val = input.trim()
@@ -97,9 +108,13 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
     if (e.key === 'Enter') { e.preventDefault(); addTag() }
   }
 
+  function toggleCasa(casaId: string) {
+    setCasas((prev) => prev.includes(casaId) ? prev.filter((id) => id !== casaId) : [...prev, casaId])
+  }
+
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas: casas.length > 0 ? casas : undefined })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
@@ -107,7 +122,8 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   const prevFunil = existing?.funil ?? ''
   const prevUtm = existing?.utm ?? ''
-  const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tags ?? []).join(',') !== tags.join(',')
+  const prevCasas = (existing?.casas ?? []).join(',')
+  const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
 
   return (
     <div className="space-y-3 p-4 bg-[var(--bg-elevated)]/20 rounded border border-[var(--border)]/50">
@@ -163,6 +179,33 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
               <Plus size={14} />
             </button>
           </div>
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-16 pt-1">Casas:</span>
+        <div className="flex-1 flex flex-wrap gap-1.5">
+          {casasAposta.length === 0 ? (
+            <span className="text-xs text-[var(--text-muted)]/40 italic">Nenhuma casa cadastrada</span>
+          ) : (
+            casasAposta.map((casa) => {
+              const selected = casas.includes(casa.id)
+              return (
+                <button
+                  key={casa.id}
+                  onClick={() => toggleCasa(casa.id)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: selected ? `${casa.cor}20` : 'var(--bg-elevated)',
+                    border: `1px solid ${selected ? `${casa.cor}40` : 'var(--border)'}`,
+                    color: selected ? casa.cor : 'var(--text-muted)',
+                  }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: casa.cor }} />
+                  {casa.nome}
+                </button>
+              )
+            })
+          )}
         </div>
       </div>
       <div className="flex justify-end">
@@ -334,6 +377,7 @@ function FunisPageInner() {
           funil,
           utm: configs[flow.id]?.utm,
           tags,
+          casas: configs[flow.id]?.casas ?? [],
           leadsHoje: leads,
           total,
           ultimoLeadAt,
@@ -461,7 +505,32 @@ function FunisPageInner() {
                       <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
                         <td className="py-3 px-3">
                           {row.funil ? (
-                            <FunilChip label={row.funil} />
+                            <div className="flex items-center gap-1.5">
+                              {row.casas.length > 0 && (
+                                <div className="flex -space-x-0.5">
+                                  {row.casas.slice(0, 3).map((casaId) => {
+                                    const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
+                                    return casa ? (
+                                      <span
+                                        key={casaId}
+                                        className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
+                                        style={{ backgroundColor: casa.cor }}
+                                        title={casa.nome}
+                                      />
+                                    ) : null
+                                  })}
+                                </div>
+                              )}
+                              <FunilChip
+                                label={row.funil}
+                                cor={(() => {
+                                  const primeiraId = row.casas[0]
+                                  if (!primeiraId) return undefined
+                                  const c = (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]
+                                  return c?.cor
+                                })()}
+                              />
+                            </div>
                           ) : (
                             <span className="text-[10px] text-[var(--text-muted)]/40 italic">—</span>
                           )}

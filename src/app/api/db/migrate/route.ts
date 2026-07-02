@@ -52,8 +52,10 @@ export async function POST() {
         tag_id VARCHAR(100) NOT NULL,
         utm VARCHAR(255),
         bot_id VARCHAR(100),
+        casas JSONB DEFAULT '[]'::jsonb,
         criado_em TIMESTAMP DEFAULT NOW()
       )`,
+      `ALTER TABLE flow_tag_configs ADD COLUMN IF NOT EXISTS casas JSONB DEFAULT '[]'::jsonb`,
     ]
 
     for (const stmt of migrationSql) {

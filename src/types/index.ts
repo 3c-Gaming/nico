@@ -214,6 +214,7 @@ export interface FlowTagConfig {
   tags: string[]
   funil?: string
   utm?: string
+  casas?: string[]
 }
 
 export interface CopaMatch {

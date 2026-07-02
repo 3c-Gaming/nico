@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import type { NumeroMonitorado, FluxoSendpulse } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
 
@@ -73,6 +73,8 @@ interface FunilRow {
   funilNome: string
   botNomes: string[]
   tags: string[]
+  casas: string[]
+  corBadge?: string
   leadsHoje: number
   total: number
   baseCusto: number
@@ -285,6 +287,11 @@ export default function HomePage() {
 
       const baseCusto = [...baseCustoPorBot.values()].reduce((a, b) => a + b, 0)
       const baseLinhas = Math.round([...baseLinhasPorBot.values()].reduce((a, b) => a + b, 0))
+
+      // collect unique casas and first casa color for badge
+      const casas = [...new Set(flows.flatMap(([fid]) => configs[fid]?.casas ?? []))]
+      const primeiraCasaId = casas[0]
+      const corBadge = primeiraCasaId ? (getState().casasAposta as Record<string, CasaAposta>)[primeiraCasaId]?.cor : undefined
       const fluxosPorBot = fluxosMap
       const monitoramentoNum = monitoramento?.numeros ?? []
       const bots: FunilBotDetail[] = [...porBot.entries()].map(([botId, data]) => {
@@ -312,7 +319,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots }
+      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
 
@@ -488,7 +495,28 @@ export default function HomePage() {
                                 {expandedFunis[row.funilNome] ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
                               </button>
                             )}
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-[var(--d1)]/15 border border-[var(--d1)]/30 text-[var(--d1)]">
+                            {row.casas.length > 0 && (
+                              <div className="flex -space-x-0.5">
+                                {row.casas.slice(0, 3).map((casaId) => {
+                                  const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
+                                  return casa ? (
+                                    <span
+                                      key={casaId}
+                                      className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
+                                      style={{ backgroundColor: casa.cor }}
+                                      title={casa.nome}
+                                    />
+                                  ) : null
+                                })}
+                              </div>
+                            )}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono"
+                              style={{
+                                backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
+                                border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
+                                color: row.corBadge ?? 'var(--d1)',
+                              }}
+                            >
                               {row.funilNome}
                             </span>
                             <button

@@ -63,4 +63,5 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   tags: jsonb('tags').notNull().default('[]'),
   funil: text('funil'),
   utm: text('utm'),
+  casas: jsonb('casas').default('[]'),
 })
