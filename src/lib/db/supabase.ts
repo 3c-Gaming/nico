@@ -148,6 +148,11 @@ export async function deletarDisparo(id: string): Promise<boolean> {
   return !error
 }
 
+export async function bulkInsertDisparos(disparos: Disparo[]): Promise<Disparo[]> {
+  const { data } = await tb('disparos').upsert(disparos.map((d) => toSnakeCase(d as any))).select()
+  return rows<Disparo>(data)
+}
+
 // --- Esteiras ---
 
 export async function listarEsteiras(): Promise<Esteira[]> {
@@ -168,6 +173,11 @@ export async function criarEsteira(esteira: Esteira): Promise<Esteira> {
 export async function deletarEsteira(id: string): Promise<boolean> {
   const { error } = await tb('esteiras').delete().eq('id', id)
   return !error
+}
+
+export async function bulkInsertEsteiras(esteiras: Esteira[]): Promise<Esteira[]> {
+  const { data } = await tb('esteiras').upsert(esteiras.map((e) => toSnakeCase(e as any))).select()
+  return rows<Esteira>(data)
 }
 
 // --- Casas de Aposta ---

@@ -40,6 +40,8 @@ export default function MigrarLocalPage() {
       if (data.flowTagConfigs) linhas.push(`FlowTagConfigs: ${data.flowTagConfigs.inserted}`)
       if (data.casas) linhas.push(`Casas: ${data.casas.inserted}`)
       if (data.linkTemplates) linhas.push(`LinkTemplates: ${data.linkTemplates.inserted}`)
+      if (data.disparos) linhas.push(`Disparos: ${data.disparos.inserted}`)
+      if (data.esteiras) linhas.push(`Esteiras: ${data.esteiras.inserted}`)
 
       setResultado(linhas.length > 0 ? linhas.join(', ') : 'Nenhum dado para importar')
       setStatus('sucesso')
@@ -54,7 +56,7 @@ export default function MigrarLocalPage() {
       <h2 style={{ marginBottom: 8 }}>Migrar dados do navegador para o Supabase</h2>
       <p style={{ marginBottom: 24, color: '#555', fontSize: 14 }}>
         Esta página lê os dados do <code>localStorage</code> (<code>nico_app_state</code>) e envia para o Supabase via API.
-        Use se quiser trazer os dados que você cruzou (tags, funis, UTMs, casas, templates) da sua máquina local para a nuvem.
+        Use se quiser trazer os dados (tags, funis, UTMs, casas, templates, disparos, esteiras) da sua máquina local para a nuvem.
       </p>
 
       <div style={{ marginBottom: 24, padding: 16, background: '#f0f9ff', borderRadius: 8, fontSize: 13, lineHeight: 1.6 }}>
@@ -63,6 +65,8 @@ export default function MigrarLocalPage() {
           <li><code>flowTagConfigs</code> — cruzamento de tags, funis, UTMs</li>
           <li><code>casasAposta</code> — casas de aposta configuradas</li>
           <li><code>linkTemplates</code> — templates de link</li>
+          <li><code>disparos</code> — disparos criados</li>
+          <li><code>esteiras</code> — esteiras de disparos</li>
         </ul>
       </div>
 
