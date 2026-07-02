@@ -24,7 +24,7 @@ function syncToApi(path: string, method: string, body?: unknown) {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
-  }).catch(() => {})
+  }).catch((err) => console.warn('[sync]', path, err))
 }
 
 export function getState(): AppState {
@@ -139,7 +139,7 @@ export function deletarLinkTemplate(id: string): void {
 
 export function updateFlowTagConfig(config: FlowTagConfig): void {
   const state = getState()
-  state.flowTagConfigs[config.flowId] = config
+  state.flowTagConfigs[config.flowId] = { ...state.flowTagConfigs[config.flowId], ...config }
   setState(state)
   syncToApi('/api/flow-tag-configs', 'POST', config)
 }

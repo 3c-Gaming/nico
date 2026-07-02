@@ -114,7 +114,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas: casas.length > 0 ? casas : undefined })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
