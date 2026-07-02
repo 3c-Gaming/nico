@@ -12,6 +12,48 @@ const globalForSupabase = globalThis as unknown as {
   supabase: ReturnType<typeof createClient> | undefined
 }
 
+const CAMEL_TO_SNAKE: Record<string, string> = {
+  // Disparos
+  casasAposta: 'casas_aposta',
+  dataDisparo: 'data_disparo',
+  horarioDisparo: 'horario_disparo',
+  templateDaxx: 'template_daxx',
+  numeroSendpulse: 'numero_sendpulse',
+  esteiraPaiId: 'esteira_pai_id',
+  numerosSendpulse: 'numeros_sendpulse',
+  linkTemplatesSelecionados: 'link_templates_selecionados',
+  criadoEm: 'criado_em',
+  atualizadoEm: 'atualizado_em',
+  flowIds: 'flow_ids',
+  cpaPainelId: 'cpa_painel_id',
+  betmgmPid: 'betmgm_pid',
+  valorTotalBase: 'valor_total_base',
+  // Esteiras
+  criadaEm: 'criado_em',
+  // Casas
+  paineisCPA: 'paineis_cpa',
+  funilIds: 'funil_ids',
+  // Link Templates
+  casaId: 'casa_id',
+  urlTemplate: 'url_template',
+  // Flow Tag Configs
+  flowId: 'flow_id',
+  botId: 'bot_id',
+  // Preferencias
+  pinnedNumeros: 'pinned_numeros',
+  pinnedFunis: 'pinned_funis',
+  updatedAt: 'updated_at',
+}
+
+function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const key = CAMEL_TO_SNAKE[k] ?? k
+    result[key] = v
+  }
+  return result
+}
+
 function getSupabase() {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null
   if (!globalForSupabase.supabase) {
@@ -82,13 +124,13 @@ export async function getDisparo(id: string): Promise<Disparo | null> {
 }
 
 export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
-  const { data } = await tb('disparos').insert(disparo).select().single()
+  const { data } = await tb('disparos').insert(toSnakeCase(disparo as any)).select().single()
   return row<Disparo>(data)!
 }
 
 export async function atualizarDisparo(id: string, updates: Partial<Disparo>): Promise<Disparo | null> {
   const { data } = await tb('disparos')
-    .update({ ...updates, atualizadoEm: new Date().toISOString() })
+    .update(toSnakeCase({ ...updates, atualizadoEm: new Date().toISOString() } as any))
     .eq('id', id)
     .select()
     .single()
@@ -113,7 +155,7 @@ export async function getEsteira(id: string): Promise<Esteira | null> {
 }
 
 export async function criarEsteira(esteira: Esteira): Promise<Esteira> {
-  const { data } = await tb('esteiras').insert(esteira).select().single()
+  const { data } = await tb('esteiras').insert(toSnakeCase(esteira as any)).select().single()
   return row<Esteira>(data)!
 }
 
@@ -144,35 +186,35 @@ export async function listarFlowTagConfigs(): Promise<FlowTagConfig[]> {
 }
 
 export async function criarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
-  const { data } = await tb('flow_tag_configs').insert(config).select().single()
+  const { data } = await tb('flow_tag_configs').insert(toSnakeCase(config as any)).select().single()
   return row<FlowTagConfig>(data)!
 }
 
 export async function bulkInsertFlowTagConfigs(configs: FlowTagConfig[]): Promise<FlowTagConfig[]> {
-  const { data } = await tb('flow_tag_configs').insert(configs).select()
+  const { data } = await tb('flow_tag_configs').insert(configs.map((c) => toSnakeCase(c as any))).select()
   return rows<FlowTagConfig>(data)
 }
 
 export async function bulkInsertCasas(casas: CasaAposta[]): Promise<CasaAposta[]> {
-  const { data } = await tb('casas_aposta').insert(casas).select()
+  const { data } = await tb('casas_aposta').insert(casas.map((c) => toSnakeCase(c as any))).select()
   return rows<CasaAposta>(data)
 }
 
 export async function bulkInsertLinkTemplates(templates: LinkTemplate[]): Promise<LinkTemplate[]> {
-  const { data } = await tb('link_templates').insert(templates).select()
+  const { data } = await tb('link_templates').insert(templates.map((t) => toSnakeCase(t as any))).select()
   return rows<LinkTemplate>(data)
 }
 
 // --- Casas CRUD ---
 
 export async function criarCasa(casa: CasaAposta): Promise<CasaAposta> {
-  const { data } = await tb('casas_aposta').insert(casa).select().single()
+  const { data } = await tb('casas_aposta').insert(toSnakeCase(casa as any)).select().single()
   return row<CasaAposta>(data)!
 }
 
 export async function atualizarCasa(id: string, updates: Partial<CasaAposta>): Promise<CasaAposta | null> {
   const { data } = await tb('casas_aposta')
-    .update(updates)
+    .update(toSnakeCase(updates as any))
     .eq('id', id)
     .select()
     .single()
@@ -187,13 +229,13 @@ export async function deletarCasa(id: string): Promise<boolean> {
 // --- Link Templates CRUD ---
 
 export async function criarLinkTemplate(template: LinkTemplate): Promise<LinkTemplate> {
-  const { data } = await tb('link_templates').insert(template).select().single()
+  const { data } = await tb('link_templates').insert(toSnakeCase(template as any)).select().single()
   return row<LinkTemplate>(data)!
 }
 
 export async function atualizarLinkTemplate(id: string, updates: Partial<LinkTemplate>): Promise<LinkTemplate | null> {
   const { data } = await tb('link_templates')
-    .update(updates)
+    .update(toSnakeCase(updates as any))
     .eq('id', id)
     .select()
     .single()
@@ -209,7 +251,7 @@ export async function deletarLinkTemplate(id: string): Promise<boolean> {
 
 export async function atualizarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
   const { data } = await tb('flow_tag_configs')
-    .upsert(config)
+    .upsert(toSnakeCase(config as any))
     .select()
     .single()
   return row<FlowTagConfig>(data)!
