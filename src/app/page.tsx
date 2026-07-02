@@ -107,6 +107,16 @@ export default function HomePage() {
     setPinVersion((v) => v + 1)
   }, [])
 
+  useEffect(() => {
+    const handler = () => forceUpdate()
+    window.addEventListener('nico:state-changed', handler)
+    window.addEventListener('nico:data-loaded', handler)
+    return () => {
+      window.removeEventListener('nico:state-changed', handler)
+      window.removeEventListener('nico:data-loaded', handler)
+    }
+  }, [forceUpdate])
+
   const numerosPinados = useMemo(() => {
     if (!monitoramento?.numeros) return []
     return monitoramento.numeros.filter((n) => pinnedNumeros.includes(n.numero.id))
