@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, Sparkles, Check, Link2, ChevronDown, ChevronUp, RefreshCw, Trophy, Newspaper, ExternalLink, MapPin, Clock, ChevronRight, BarChart3, Users } from 'lucide-react'
+import { Search, Sparkles, Check, Link2, ChevronDown, ChevronUp, RefreshCw, Trophy, Newspaper, ExternalLink, MapPin, Clock, ChevronRight, BarChart3, Users, CalendarDays, List } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { getState } from '@/lib/store'
 import { montarLinkWhatsApp } from '@/lib/copa-2026/url'
+import { CopaTimeline } from '@/components/copa-2026/CopaTimeline'
 import { salvarPreferencia, listarPreferencias, removerPreferencia, getResumoPreferencias } from '@/lib/copa-2026/preferencias'
 import type { CopaMatch, CopaNoticia, SugestaoCopa, PreferenciaCopa, GroupStanding, TeamInfo, RecentMatch } from '@/types'
 
@@ -100,6 +101,7 @@ export default function Copa2026Page() {
   const [standings, setStandings] = useState<GroupStanding[]>([])
   const [standingsOpen, setStandingsOpen] = useState(false)
   const [loadingStandings, setLoadingStandings] = useState(false)
+  const [visao, setVisao] = useState<'lista' | 'calendario'>('lista')
   const [teamCache, setTeamCache] = useState<Record<string, { info: TeamInfo; recent: RecentMatch[] }>>({})
   const [loadingTeam, setLoadingTeam] = useState<Record<string, boolean>>({})
 
@@ -418,6 +420,30 @@ export default function Copa2026Page() {
                 ))}
               </select>
             </div>
+            <div className="flex items-center gap-1 bg-[var(--bg-base)] border border-[var(--border)] rounded p-0.5">
+              <button
+                onClick={() => setVisao('lista')}
+                className={`flex items-center gap-1 px-2 h-7 rounded text-xs font-medium transition-all ${
+                  visao === 'lista'
+                    ? 'bg-[var(--d1)] text-white'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <List size={14} />
+                Lista
+              </button>
+              <button
+                onClick={() => setVisao('calendario')}
+                className={`flex items-center gap-1 px-2 h-7 rounded text-xs font-medium transition-all ${
+                  visao === 'calendario'
+                    ? 'bg-[var(--d1)] text-white'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <CalendarDays size={14} />
+                Calendário
+              </button>
+            </div>
             <button
               onClick={buscarJogos}
               disabled={loadingMatches}
@@ -512,8 +538,8 @@ export default function Copa2026Page() {
           </div>
         )}
 
-        {/* Lista de Jogos */}
-        {matches.length > 0 && (
+        {/* Lista de Jogos / Calendário */}
+        {matches.length > 0 && visao === 'lista' && (
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">
@@ -711,6 +737,12 @@ export default function Copa2026Page() {
               {loadingSugestoes ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
               {loadingSugestoes ? 'Gerando…' : 'Gerar Sugestões com IA'}
             </button>
+          </div>
+        )}
+
+        {matches.length > 0 && visao === 'calendario' && (
+          <div className="min-h-[400px]">
+            <CopaTimeline matches={matches} />
           </div>
         )}
 
