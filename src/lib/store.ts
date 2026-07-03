@@ -2,8 +2,6 @@
 
 import type { AppState, CasaAposta, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA } from '@/types'
 
-const STORAGE_KEY = 'nico_app_state'
-
 const ESTADO_INICIAL: AppState = {
   disparos: {},
   esteiras: {},
@@ -16,7 +14,6 @@ const ESTADO_INICIAL: AppState = {
   pinnedFunis: [],
 }
 
-let cachedJson = ''
 let cachedState: AppState | null = null
 
 function syncToApi(path: string, method: string, body?: unknown) {
@@ -24,56 +21,24 @@ function syncToApi(path: string, method: string, body?: unknown) {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
-  }).catch((err) => console.warn('[sync]', path, err))
+  })
+    .then((res) => {
+      if (!res.ok) console.warn('[sync]', method, path, res.status)
+    })
+    .catch((err) => console.warn('[sync]', path, err))
 }
 
 export function getState(): AppState {
   if (typeof window === 'undefined') return { ...ESTADO_INICIAL }
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      const vazio = { ...ESTADO_INICIAL }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(vazio))
-      cachedJson = JSON.stringify(vazio)
-      cachedState = vazio
-      return vazio
-    }
-    if (raw !== cachedJson) {
-      cachedJson = raw
-      const parsed = JSON.parse(raw) as AppState
-      if (!parsed.linkTemplates) parsed.linkTemplates = {}
-      if (!parsed.flowTagConfigs) parsed.flowTagConfigs = {}
-      if (!parsed.pinnedNumeros) parsed.pinnedNumeros = []
-      if (!parsed.pinnedFunis) parsed.pinnedFunis = []
-      for (const c of Object.values(parsed.casasAposta)) {
-        if (!Array.isArray(c.paineisCPA)) (c as unknown as Record<string, unknown>).paineisCPA = []
-        if (!Array.isArray(c.funilIds)) (c as unknown as Record<string, unknown>).funilIds = []
-      }
-      for (const d of Object.values(parsed.disparos)) {
-        if (!Array.isArray(d.casasAposta)) (d as unknown as Record<string, unknown>).casasAposta = []
-        const old = d as unknown as Record<string, unknown>
-        if (old.numeroSendpulse && !old.numerosSendpulse) {
-          old.numerosSendpulse = [old.numeroSendpulse]
-          delete old.numeroSendpulse
-        }
-      }
-      for (const e of Object.values(parsed.esteiras)) {
-        if (!Array.isArray(e.casasAposta)) (e as unknown as Record<string, unknown>).casasAposta = []
-      }
-      if (!Array.isArray(parsed.pinnedNumeros)) parsed.pinnedNumeros = []
-      if (!Array.isArray(parsed.pinnedFunis)) parsed.pinnedFunis = []
-      cachedState = parsed
-    }
-    return cachedState!
-  } catch {
-    return { ...ESTADO_INICIAL }
+  if (!cachedState) {
+    cachedState = { ...ESTADO_INICIAL }
   }
+  return cachedState
 }
 
 export function setState(state: AppState): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  cachedState = state
   window.dispatchEvent(new CustomEvent('nico:state-changed'))
 }
 

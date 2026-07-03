@@ -37,6 +37,8 @@ export function criarEsteira(disparoD1: Disparo, casasAposta: CasaAposta[]): Est
     dataDisparo: formatISODate(data),
     horarioDisparo: disparoD1.horarioDisparo,
     base: { ...disparoD1.base },
+    utm: disparoD1.utm,
+    betmgmPid: disparoD1.betmgmPid,
     templateDaxx: disparoD1.templateDaxx ? { ...disparoD1.templateDaxx } : undefined,
     numerosSendpulse: disparoD1.numerosSendpulse?.map((n) => ({ ...n })),
     esteiraPaiId: esteiraId,

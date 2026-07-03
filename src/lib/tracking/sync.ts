@@ -1,6 +1,6 @@
 import type { Disparo } from '@/types'
 
-const ACID_REGEX = /^\d{2}-\d{2}-\d{2}-\d{2}-(\w+)-(\w+)-/
+const ACID_REGEX = /^\d{2}_\d{2}_\d{2}_\d{2}_(\w+)_(\w+)_/
 
 export function parseAcid(acid: string): { funil: string; projeto: string } | null {
   const m = acid.match(ACID_REGEX)
