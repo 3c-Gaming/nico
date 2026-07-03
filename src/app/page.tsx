@@ -7,7 +7,6 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import { parseAcid } from '@/lib/tracking/sync'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
@@ -201,8 +200,7 @@ export default function HomePage() {
         const utm = c.utm!
         const matches = todos.filter((e) => {
         if (e.bethouse === 'superbet' && e.acid) {
-          const parsed = parseAcid(e.acid)
-          return parsed?.funil === utm
+          return e.acid.includes(utm)
         }
         if (e.bethouse === 'betmgm') {
           return String(e.pid) === utm
