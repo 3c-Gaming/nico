@@ -129,7 +129,7 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
   return (
     <tr>
       <td colSpan={5} className="p-0">
-        <div className="py-3 px-6 bg-[var(--bg-elevated)]/30 border-b border-[var(--border)]">
+        <div className="py-3 px-6 glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
           {carregando && <Spinner size={16} />}
           {erro && <span className="text-xs text-[var(--error)]">{erro}</span>}
           {fluxos && fluxos.length === 0 && (
@@ -149,7 +149,7 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
               </div>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-[var(--border)]">
+                  <tr className="border-b border-[var(--glass-border)]">
                     <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)] w-16">Funil</th>
                     <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Fluxo</th>
                     <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Status</th>
@@ -173,7 +173,7 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
                     const temLeads = totalLeads > 0
                     const temTotal = totalGeral > 0
                     return (
-                      <tr key={fluxo.id} className="border-b border-[var(--border)]/50">
+                      <tr key={fluxo.id} className="border-b border-[var(--glass-border)]/50">
                         <td className="py-2 px-2">
                           {(() => {
                             const funil = getState().flowTagConfigs[fluxo.id]?.funil
@@ -344,7 +344,7 @@ export default function NumerosPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                    <tr className="border-b border-[var(--border)]">
+                    <tr className="border-b border-[var(--glass-border)]">
                       <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome / Número</th>
                       <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Disparos</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis</th>
@@ -357,7 +357,7 @@ export default function NumerosPage() {
                     const isExpanded = expandedId === item.numero.id
                     return (
                     <Fragment key={item.numero.id}>
-                    <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : item.numero.id)}>
+                    <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : item.numero.id)}>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">
                           {isExpanded ? <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />}

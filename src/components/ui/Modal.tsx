@@ -40,7 +40,7 @@ export function Modal({ open, onClose, title, children, width = '480px' }: Modal
         ref={ref}
         role="dialog"
         aria-modal="true"
-        className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-md shadow-xl max-h-[85vh] overflow-y-auto transition-opacity"
+        className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md max-h-[85vh] overflow-y-auto transition-all"
         style={{ width, maxWidth: '100%' }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -127,7 +127,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
 
   return (
-    <div className="space-y-3 p-4 bg-[var(--bg-elevated)]/20 rounded border border-[var(--border)]/50">
+    <div className="space-y-3 p-4 glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-16">Funil:</span>
         <input
@@ -523,7 +523,7 @@ function FunisPageInner() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)]">
+                <tr className="border-b border-[var(--glass-border)]">
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
@@ -544,7 +544,7 @@ function FunisPageInner() {
                   const isEditing = editingKey === configKey
                   return (
                     <Fragment key={configKey}>
-                      <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
+                      <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
                         <td className="py-3 px-3">
                           {row.funil ? (
                             <div className="flex items-center gap-1.5">
@@ -696,7 +696,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={12} className="p-0 border-b border-[var(--border)]">
+                          <td colSpan={12} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}

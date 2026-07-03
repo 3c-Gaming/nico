@@ -603,7 +603,7 @@ export default function BasesPage() {
       {/* Modal de importação */}
       {importModalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] shadow-xl flex flex-col">
+          <div className="w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">Importar disparos retroativos</h2>
               <button onClick={() => setImportModalAberto(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">

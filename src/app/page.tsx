@@ -366,7 +366,7 @@ export default function HomePage() {
     const isDisparo = tipo === 'disparo'
     return rows.map((row) => (
       <Fragment key={row.funilNome}>
-        <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
+        <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
           <td className="py-3 px-3">
             <div className="flex items-center gap-1.5">
               {row.bots.length > 1 && (
@@ -473,10 +473,10 @@ export default function HomePage() {
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
             <td colSpan={isDisparo ? 9 : 7} className="p-0">
-              <div className="bg-[var(--bg-elevated)]/20 border-b border-[var(--border)]">
+              <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-[var(--border)]/50">
+                    <tr className="border-b border-[var(--glass-border)]/50">
                       <th className="text-left py-2 px-3 pl-8 text-[10px] font-medium text-[var(--text-muted)]">Número</th>
                       <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Fluxos</th>
                       <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Tags</th>
@@ -494,7 +494,7 @@ export default function HomePage() {
                   </thead>
                   <tbody>
                     {row.bots.map((bot) => (
-                      <tr key={bot.botId} className="border-b border-[var(--border)]/30 hover:bg-[var(--bg-elevated)]/40 transition-colors">
+                      <tr key={bot.botId} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]/30 hover:bg-[var(--glass-hover-bg)] transition-colors">
                         <td className="py-2 px-3 pl-8">
                           <span className="font-mono text-[var(--text-primary)]">{bot.botNome}</span>
                         </td>
@@ -643,7 +643,7 @@ export default function HomePage() {
               {numerosPinados.map((item) => (
                 <div
                   key={item.numero.id}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4 space-y-3 hover:border-[var(--border-strong)] transition-colors"
+                  className="rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] p-4 space-y-3 hover:bg-[var(--glass-hover-bg)] hover:shadow-[var(--glass-hover-shadow)] transition-all"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -703,7 +703,7 @@ export default function HomePage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--border)]">
+                      <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
@@ -737,7 +737,7 @@ export default function HomePage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--border)]">
+                      <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>

@@ -147,7 +147,7 @@ export default function LinksPage() {
                 return (
                   <div
                     key={t.id}
-                    className="p-4 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)] transition-colors group"
+                    className="p-4 rounded-md glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] hover:bg-[var(--glass-hover-bg)] hover:shadow-[var(--glass-hover-shadow)] transition-all group"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0 space-y-2">
@@ -225,7 +225,7 @@ export default function LinksPage() {
             </h2>
             <div className="grid gap-3">
               {orphanTemplates.map((t) => (
-                <div key={t.id} className="p-4 rounded-md border border-[var(--error)] bg-[var(--bg-surface)]">
+                <div key={t.id} className="p-4 rounded-md border border-[var(--error)] glass bg-[var(--glass-bg)] shadow-[var(--glass-shadow)]">
                   <span className="text-sm text-[var(--text-primary)]">{t.nome}</span>
                 </div>
               ))}

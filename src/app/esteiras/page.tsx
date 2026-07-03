@@ -32,7 +32,7 @@ export default function EsteirasPage() {
           return (
             <div
               key={esteira.id}
-              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-5 hover:border-[var(--border-strong)] transition-colors"
+              className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-5 hover:bg-[var(--glass-hover-bg)] hover:shadow-[var(--glass-hover-shadow)] transition-all"
             >
               <div className="flex items-start justify-between mb-4">
                 <div>

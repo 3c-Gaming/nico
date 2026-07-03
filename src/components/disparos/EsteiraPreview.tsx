@@ -27,7 +27,7 @@ export function EsteiraPreview({ dataDisparo, casas, horario }: EsteiraPreviewPr
   if (!dataDisparo || casas.length === 0) return null
 
   return (
-    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+    <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
       <span className="text-xs text-[var(--text-secondary)] font-medium mb-3 block">
         Prévia da Esteira
       </span>

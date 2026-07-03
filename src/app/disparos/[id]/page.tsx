@@ -401,7 +401,7 @@ export default function DetalheDisparoPage() {
               value={formData.status}
               onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as StatusDisparo }))}
             />
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4 space-y-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
               <div>
                 <span className="text-xs text-[var(--text-muted)] block mb-3">Números Sendpulse</span>
                 <StepNumero
@@ -570,11 +570,11 @@ export default function DetalheDisparoPage() {
         ) : (
           <div className="space-y-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-1">Tipo</span>
                 <Badge variant="tipo" value={disparo.tipo} />
               </div>
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-1">Status</span>
                 <Dropdown label={<span className="flex items-center gap-1.5"><StatusDot status={disparo.status} /><span className="capitalize">{disparo.status.replace('_', ' ')}</span></span>}>
                   <div className="p-1 min-w-[140px]">
@@ -598,17 +598,17 @@ export default function DetalheDisparoPage() {
                   </div>
                 </Dropdown>
               </div>
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-1">Data</span>
                 <span className="text-sm text-[var(--text-primary)]">{disparo.dataDisparo}</span>
               </div>
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-1">Horário</span>
                 <span className="text-sm text-[var(--text-primary)]">{disparo.horarioDisparo}</span>
               </div>
             </div>
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
               <span className="text-xs text-[var(--text-muted)] block mb-2">Casas de Aposta</span>
               <div className="flex flex-wrap gap-1.5">
                 {disparo.casasAposta.map((cId) => {
@@ -619,7 +619,7 @@ export default function DetalheDisparoPage() {
               </div>
             </div>
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
               <span className="text-xs text-[var(--text-muted)] block mb-2">Base CSV</span>
               <div className="text-sm text-[var(--text-primary)]">
                 <span className="capitalize">{disparo.base.status}</span>
@@ -636,7 +636,7 @@ export default function DetalheDisparoPage() {
             </div>
 
             {disparo.templateDaxx && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-2">Template DAXX</span>
                 <span className="text-sm text-[var(--text-primary)]">{disparo.templateDaxx.nome}</span>
                 {disparo.templateDaxx.url && (
@@ -652,7 +652,7 @@ export default function DetalheDisparoPage() {
               </div>
             )}
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
               <span className="text-xs text-[var(--text-muted)] block mb-3">Números e Fluxos</span>
               {disparo.numerosSendpulse && disparo.numerosSendpulse.length > 0 && (
                 <div className="space-y-2">
@@ -696,14 +696,14 @@ export default function DetalheDisparoPage() {
             </div>
 
             {disparo.notas && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-2">Notas</span>
                 <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{disparo.notas}</p>
               </div>
             )}
 
             {(disparo.utm || disparo.cpaPainelId) && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <span className="text-xs text-[var(--text-muted)] block mb-2">CPA / UTM</span>
                 <div className="flex items-center gap-4 text-sm">
                   {disparo.utm && (
@@ -736,7 +736,7 @@ export default function DetalheDisparoPage() {
               if (!c && !disparo.conversao) return null
               const pct = c && c.entreguesDaxx > 0 ? ((c.leadsFluxo / c.entreguesDaxx) * 100).toFixed(1) : null
               return (
-                <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+                <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                   <span className="text-xs text-[var(--text-muted)] block mb-2">Conversão</span>
                   <div className="flex items-center gap-6 text-sm">
                     <div>
@@ -765,7 +765,7 @@ export default function DetalheDisparoPage() {
               const r = disparo.resultados
               if (!r?.registros && !r?.ftds) return null
               return (
-                <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+                <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                   <span className="text-xs text-[var(--text-muted)] block mb-2">Tracking (3CGG)</span>
                   <div className="flex items-center gap-6 text-sm">
                     <div>
@@ -781,7 +781,7 @@ export default function DetalheDisparoPage() {
               )
             })()}
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs text-[var(--text-muted)] font-medium">Resultados</span>
                 <button
@@ -907,7 +907,7 @@ export default function DetalheDisparoPage() {
             </div>
 
             {esteira && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs text-[var(--text-muted)] font-medium">Esteira</span>
                   <Link href="/esteiras" className="text-xs text-[var(--d1)] hover:underline">
@@ -964,7 +964,7 @@ export default function DetalheDisparoPage() {
               </div>
             )}
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-md p-4">
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
               <span className="text-xs text-[var(--text-muted)] block mb-3">Links</span>
               <div className="space-y-3">
                 {disparo.casasAposta.map((cId) => {

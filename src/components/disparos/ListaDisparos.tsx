@@ -279,7 +279,7 @@ export function ListaDisparos() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--border)]">
+            <tr className="border-b border-[var(--glass-border)]">
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 w-10">#</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Nomenclatura</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Casa</th>
@@ -310,7 +310,7 @@ export function ListaDisparos() {
               <tr
                 key={d.id}
                 onClick={() => router.push(`/disparos/${d.id}`)}
-                className="border-b border-[var(--border)] hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
+                className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] cursor-pointer transition-colors"
               >
                 <td className="px-3 py-3 text-[var(--text-muted)] text-xs">
                   {d.esteiraPaiId ? <GitBranch size={14} className="text-[var(--d3)]" /> : '-'}

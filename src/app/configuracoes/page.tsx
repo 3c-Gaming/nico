@@ -231,18 +231,18 @@ export default function ConfiguracoesPage() {
     <div className="flex-1 flex flex-col p-6 space-y-6">
       <h1 className="text-lg font-mono text-[var(--text-primary)]">Configurações</h1>
 
-      <div className="flex items-center justify-between max-w-sm p-4 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+      <div className="flex items-center justify-between max-w-sm p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <span className="text-sm text-[var(--text-primary)]">Tema</span>
         <ThemeToggle />
       </div>
 
-      <div className="max-w-2xl p-4 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Token daxX</h2>
 
         <DaxxTokenSection />
       </div>
 
-      <div className="max-w-2xl p-4 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Tags dos Fluxos</h2>

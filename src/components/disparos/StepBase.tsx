@@ -40,7 +40,7 @@ export function StepBase({
               className={`p-4 rounded-md border text-left transition-all ${
                 tipo === opt.value
                   ? 'border-[var(--d1)] bg-[var(--d1)]/10'
-                  : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
+                  : 'border-[var(--glass-border)] glass bg-[var(--glass-bg)] shadow-[var(--glass-shadow)] hover:bg-[var(--glass-hover-bg)] hover:shadow-[var(--glass-hover-shadow)]'
               }`}
             >
               <span
