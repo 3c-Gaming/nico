@@ -1,25 +1,46 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { CopaMatch } from '@/types'
 import { isMesmaData, adicionarDias, gerarRangeDias, parsearDataISO } from '@/lib/datas'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { ColunaDataJogos } from './ColunaDataJogos'
 import { CopaFiltros } from './CopaFiltros'
 import { Button } from '../ui/Button'
-import type { FiltrosCopaCalendario } from '@/hooks/useCopaCalendario'
+import type { FiltrosCopaCalendario } from './CopaFiltros'
 
-interface CopaTimelineProps {
-  matches: CopaMatch[]
+function primeiroDiaDoMes(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1)
 }
 
-export function CopaTimeline({ matches }: CopaTimelineProps) {
+function ultimoDiaDoMes(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+}
+
+function nomeMes(date: Date): string {
+  return date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
+}
+
+function gerarDatasMes(date: Date): string[] {
+  const ano = date.getFullYear()
+  const mes = date.getMonth()
+  const total = new Date(ano, mes + 1, 0).getDate()
+  const datas: string[] = []
+  for (let d = 1; d <= total; d++) {
+    datas.push(`${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+  }
+  return datas
+}
+
+export function CopaTimeline() {
   const hoje = useMemo(() => {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   }, [])
 
-  const [inicioRange, setInicioRange] = useState(() => adicionarDias(hoje, -1))
+  const [mesAtual, setMesAtual] = useState(() => primeiroDiaDoMes(hoje))
+  const [matches, setMatches] = useState<CopaMatch[]>([])
+  const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [filtros, setFiltrosState] = useState<FiltrosCopaCalendario>({
@@ -28,8 +49,37 @@ export function CopaTimeline({ matches }: CopaTimelineProps) {
     apenasAoVivo: false,
   })
 
-  const fimRange = useMemo(() => adicionarDias(inicioRange, 1 + 16), [inicioRange])
-  const diasVisiveis = useMemo(() => gerarRangeDias(inicioRange, fimRange), [inicioRange, fimRange])
+  const diaInicio = mesAtual
+  const diaFim = useMemo(() => adicionarDias(primeiroDiaDoMes(mesAtual), ultimoDiaDoMes(mesAtual) - 1), [mesAtual])
+
+  const diasVisiveis = useMemo(() => gerarRangeDias(diaInicio, diaFim), [diaInicio, diaFim])
+
+  useEffect(() => {
+    let cancelled = false
+    async function carregar() {
+      setLoading(true)
+      try {
+        const dates = gerarDatasMes(mesAtual)
+        const results = await Promise.allSettled(
+          dates.map((d) =>
+            fetch(`/api/copa-2026/fixtures?date=${d}`)
+              .then((r) => (r.ok ? r.json() : { matches: [] }))
+              .then((j) => (j.matches ?? []) as CopaMatch[])
+          )
+        )
+        if (cancelled) return
+        const todos: CopaMatch[] = []
+        for (const r of results) {
+          if (r.status === 'fulfilled') todos.push(...r.value)
+        }
+        setMatches(todos)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    carregar()
+    return () => { cancelled = true }
+  }, [mesAtual])
 
   const matchesFiltrados = useMemo(() => {
     return matches.filter((m) => {
@@ -54,17 +104,12 @@ export function CopaTimeline({ matches }: CopaTimelineProps) {
     return map
   }, [diasVisiveis, matchesFiltrados])
 
-  const stagesDisponiveis = useMemo(() => {
-    return [...new Set(matches.map((m) => m.stage))]
-  }, [matches])
-
-  const gruposDisponiveis = useMemo(() => {
-    return [...new Set(matches.map((m) => m.group).filter(Boolean) as string[])]
-  }, [matches])
-
-  const setFiltros = (f: Partial<FiltrosCopaCalendario>) => {
+  const setFiltros = useCallback((f: Partial<FiltrosCopaCalendario>) => {
     setFiltrosState((prev) => ({ ...prev, ...f }))
-  }
+  }, [])
+
+  const stagesDisponiveis = useMemo(() => [...new Set(matches.map((m) => m.stage))], [matches])
+  const gruposDisponiveis = useMemo(() => [...new Set(matches.map((m) => m.group).filter(Boolean) as string[])], [matches])
 
   const indexHoje = useMemo(
     () => diasVisiveis.findIndex((d) => isMesmaData(d, hoje)),
@@ -80,32 +125,44 @@ export function CopaTimeline({ matches }: CopaTimelineProps) {
         }, 100)
       }
     }
-  }, [indexHoje])
+  }, [indexHoje, loading])
+
+  function avancarMes() {
+    setMesAtual((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+  }
+
+  function recuarMes() {
+    setMesAtual((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+  }
+
+  function irParaHoje() {
+    setMesAtual(primeiroDiaDoMes(hoje))
+  }
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-        <CopaFiltros
-          filtros={filtros}
-          onChange={setFiltros}
-          stages={stagesDisponiveis}
-          grupos={gruposDisponiveis}
-        />
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)]">
+        <div className="flex items-center gap-3">
+          <CopaFiltros
+            filtros={filtros}
+            onChange={setFiltros}
+            stages={stagesDisponiveis}
+            grupos={gruposDisponiveis}
+          />
+          {loading && <RefreshCw size={14} className="animate-spin text-[var(--text-muted)]" />}
+        </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setInicioRange((p) => adicionarDias(p, -7))} icon={<ChevronLeft size={16} />}>
+          <Button variant="ghost" size="sm" onClick={recuarMes} icon={<ChevronLeft size={16} />}>
             Anterior
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => {
-            const idx = diasVisiveis.findIndex((d) => isMesmaData(d, hoje))
-            if (idx >= 0 && containerRef.current) {
-              const coluna = containerRef.current.querySelector(`[data-dia-index="${idx}"]`)
-              coluna?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-            }
-          }}>
-            Hoje
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setInicioRange((p) => adicionarDias(p, 7))} icon={<ChevronRight size={16} />}>
+          <span className="text-sm font-medium text-[var(--text-primary)] capitalize min-w-[150px] text-center select-none">
+            {nomeMes(mesAtual)}
+          </span>
+          <Button variant="ghost" size="sm" onClick={avancarMes} icon={<ChevronRight size={16} />}>
             Próximo
+          </Button>
+          <Button variant="secondary" size="sm" onClick={irParaHoje}>
+            Hoje
           </Button>
         </div>
       </div>

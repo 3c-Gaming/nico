@@ -2,7 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { FiltrosCopaCalendario } from '@/hooks/useCopaCalendario'
+
+export interface FiltrosCopaCalendario {
+  stages: string[]
+  grupos: string[]
+  apenasAoVivo: boolean
+}
 
 interface CopaFiltrosProps {
   filtros: FiltrosCopaCalendario
