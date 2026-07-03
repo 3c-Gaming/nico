@@ -8,7 +8,7 @@ export function calcularDataFilho(dataD1: Date, tipo: 'D3' | 'D5' | 'D7'): Date 
   return adicionarDias(dataD1, OFFSET[tipo])
 }
 
-export function criarEsteira(disparoD1: Disparo, casasAposta: CasaAposta[]): Esteira {
+export function criarEsteira(disparoD1: Disparo, casasAposta: CasaAposta[]): { esteira: Esteira; filhos: Disparo[] } {
   const dataCriacao = new Date(disparoD1.criadoEm)
   const dataD1 = parseData(disparoD1.dataDisparo)
 
@@ -61,7 +61,7 @@ export function criarEsteira(disparoD1: Disparo, casasAposta: CasaAposta[]): Est
     ativa: true,
   }
 
-  return esteira
+  return { esteira, filhos }
 }
 
 function parseData(iso: string): Date {

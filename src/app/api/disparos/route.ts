@@ -14,28 +14,27 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { disparo, criarEsteira: shouldCriarEsteira } = body
+  const { disparo, esteira, filhos } = body
 
-  const id = crypto.randomUUID()
   const agora = new Date().toISOString()
-  const novo: Disparo = { ...disparo, id, criadoEm: agora, atualizadoEm: agora }
+  const pai: Disparo = { ...disparo, criadoEm: agora, atualizadoEm: agora }
+  await criarDisparo(pai)
 
-  await criarDisparo(novo)
+  let esteiraPersistida: Esteira | undefined
+  const filhosPersistidos: Disparo[] = []
 
-  let esteira: Esteira | undefined
-
-  if (shouldCriarEsteira && novo.tipo === 'D1') {
-    esteira = {
-      id: crypto.randomUUID(),
-      nome: novo.nomenclatura,
-      casasAposta: [...novo.casasAposta],
-      disparos: { d1: id },
-      criadaEm: agora,
-      atualizadoEm: agora,
-      ativa: true,
+  if (filhos?.length) {
+    for (const f of filhos) {
+      const child: Disparo = { ...f, criadoEm: agora, atualizadoEm: agora }
+      await criarDisparo(child)
+      filhosPersistidos.push(child)
     }
-    await criarEsteira(esteira)
   }
 
-  return NextResponse.json({ disparo: novo, esteira })
+  if (esteira) {
+    esteiraPersistida = { ...esteira, criadaEm: agora, atualizadoEm: agora }
+    await criarEsteira(esteiraPersistida!)
+  }
+
+  return NextResponse.json({ disparo: pai, esteira: esteiraPersistida, filhos: filhosPersistidos })
 }

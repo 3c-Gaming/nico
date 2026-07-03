@@ -18,6 +18,10 @@ import { StepAgendamento } from './StepAgendamento'
 
 const STEPS = ['Básico', 'Base CSV', 'Template', 'Número', 'Agendamento']
 
+function fireAndForget(url: string, opts: RequestInit) {
+  fetch(url, opts).catch(() => {})
+}
+
 export function FormNovoDisparo() {
   const router = useRouter()
   const { create: createDisparo } = useDisparos()
@@ -88,11 +92,22 @@ export function FormNovoDisparo() {
       }
 
       if (tipo === 'D1') {
-        const esteira = criarEsteira(disparoData, Object.values(casasDisponiveis))
+        const { esteira, filhos } = criarEsteira(disparoData, Object.values(casasDisponiveis))
         createDisparo(disparoData)
+        for (const f of filhos) createDisparo(f)
         createEsteira(esteira)
+        fireAndForget('/api/disparos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disparo: disparoData, esteira, filhos }),
+        })
       } else {
         createDisparo(disparoData)
+        fireAndForget('/api/disparos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disparo: disparoData }),
+        })
       }
 
       addToast('success', `${tipo} criado com sucesso!`)
