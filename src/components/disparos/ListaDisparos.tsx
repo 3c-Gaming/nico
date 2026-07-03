@@ -1,19 +1,20 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState } from '@/lib/store'
 import { Badge } from '../ui/Badge'
 import { Chip } from '../ui/Chip'
 import { StatusDot } from '../ui/StatusDot'
-import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
-import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3 } from 'lucide-react'
+import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { sincronizarDisparos } from '@/lib/tracking/sync'
-import type { TipoDisparo, TrackingResultado } from '@/types'
+import { sincronizarCpa } from '@/lib/cpa/sync'
+import type { TipoDisparo } from '@/types'
 
 type SortField = 'dataDisparo' | 'status'
 type SortDir = 'asc' | 'desc'
@@ -21,6 +22,7 @@ type SortDir = 'asc' | 'desc'
 const TIPOS: TipoDisparo[] = ['D1', 'D3', 'D5', 'D7', 'PONTUAL']
 
 export function ListaDisparos() {
+  const router = useRouter()
   const { list, getById, remove, update } = useDisparos()
   const { casas, list: casasList } = useCasasAposta()
   const { addToast } = useToast()
@@ -30,7 +32,6 @@ export function ListaDisparos() {
   const [filtroFunil, setFiltroFunil] = useState('')
   const [sortField, setSortField] = useState<SortField>('dataDisparo')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [recalculando, setRecalculando] = useState(false)
 
   // Backfill automático ao carregar a página
@@ -65,6 +66,7 @@ export function ListaDisparos() {
 
   // Auto-sync tracking ao carregar
   const [sincronizando, setSincronizando] = useState(false)
+  const [sincronizandoCpa, setSincronizandoCpa] = useState(false)
 
   useEffect(() => {
     const hoje = new Date().toISOString().split('T')[0]
@@ -90,6 +92,35 @@ export function ListaDisparos() {
       })
       .catch(() => {})
       .finally(() => setSincronizando(false))
+  }, [])
+
+  // Auto-sync CPA ao carregar (D+1)
+  useEffect(() => {
+    const ontem = new Date()
+    ontem.setDate(ontem.getDate() - 1)
+    const dataOntem = ontem.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+    const comCpa = list.filter((d) => (d.utm || d.betmgmPid))
+    if (!comCpa.length) return
+
+    setSincronizandoCpa(true)
+    sincronizarCpa(comCpa, dataOntem)
+      .then((resultados) => {
+        for (const [id, r] of Object.entries(resultados)) {
+          const dis = getById(id)
+          if (dis) {
+            update(id, {
+              resultados: {
+                ...(dis.resultados ?? { registros: 0, ftds: 0, cpas: 0, custo: 0, valorFaturadoCPA: 0 }),
+                cpas: r.cpas,
+                atualizadoEm: new Date().toISOString(),
+              },
+            })
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSincronizandoCpa(false))
   }, [])
 
   async function handleRecalcularCustos() {
@@ -177,8 +208,6 @@ export function ListaDisparos() {
     }
   }
 
-  const selected = selectedId ? getById(selectedId) : null
-
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-3">
@@ -253,7 +282,6 @@ export function ListaDisparos() {
             <tr className="border-b border-[var(--border)]">
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 w-10">#</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Nomenclatura</th>
-              <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Tipo</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Casa</th>
               <th
                 className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 cursor-pointer hover:text-[var(--text-primary)]"
@@ -271,6 +299,7 @@ export function ListaDisparos() {
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Conversão</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Registros</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">FTDs</th>
+              <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">CPAs</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Base</th>
               <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Custo</th>
               <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 w-20">Ações</th>
@@ -280,7 +309,7 @@ export function ListaDisparos() {
             {filtered.map((d) => (
               <tr
                 key={d.id}
-                onClick={() => setSelectedId(d.id)}
+                onClick={() => router.push(`/disparos/${d.id}`)}
                 className="border-b border-[var(--border)] hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
               >
                 <td className="px-3 py-3 text-[var(--text-muted)] text-xs">
@@ -288,9 +317,6 @@ export function ListaDisparos() {
                 </td>
                 <td className="px-3 py-3 font-mono text-xs text-[var(--text-primary)] max-w-[250px] truncate">
                   {d.nomenclatura}
-                </td>
-                <td className="px-3 py-3">
-                  <Badge variant="tipo" value={d.tipo} />
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1">
@@ -334,13 +360,25 @@ export function ListaDisparos() {
                   }
                 </td>
                 <td className="px-3 py-3">
-                  <span className={`text-xs ${
-                    d.base.status === 'disponivel' ? 'text-[var(--success)]' :
-                    d.base.status === 'erro' ? 'text-[var(--error)]' :
-                    'text-[var(--text-muted)]'
-                  }`}>
-                    {d.base.status}
-                  </span>
+                  {d.resultados?.cpas != null
+                    ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.resultados.cpas}</span>
+                    : <span className="text-xs text-[var(--text-muted)]">—</span>
+                  }
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    {d.base.totalRegistros != null
+                      ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.base.totalRegistros.toLocaleString('pt-BR')}</span>
+                      : <span className="text-xs text-[var(--text-muted)]">—</span>
+                    }
+                    <span className={`text-[10px] ${
+                      d.base.status === 'disponivel' ? 'text-[var(--success)]' :
+                      d.base.status === 'erro' ? 'text-[var(--error)]' :
+                      'text-[var(--text-muted)]'
+                    }`}>
+                      {d.base.status}
+                    </span>
+                  </div>
                 </td>
                 <td className="px-3 py-3 text-right">
                   {d.base.totalRegistros != null
@@ -357,6 +395,18 @@ export function ListaDisparos() {
                     >
                       <ExternalLink size={14} />
                     </Link>
+                    {d.status !== 'executado' && (
+                      <button
+                        onClick={() => {
+                          update(d.id, { status: 'executado' })
+                          addToast('success', 'Disparo marcado como executado')
+                        }}
+                        className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--success)] hover:bg-[var(--bg-elevated)] transition-colors"
+                        title="Marcar como executado"
+                      >
+                        <CheckCircle size={14} />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(d.id)}
                       className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"
@@ -377,93 +427,6 @@ export function ListaDisparos() {
           </div>
         )}
       </div>
-
-      <Modal
-        open={!!selectedId && !!selected}
-        onClose={() => setSelectedId(null)}
-        title={selected?.nomenclatura ?? ''}
-        width="520px"
-      >
-        {selected && (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs">Tipo</span>
-                <Badge variant="tipo" value={selected.tipo} />
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs">Status</span>
-                <Badge variant="status" value={selected.status} />
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs">Data</span>
-                <span className="text-[var(--text-primary)]">{selected.dataDisparo}</span>
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs">Horário</span>
-                <span className="text-[var(--text-primary)]">{selected.horarioDisparo}</span>
-              </div>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)] block text-xs mb-1">Casas de Aposta</span>
-              <div className="flex flex-wrap gap-1">
-                {selected.casasAposta.map((cId) => {
-                  const c = casas[cId]
-                  if (!c) return null
-                  return <Chip key={cId} label={c.nome} cor={c.cor} />
-                })}
-              </div>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)] block text-xs mb-1">Base CSV</span>
-              <span className="text-[var(--text-primary)]">{selected.base.status}</span>
-              {selected.base.nomeArquivo && (
-                <span className="text-[var(--text-secondary)] ml-2">({selected.base.nomeArquivo})</span>
-              )}
-            </div>
-            {selected.templateDaxx && (
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs mb-1">Template DAXX</span>
-                <span className="text-[var(--text-primary)]">{selected.templateDaxx.nome}</span>
-              </div>
-            )}
-            {selected.numerosSendpulse && selected.numerosSendpulse.length > 0 && (
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs mb-1">Números Sendpulse</span>
-                <div className="flex flex-wrap gap-1">
-                  {selected.numerosSendpulse.map((n) => (
-                    <span key={n.id} className="text-[var(--text-primary)] font-mono text-xs">{n.numero}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {selected.notas && (
-              <div>
-                <span className="text-[var(--text-muted)] block text-xs mb-1">Notas</span>
-                <p className="text-[var(--text-primary)]">{selected.notas}</p>
-              </div>
-            )}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
-              <Link href={`/disparos/${selected.id}`}>
-                <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />}>
-                  Detalhes
-                </Button>
-              </Link>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={<Trash2 size={14} />}
-                onClick={() => {
-                  handleDelete(selected.id)
-                  setSelectedId(null)
-                }}
-              >
-                Excluir
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   )
 }

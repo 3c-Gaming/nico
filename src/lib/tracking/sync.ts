@@ -8,23 +8,14 @@ export function parseAcid(acid: string): { funil: string; projeto: string } | nu
   return { funil: m[1], projeto: m[2] }
 }
 
-export function getAcidWords(acid: string): string[] {
-  const parts = acid.split('-')
-  return parts.slice(4, -1)
-}
-
 export function matchEventToDisparo(
   evento: { bethouse: string; event: string; acid?: string; pid?: number },
   disparos: Disparo[],
 ): Disparo | null {
   if (evento.bethouse === 'superbet' && evento.acid) {
     const parsed = parseAcid(evento.acid)
-    const match = parsed
-      ? disparos.find((d) => d.utm && d.utm === parsed.funil)
-      : null
-    if (match) return match
-    const words = getAcidWords(evento.acid)
-    return disparos.find((d) => d.utm && words.some((w) => d.utm!.includes(w))) ?? null
+    if (!parsed) return null
+    return disparos.find((d) => d.utm && d.utm === parsed.funil) ?? null
   }
 
   if (evento.bethouse === 'betmgm' && evento.pid != null) {
