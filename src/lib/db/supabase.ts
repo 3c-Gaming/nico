@@ -197,17 +197,23 @@ export async function listarLinkTemplates(): Promise<LinkTemplate[]> {
 // --- Flow Tag Configs ---
 
 export async function listarFlowTagConfigs(): Promise<FlowTagConfig[]> {
-  const { data } = await tb('flow_tag_configs').select('*')
+  const { data, error } = await tb('flow_tag_configs').select('*')
+  if (error) {
+    console.warn('[supabase] listarFlowTagConfigs error:', error.message)
+    return []
+  }
   return rows<FlowTagConfig>(data)
 }
 
 export async function criarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
-  const { data } = await tb('flow_tag_configs').insert(toSnakeCase(config as any)).select().single()
+  const { data, error } = await tb('flow_tag_configs').insert(toSnakeCase(config as any)).select().single()
+  if (error) throw new Error(`Erro ao criar flow tag config: ${error.message}`)
   return row<FlowTagConfig>(data)!
 }
 
 export async function bulkInsertFlowTagConfigs(configs: FlowTagConfig[]): Promise<FlowTagConfig[]> {
-  const { data } = await tb('flow_tag_configs').upsert(configs.map((c) => toSnakeCase(c as any))).select()
+  const { data, error } = await tb('flow_tag_configs').upsert(configs.map((c) => toSnakeCase(c as any))).select()
+  if (error) throw new Error(`Erro ao inserir flow tag configs em lote: ${error.message}`)
   return rows<FlowTagConfig>(data)
 }
 
@@ -266,10 +272,11 @@ export async function deletarLinkTemplate(id: string): Promise<boolean> {
 // --- Flow Tag Configs CRUD ---
 
 export async function atualizarFlowTagConfig(config: FlowTagConfig): Promise<FlowTagConfig> {
-  const { data } = await tb('flow_tag_configs')
+  const { data, error } = await tb('flow_tag_configs')
     .upsert(toSnakeCase(config as any))
     .select()
     .single()
+  if (error) throw new Error(`Erro ao atualizar flow tag config: ${error.message}`)
   return row<FlowTagConfig>(data)!
 }
 
