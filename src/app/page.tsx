@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
-import { getState, togglePinNumero, togglePinFunil, updateCacheMetricas } from '@/lib/store'
+import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { parseAcid } from '@/lib/tracking/sync'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, CacheMetrica } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
 
@@ -102,35 +102,6 @@ export default function HomePage() {
   const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
   const [liveLeadsLoaded, setLiveLeadsLoaded] = useState(false)
   const [liveTrackingLoaded, setLiveTrackingLoaded] = useState(false)
-  const trackingRef = useRef(trackingMap)
-  trackingRef.current = trackingMap
-  const contagensRef = useRef(contagens)
-  contagensRef.current = contagens
-  const contagensTotalRef = useRef(contagensTotal)
-  contagensTotalRef.current = contagensTotal
-
-  function salvarCacheFunil(funis: string[]) {
-    const configs = getState().flowTagConfigs
-    const leads = contagensRef.current
-    const totais = contagensTotalRef.current
-    const tracking = trackingRef.current
-    const metricas: CacheMetrica[] = funis.map((funilNome) => {
-      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome)
-      const tags = [...new Set(flows.flatMap(([_, c]) => c.tags ?? []))]
-      const flowIds = flows.map(([fid]) => fid)
-      return {
-        funil: funilNome,
-        leadsHoje: tags.reduce((acc, t) => acc + (leads[t] ?? 0), 0),
-        totalLeads: tags.reduce((acc, t) => acc + (totais[t] ?? 0), 0),
-        registros: flowIds.reduce((acc, fid) => acc + (tracking[fid]?.registros ?? 0), 0),
-        ftds: flowIds.reduce((acc, fid) => acc + (tracking[fid]?.ftds ?? 0), 0),
-        atualizadoEm: new Date().toISOString(),
-      }
-    })
-    if (metricas.length > 0) {
-      updateCacheMetricas(metricas)
-    }
-  }
 
   useEffect(() => {
     const s = getState()
@@ -203,7 +174,6 @@ export default function HomePage() {
             setContagens(leads)
             setContagensTotal(totais)
             setUltimoLeadMap(data.ultimoLead ?? {})
-            salvarCacheFunil(pinnedFunis)
             setLiveLeadsLoaded(true)
           }
         }
@@ -246,7 +216,6 @@ export default function HomePage() {
       }
       setTrackingMap(novo)
       setLiveTrackingLoaded(true)
-      salvarCacheFunil(pinnedFunis)
     }
 
     fetchData()
