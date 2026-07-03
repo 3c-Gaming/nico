@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
-import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
+import { getState, togglePinNumero, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { parseAcid } from '@/lib/tracking/sync'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, CacheMetrica } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
 
@@ -100,6 +100,37 @@ export default function HomePage() {
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(new Date().toISOString().split('T')[0])
   const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
+  const [liveLeadsLoaded, setLiveLeadsLoaded] = useState(false)
+  const [liveTrackingLoaded, setLiveTrackingLoaded] = useState(false)
+  const trackingRef = useRef(trackingMap)
+  trackingRef.current = trackingMap
+  const contagensRef = useRef(contagens)
+  contagensRef.current = contagens
+  const contagensTotalRef = useRef(contagensTotal)
+  contagensTotalRef.current = contagensTotal
+
+  function salvarCacheFunil(funis: string[]) {
+    const configs = getState().flowTagConfigs
+    const leads = contagensRef.current
+    const totais = contagensTotalRef.current
+    const tracking = trackingRef.current
+    const metricas: CacheMetrica[] = funis.map((funilNome) => {
+      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome)
+      const tags = [...new Set(flows.flatMap(([_, c]) => c.tags ?? []))]
+      const flowIds = flows.map(([fid]) => fid)
+      return {
+        funil: funilNome,
+        leadsHoje: tags.reduce((acc, t) => acc + (leads[t] ?? 0), 0),
+        totalLeads: tags.reduce((acc, t) => acc + (totais[t] ?? 0), 0),
+        registros: flowIds.reduce((acc, fid) => acc + (tracking[fid]?.registros ?? 0), 0),
+        ftds: flowIds.reduce((acc, fid) => acc + (tracking[fid]?.ftds ?? 0), 0),
+        atualizadoEm: new Date().toISOString(),
+      }
+    })
+    if (metricas.length > 0) {
+      updateCacheMetricas(metricas)
+    }
+  }
 
   useEffect(() => {
     const s = getState()
@@ -167,9 +198,13 @@ export default function HomePage() {
           })
           if (res.ok) {
             const data = await res.json()
-            setContagens(data.leads ?? {})
-            setContagensTotal(data.totais ?? {})
+            const leads = data.leads ?? {}
+            const totais = data.totais ?? {}
+            setContagens(leads)
+            setContagensTotal(totais)
             setUltimoLeadMap(data.ultimoLead ?? {})
+            salvarCacheFunil(pinnedFunis)
+            setLiveLeadsLoaded(true)
           }
         }
       } catch { /* noop */ } finally {
@@ -210,6 +245,8 @@ export default function HomePage() {
         }
       }
       setTrackingMap(novo)
+      setLiveTrackingLoaded(true)
+      salvarCacheFunil(pinnedFunis)
     }
 
     fetchData()
@@ -226,9 +263,14 @@ export default function HomePage() {
       const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome)
       const tags = [...new Set(flows.flatMap(([_, c]) => c.tags ?? []))]
       const botIds = [...new Set(flows.map(([_, c]) => c.botId))]
+      const cache = getState().cacheMetricas[funilNome]
 
-      const leadsHoje = tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
-      const total = tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+      const leadsHoje = liveLeadsLoaded
+        ? tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
+        : (cache?.leadsHoje ?? 0)
+      const total = liveLeadsLoaded
+        ? tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+        : (cache?.totalLeads ?? 0)
       const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
         const ts = ultimoLeadMap[t] ?? null
         if (!ts) return best
@@ -241,8 +283,12 @@ export default function HomePage() {
         return found?.numero.numero ?? botId
       }))]
 
-      const registros = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
-      const ftds = flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
+      const registros = liveTrackingLoaded
+        ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
+        : (cache?.registros ?? 0)
+      const ftds = liveTrackingLoaded
+        ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
+        : (cache?.ftds ?? 0)
 
       // per-bot breakdown (also carries UTM info for base cost matching)
       const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string>; utms: Set<string> }>()
@@ -314,8 +360,12 @@ export default function HomePage() {
           botNome,
           flowNomes: botFluxos.map((f) => f.nome).filter(Boolean),
           tags: botTags,
-          leadsHoje: botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0),
-          total: botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0),
+          leadsHoje: liveLeadsLoaded
+            ? botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
+            : (cache?.leadsHoje ?? 0),
+          total: liveLeadsLoaded
+            ? botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+            : (cache?.totalLeads ?? 0),
           baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
           baseLinhas: Math.round(baseLinhasPorBot.get(botId) ?? 0),
           ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
@@ -324,8 +374,12 @@ export default function HomePage() {
             if (!best || ts > best) return ts
             return best
           }, null),
-          registros: data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.registros ?? 0), 0),
-          ftds: data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.ftds ?? 0), 0),
+          registros: liveTrackingLoaded
+            ? data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.registros ?? 0), 0)
+            : (cache?.registros ?? 0),
+          ftds: liveTrackingLoaded
+            ? data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
+            : (cache?.ftds ?? 0),
         }
       })
 

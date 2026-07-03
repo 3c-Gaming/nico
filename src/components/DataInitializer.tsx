@@ -31,24 +31,26 @@ export function DataInitializer() {
     async function load() {
       const state = getState()
 
-      const [disparosRes, esteirasRes, casasRes, templatesRes, configsRes, prefsRes] = await Promise.all([
+      const [disparosRes, esteirasRes, casasRes, templatesRes, configsRes, prefsRes, cacheRes] = await Promise.all([
         fetch('/api/disparos'),
         fetch('/api/esteiras'),
         fetch('/api/casas'),
         fetch('/api/link-templates'),
         fetch('/api/flow-tag-configs'),
         fetch('/api/preferencias'),
+        fetch('/api/cache-metricas'),
       ])
 
       if (cancel) return
 
-      const [disparosData, esteirasData, casasData, templatesData, configsData, prefsData] = await Promise.all([
+      const [disparosData, esteirasData, casasData, templatesData, configsData, prefsData, cacheData] = await Promise.all([
         disparosRes.json(),
         esteirasRes.json(),
         casasRes.json(),
         templatesRes.json(),
         configsRes.json(),
         prefsRes.json().catch(() => ({ pinnedNumeros: [], pinnedFunis: [] })),
+        cacheRes.json().catch(() => ({ metricas: [] })),
       ])
 
       const novosDisparos = arrayToRecord(disparosData.disparos ?? [], 'id')
@@ -56,6 +58,7 @@ export function DataInitializer() {
       const novasCasas = arrayToRecord(casasData.casas ?? [], 'id')
       const novosTemplates = arrayToRecord(templatesData.templates ?? [], 'id')
       const novosConfigs = arrayToRecord(configsData.configs ?? [], 'flowId')
+      const novasCache = arrayToRecord(cacheData.metricas ?? [], 'funil')
 
       const prefs = prefsData as any
       const pinnedNumeros: string[] = prefs?.pinnedNumeros ?? state.pinnedNumeros
@@ -68,6 +71,7 @@ export function DataInitializer() {
         casasAposta: { ...state.casasAposta, ...novasCasas },
         linkTemplates: { ...state.linkTemplates, ...novosTemplates },
         flowTagConfigs: { ...state.flowTagConfigs, ...novosConfigs },
+        cacheMetricas: { ...state.cacheMetricas, ...novasCache },
         pinnedNumeros,
         pinnedFunis,
         ultimaSync: new Date().toISOString(),

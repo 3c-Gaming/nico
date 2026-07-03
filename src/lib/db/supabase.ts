@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig } from '@/types'
+import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -43,6 +43,9 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   pinnedNumeros: 'pinned_numeros',
   pinnedFunis: 'pinned_funis',
   updatedAt: 'updated_at',
+  // Cache Metricas
+  leadsHoje: 'leads_hoje',
+  totalLeads: 'total_leads',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -283,4 +286,23 @@ export async function atualizarFlowTagConfig(config: FlowTagConfig): Promise<Flo
 export async function deletarFlowTagConfig(flowId: string): Promise<boolean> {
   const { error } = await tb('flow_tag_configs').delete().eq('flow_id', flowId)
   return !error
+}
+
+// --- Cache Metricas ---
+
+export async function listarCacheMetricas(): Promise<CacheMetrica[]> {
+  const { data, error } = await tb('cache_metricas').select('*')
+  if (error) {
+    console.warn('[supabase] listarCacheMetricas error:', error.message)
+    return []
+  }
+  return rows<CacheMetrica>(data)
+}
+
+export async function upsertCacheMetricas(metricas: CacheMetrica[]): Promise<CacheMetrica[]> {
+  const { data, error } = await tb('cache_metricas')
+    .upsert(metricas.map((m) => toSnakeCase(m as any)))
+    .select()
+  if (error) throw new Error(`Erro ao upsert cache metricas: ${error.message}`)
+  return rows<CacheMetrica>(data)
 }

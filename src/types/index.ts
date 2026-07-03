@@ -308,6 +308,15 @@ export interface PreferenciaCopa {
   stage: string
 }
 
+export interface CacheMetrica {
+  funil: string
+  leadsHoje: number
+  totalLeads: number
+  registros: number
+  ftds: number
+  atualizadoEm: string
+}
+
 export interface AppState {
   disparos: Record<string, Disparo>
   esteiras: Record<string, Esteira>
@@ -318,5 +327,6 @@ export interface AppState {
   flowTagConfigs: Record<string, FlowTagConfig>
   pinnedNumeros: string[]
   pinnedFunis: string[]
+  cacheMetricas: Record<string, CacheMetrica>
   ultimaSync?: string
 }

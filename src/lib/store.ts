@@ -1,6 +1,6 @@
 'use client'
 
-import type { AppState, CasaAposta, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA } from '@/types'
+import type { AppState, CacheMetrica, CasaAposta, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA } from '@/types'
 
 const ESTADO_INICIAL: AppState = {
   disparos: {},
@@ -12,6 +12,7 @@ const ESTADO_INICIAL: AppState = {
   flowTagConfigs: {},
   pinnedNumeros: [],
   pinnedFunis: [],
+  cacheMetricas: {},
 }
 
 let cachedState: AppState | null = null
@@ -176,6 +177,15 @@ export function togglePinFunil(nome: string): void {
   }
   setState(state)
   syncPreferencias(state.pinnedNumeros, state.pinnedFunis)
+}
+
+export function updateCacheMetricas(metricas: CacheMetrica[]): void {
+  const state = getState()
+  for (const m of metricas) {
+    state.cacheMetricas[m.funil] = m
+  }
+  setState(state)
+  syncToApi('/api/cache-metricas', 'PUT', metricas)
 }
 
 export async function syncNumerosSendpulse(): Promise<NumeroSendpulse[]> {
