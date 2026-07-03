@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import { getState, setState, updateFlowTagConfig, togglePinFunil } from '@/lib/store'
+import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
 interface FlowRow {
@@ -240,6 +240,7 @@ function FunisPageInner() {
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(new Date().toISOString().split('T')[0])
+  const [trackingLoaded, setTrackingLoaded] = useState(false)
 
   async function carregarDados() {
     setLoading(!refreshing)
@@ -344,6 +345,29 @@ function FunisPageInner() {
         }
       }
       setTrackingMap(novo)
+
+      // Salva cache por funil no banco
+      const configsSnapshot = getState().flowTagConfigs
+      const perFunil: Record<string, { registros: number; ftds: number }> = {}
+      for (const [flowId, val] of Object.entries(novo)) {
+        const cfg = configsSnapshot[flowId]
+        if (cfg?.funil) {
+          if (!perFunil[cfg.funil]) perFunil[cfg.funil] = { registros: 0, ftds: 0 }
+          perFunil[cfg.funil].registros += val.registros
+          perFunil[cfg.funil].ftds += val.ftds
+        }
+      }
+      const cacheArr = Object.entries(perFunil).map(([funil, val]) => ({
+        funil,
+        leadsHoje: 0,
+        totalLeads: 0,
+        registros: val.registros,
+        ftds: val.ftds,
+        atualizadoEm: new Date().toISOString(),
+      }))
+      if (cacheArr.length > 0) updateCacheMetricas(cacheArr)
+
+      setTrackingLoaded(true)
     }
 
     fetchTracking()
@@ -598,6 +622,10 @@ function FunisPageInner() {
                         <td className="py-3 px-3 text-right">
                           {!row.utm ? (
                             <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : !trackingLoaded && row.funil && getState().cacheMetricas[row.funil] ? (
+                            <span className="font-semibold font-mono text-[var(--text-muted)]/60">
+                              {getState().cacheMetricas[row.funil].registros}
+                            </span>
                           ) : (
                             <span className={`font-semibold font-mono ${(trackingMap[row.flow.id]?.registros ?? 0) > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
                               {trackingMap[row.flow.id]?.registros ?? 0}
@@ -607,6 +635,10 @@ function FunisPageInner() {
                         <td className="py-3 px-3 text-right">
                           {!row.utm ? (
                             <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : !trackingLoaded && row.funil && getState().cacheMetricas[row.funil] ? (
+                            <span className="font-semibold font-mono text-[var(--text-muted)]/60">
+                              {getState().cacheMetricas[row.funil].ftds}
+                            </span>
                           ) : (
                             <span className={`font-semibold font-mono ${(trackingMap[row.flow.id]?.ftds ?? 0) > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
                               {trackingMap[row.flow.id]?.ftds ?? 0}
