@@ -61,7 +61,6 @@ interface FunilBotDetail {
   flowNomes: string[]
   tags: string[]
   leadsHoje: number
-  total: number
   baseCusto: number
   baseLinhas: number
   ultimoLeadAt: string | null
@@ -76,20 +75,19 @@ interface FunilRow {
   casas: string[]
   corBadge?: string
   leadsHoje: number
-  total: number
   baseCusto: number
   baseLinhas: number
   ultimoLeadAt: string | null
   registros: number
   ftds: number
   bots: FunilBotDetail[]
+  tipo: 'traffic' | 'disparo'
 }
 
 export default function HomePage() {
   const router = useRouter()
   const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao } = useMonitoramento()
   const [contagens, setContagens] = useState<Record<string, number>>({})
-  const [contagensTotal, setContagensTotal] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
   const [carregandoFunis, setCarregandoFunis] = useState(false)
@@ -169,9 +167,7 @@ export default function HomePage() {
           if (res.ok) {
             const data = await res.json()
             const leads = data.leads ?? {}
-            const totais = data.totais ?? {}
             setContagens(leads)
-            setContagensTotal(totais)
             setUltimoLeadMap(data.ultimoLead ?? {})
             setLiveLeadsLoaded(true)
           }
@@ -235,15 +231,16 @@ export default function HomePage() {
       const leadsHoje = liveLeadsLoaded
         ? tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
         : (cache?.leadsHoje ?? 0)
-      const total = liveLeadsLoaded
-        ? tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
-        : (cache?.totalLeads ?? 0)
       const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
         const ts = ultimoLeadMap[t] ?? null
         if (!ts) return best
         if (!best || ts > best) return ts
         return best
       }, null)
+
+      // determine tipo from flows
+      const flowTipos = flows.map(([_, c]) => c.tipo ?? 'disparo')
+      const tipo = flowTipos.includes('traffic') ? 'traffic' as const : 'disparo' as const
 
       const botNomes = [...new Set(botIds.map((botId) => {
         const found = monitoramento?.numeros.find((n) => n.numero.id === botId)
@@ -330,9 +327,6 @@ export default function HomePage() {
           leadsHoje: liveLeadsLoaded
             ? botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
             : (cache?.leadsHoje ?? 0),
-          total: liveLeadsLoaded
-            ? botTags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
-            : (cache?.totalLeads ?? 0),
           baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
           baseLinhas: Math.round(baseLinhasPorBot.get(botId) ?? 0),
           ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
@@ -350,11 +344,14 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, total, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots }
+      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots, tipo }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
+  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0
+
+  const disparoRows = funilRows.filter((r) => r.tipo === 'disparo')
+  const trafficRows = funilRows.filter((r) => r.tipo === 'traffic')
 
   function handleToggleFunil(nome: string) {
     togglePinFunil(nome)
@@ -363,6 +360,211 @@ export default function HomePage() {
 
   function toggleExpand(funilNome: string) {
     setExpandedFunis((prev) => ({ ...prev, [funilNome]: !prev[funilNome] }))
+  }
+
+  function renderFunilRows(rows: FunilRow[], tipo: 'disparo' | 'traffic') {
+    const isDisparo = tipo === 'disparo'
+    return rows.map((row) => (
+      <Fragment key={row.funilNome}>
+        <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
+          <td className="py-3 px-3">
+            <div className="flex items-center gap-1.5">
+              {row.bots.length > 1 && (
+                <button
+                  onClick={() => toggleExpand(row.funilNome)}
+                  className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                  title={expandedFunis[row.funilNome] ? 'Recolher' : 'Expandir'}
+                >
+                  {expandedFunis[row.funilNome] ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
+                </button>
+              )}
+              {row.casas.length > 0 && (
+                <div className="flex -space-x-0.5">
+                  {row.casas.slice(0, 3).map((casaId) => {
+                    const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
+                    return casa ? (
+                      <span
+                        key={casaId}
+                        className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
+                        style={{ backgroundColor: casa.cor }}
+                        title={casa.nome}
+                      />
+                    ) : null
+                  })}
+                </div>
+              )}
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono"
+                style={{
+                  backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
+                  border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
+                  color: row.corBadge ?? 'var(--d1)',
+                }}
+              >
+                {row.funilNome}
+              </span>
+              <button
+                onClick={() => handleToggleFunil(row.funilNome)}
+                className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                title="Desafixar da Home"
+              >
+                <Pin size={11} className="text-amber-400" />
+              </button>
+            </div>
+          </td>
+          <td className="py-3 px-3">
+            <div className="flex flex-wrap gap-1">
+              {row.botNomes.length === 0 ? (
+                <span className="text-xs text-[var(--text-muted)]/40">—</span>
+              ) : (
+                row.botNomes.map((nome) => (
+                  <span key={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
+                    {nome}
+                  </span>
+                ))
+              )}
+            </div>
+          </td>
+          <td className="py-3 px-3 text-right">
+            <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+              {row.leadsHoje}
+            </span>
+          </td>
+          {isDisparo && (
+            <>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.baseLinhas > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.baseLinhas > 0 ? row.baseLinhas.toLocaleString('pt-BR') : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span
+                  className={`font-semibold font-mono ${row.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
+                  title={row.baseLinhas > 0 ? `${row.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
+                >
+                  {row.baseCusto > 0 ? `R$ ${row.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
+                </span>
+              </td>
+            </>
+          )}
+          <td className="py-3 px-3 text-right">
+            <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+              {row.registros}
+            </span>
+          </td>
+          <td className="py-3 px-3 text-right">
+            <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
+              {row.ftds}
+            </span>
+          </td>
+          <td className="py-3 px-3">
+            <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
+              {formatarTempoRelativo(row.ultimoLeadAt).texto}
+            </span>
+          </td>
+          <td className="py-3 px-3 text-right">
+            <button
+              onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
+              className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
+            >
+              ver fluxos
+            </button>
+          </td>
+        </tr>
+        {row.bots.length > 1 && expandedFunis[row.funilNome] && (
+          <tr key={`${row.funilNome}-expand`}>
+            <td colSpan={isDisparo ? 9 : 7} className="p-0">
+              <div className="bg-[var(--bg-elevated)]/20 border-b border-[var(--border)]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]/50">
+                      <th className="text-left py-2 px-3 pl-8 text-[10px] font-medium text-[var(--text-muted)]">Número</th>
+                      <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Fluxos</th>
+                      <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Tags</th>
+                      <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Leads hoje</th>
+                      {isDisparo && (
+                        <>
+                          <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Base</th>
+                          <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Custo/Gasto</th>
+                        </>
+                      )}
+                      <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Reg</th>
+                      <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">FTDs</th>
+                      <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Último lead</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {row.bots.map((bot) => (
+                      <tr key={bot.botId} className="border-b border-[var(--border)]/30 hover:bg-[var(--bg-elevated)]/40 transition-colors">
+                        <td className="py-2 px-3 pl-8">
+                          <span className="font-mono text-[var(--text-primary)]">{bot.botNome}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex flex-wrap gap-0.5">
+                            {bot.flowNomes.length === 0 ? (
+                              <span className="text-[var(--text-muted)]/40">—</span>
+                            ) : (
+                              bot.flowNomes.map((fn) => (
+                                <span key={fn} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]">
+                                  {fn}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex flex-wrap gap-0.5">
+                            {bot.tags.length === 0 ? (
+                              <span className="text-[var(--text-muted)]/40">—</span>
+                            ) : (
+                              bot.tags.map((t) => (
+                                <span key={t} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--d3)]/10 border border-[var(--d3)]/20 text-[var(--d3)]">
+                                  {t}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className={`font-semibold ${bot.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{bot.leadsHoje}</span>
+                        </td>
+                        {isDisparo && (
+                          <>
+                            <td className="py-2 px-3 text-right">
+                              <span className={`font-semibold font-mono ${bot.baseLinhas > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                                {bot.baseLinhas > 0 ? bot.baseLinhas.toLocaleString('pt-BR') : '—'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <span
+                                className={`font-semibold font-mono ${bot.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
+                                title={bot.baseLinhas > 0 ? `${bot.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
+                              >
+                                {bot.baseCusto > 0 ? `R$ ${bot.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
+                              </span>
+                            </td>
+                          </>
+                        )}
+                        <td className="py-2 px-3 text-right">
+                          <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className={`font-semibold font-mono ${bot.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{bot.ftds}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`text-xs font-mono ${formatarTempoRelativo(bot.ultimoLeadAt).cor}`}>
+                            {formatarTempoRelativo(bot.ultimoLeadAt).texto}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    ))
   }
 
   return (
@@ -486,223 +688,73 @@ export default function HomePage() {
         )}
 
         {pinnedFunis.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <Layers size={16} className="text-[var(--d1)]" />
-                Funis Fixados
-                <span className="text-xs font-normal text-[var(--text-muted)]">{pinnedFunis.length}</span>
-              </h2>
-              {carregandoFunis && <Spinner size={12} />}
-            </div>
+          <>
+            {disparoRows.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <Layers size={16} className="text-[var(--d1)]" />
+                    Disparo
+                    <span className="text-xs font-normal text-[var(--text-muted)]">{disparoRows.length}</span>
+                  </h2>
+                  {carregandoFunis && <Spinner size={12} />}
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Total</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {funilRows.map((row) => (
-                    <Fragment key={row.funilNome}>
-                      <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/30 transition-colors">
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5">
-                            {row.bots.length > 1 && (
-                              <button
-                                onClick={() => toggleExpand(row.funilNome)}
-                                className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
-                                title={expandedFunis[row.funilNome] ? 'Recolher' : 'Expandir'}
-                              >
-                                {expandedFunis[row.funilNome] ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
-                              </button>
-                            )}
-                            {row.casas.length > 0 && (
-                              <div className="flex -space-x-0.5">
-                                {row.casas.slice(0, 3).map((casaId) => {
-                                  const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
-                                  return casa ? (
-                                    <span
-                                      key={casaId}
-                                      className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
-                                      style={{ backgroundColor: casa.cor }}
-                                      title={casa.nome}
-                                    />
-                                  ) : null
-                                })}
-                              </div>
-                            )}
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono"
-                              style={{
-                                backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
-                                border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
-                                color: row.corBadge ?? 'var(--d1)',
-                              }}
-                            >
-                              {row.funilNome}
-                            </span>
-                            <button
-                              onClick={() => handleToggleFunil(row.funilNome)}
-                              className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
-                              title="Desafixar da Home"
-                            >
-                              <Pin size={11} className="text-amber-400" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="flex flex-wrap gap-1">
-                            {row.botNomes.length === 0 ? (
-                              <span className="text-xs text-[var(--text-muted)]/40">—</span>
-                            ) : (
-                              row.botNomes.map((nome) => (
-                                <span key={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
-                                  {nome}
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
-                            {row.leadsHoje}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`font-semibold ${row.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                            {row.total}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span
-                            className={`font-semibold font-mono ${row.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
-                            title={row.baseLinhas > 0 ? `${row.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
-                          >
-                            {row.baseCusto > 0 ? `R$ ${row.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                            {row.registros}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
-                            {row.ftds}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
-                            {formatarTempoRelativo(row.ultimoLeadAt).texto}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
-                            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
-                          >
-                            ver fluxos
-                          </button>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)]">
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
-                      {row.bots.length > 1 && expandedFunis[row.funilNome] && (
-                        <tr key={`${row.funilNome}-expand`}>
-                          <td colSpan={9} className="p-0">
-                            <div className="bg-[var(--bg-elevated)]/20 border-b border-[var(--border)]">
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="border-b border-[var(--border)]/50">
-                                    <th className="text-left py-2 px-3 pl-8 text-[10px] font-medium text-[var(--text-muted)]">Número</th>
-                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Fluxos</th>
-                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Tags</th>
-                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Leads hoje</th>
-                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Total</th>
-                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Base</th>
-                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Reg</th>
-                                    <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">FTDs</th>
-                                    <th className="text-left py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Último lead</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.bots.map((bot) => (
-                                    <tr key={bot.botId} className="border-b border-[var(--border)]/30 hover:bg-[var(--bg-elevated)]/40 transition-colors">
-                                      <td className="py-2 px-3 pl-8">
-                                        <span className="font-mono text-[var(--text-primary)]">{bot.botNome}</span>
-                                      </td>
-                                      <td className="py-2 px-3">
-                                        <div className="flex flex-wrap gap-0.5">
-                                          {bot.flowNomes.length === 0 ? (
-                                            <span className="text-[var(--text-muted)]/40">—</span>
-                                          ) : (
-                                            bot.flowNomes.map((fn) => (
-                                              <span key={fn} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]">
-                                                {fn}
-                                              </span>
-                                            ))
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="py-2 px-3">
-                                        <div className="flex flex-wrap gap-0.5">
-                                          {bot.tags.length === 0 ? (
-                                            <span className="text-[var(--text-muted)]/40">—</span>
-                                          ) : (
-                                            bot.tags.map((t) => (
-                                              <span key={t} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--d3)]/10 border border-[var(--d3)]/20 text-[var(--d3)]">
-                                                {t}
-                                              </span>
-                                            ))
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="py-2 px-3 text-right">
-                                        <span className={`font-semibold ${bot.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{bot.leadsHoje}</span>
-                                      </td>
-                                      <td className="py-2 px-3 text-right">
-                                        <span className={`font-semibold ${bot.total > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.total}</span>
-                                      </td>
-                                      <td className="py-2 px-3 text-right">
-                                        <span
-                                          className={`font-semibold font-mono ${bot.baseCusto > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}
-                                          title={bot.baseLinhas > 0 ? `${bot.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
-                                        >
-                                          {bot.baseCusto > 0 ? `R$ ${bot.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
-                                        </span>
-                                      </td>
-                                      <td className="py-2 px-3 text-right">
-                                        <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
-                                      </td>
-                                      <td className="py-2 px-3 text-right">
-                                        <span className={`font-semibold font-mono ${bot.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{bot.ftds}</span>
-                                      </td>
-                                      <td className="py-2 px-3">
-                                        <span className={`text-xs font-mono ${formatarTempoRelativo(bot.ultimoLeadAt).cor}`}>
-                                          {formatarTempoRelativo(bot.ultimoLeadAt).texto}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                    </thead>
+                    <tbody>
+                      {renderFunilRows(disparoRows, 'disparo')}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {trafficRows.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <Layers size={16} className="text-[var(--d1)]" />
+                    Tráfego
+                    <span className="text-xs font-normal text-[var(--text-muted)]">{trafficRows.length}</span>
+                  </h2>
+                  {carregandoFunis && <Spinner size={12} />}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)]">
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {renderFunilRows(trafficRows, 'traffic')}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
     </>

@@ -85,6 +85,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const existing = configs[flow.id]
   const [funil, setFunil] = useState(existing?.funil ?? '')
   const [utm, setUtm] = useState(existing?.utm ?? '')
+  const [tipo, setTipo] = useState<'traffic' | 'disparo'>(existing?.tipo ?? 'disparo')
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
   const [casas, setCasas] = useState<string[]>(existing?.casas ?? [])
   const [input, setInput] = useState('')
@@ -114,7 +115,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas, tipo })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
@@ -123,7 +124,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const prevFunil = existing?.funil ?? ''
   const prevUtm = existing?.utm ?? ''
   const prevCasas = (existing?.casas ?? []).join(',')
-  const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
+  const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
 
   return (
     <div className="space-y-3 p-4 bg-[var(--bg-elevated)]/20 rounded border border-[var(--border)]/50">
@@ -146,6 +147,23 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
           placeholder="ex: pilhado-disp-traf-odm ou 13382"
           className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-16">Tipo:</span>
+        <div className="flex items-center gap-1 bg-[var(--bg-base)] border border-[var(--border)] rounded p-0.5">
+          <button
+            onClick={() => setTipo('disparo')}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${tipo === 'disparo' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            Disparo
+          </button>
+          <button
+            onClick={() => setTipo('traffic')}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${tipo === 'traffic' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            Tráfego
+          </button>
+        </div>
       </div>
       <div className="flex items-start gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-16 pt-1">Tags:</span>
