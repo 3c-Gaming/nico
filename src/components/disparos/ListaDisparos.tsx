@@ -10,11 +10,12 @@ import { Chip } from '../ui/Chip'
 import { StatusDot } from '../ui/StatusDot'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
-import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle } from 'lucide-react'
+import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle, Copy } from 'lucide-react'
 import Link from 'next/link'
 import { sincronizarDisparos } from '@/lib/tracking/sync'
 import { sincronizarCpa } from '@/lib/cpa/sync'
-import type { TipoDisparo } from '@/types'
+import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
+import type { Disparo, TipoDisparo } from '@/types'
 
 type SortField = 'dataDisparo' | 'status'
 type SortDir = 'asc' | 'desc'
@@ -23,7 +24,7 @@ const TIPOS: TipoDisparo[] = ['D1', 'D3', 'D5', 'D7', 'PONTUAL']
 
 export function ListaDisparos() {
   const router = useRouter()
-  const { list, getById, remove, update } = useDisparos()
+  const { list, getById, remove, update, create } = useDisparos()
   const { casas, list: casasList } = useCasasAposta()
   const { addToast } = useToast()
   const [busca, setBusca] = useState('')
@@ -206,6 +207,14 @@ export function ListaDisparos() {
       remove(id)
       addToast('success', 'Disparo removido')
     }
+  }
+
+  function handleClone(d: Disparo) {
+    const clone = clonarDisparo(d)
+    create(clone)
+    salvarCloneRemoto(clone)
+    addToast('success', 'Disparo clonado')
+    router.push(`/disparos/${clone.id}`)
   }
 
   return (
@@ -407,6 +416,13 @@ export function ListaDisparos() {
                         <CheckCircle size={14} />
                       </button>
                     )}
+                    <button
+                      onClick={() => handleClone(d)}
+                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-elevated)] transition-colors"
+                      title="Clonar disparo"
+                    >
+                      <Copy size={14} />
+                    </button>
                     <button
                       onClick={() => handleDelete(d.id)}
                       className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"

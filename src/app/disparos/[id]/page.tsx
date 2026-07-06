@@ -21,6 +21,7 @@ import { ArrowLeft, Trash2, Pencil, X, Check, Copy, Link as LinkIcon, Play, Chev
 import Link from 'next/link'
 import { StepNumero } from '@/components/disparos/StepNumero'
 import { sincronizarDisparos } from '@/lib/tracking/sync'
+import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
 import type { StatusDisparo, StatusBase, TipoDisparo, NumeroSendpulse, PainelCPA, ResultadoDisparo, ConversaoDisparo, FluxoSendpulse, TrackingResultado } from '@/types'
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -202,6 +203,15 @@ export default function DetalheDisparoPage() {
     }
   }
 
+  function handleClone() {
+    if (!disparo) return
+    const clone = clonarDisparo(disparo)
+    createDisparo(clone)
+    salvarCloneRemoto(clone)
+    addToast('success', 'Disparo clonado')
+    router.push(`/disparos/${clone.id}`)
+  }
+
   function toggleEdicao() {
     if (!modoEdicao) {
       setFormData({
@@ -380,6 +390,9 @@ export default function DetalheDisparoPage() {
                   icon={<RefreshCw size={16} />}
                 >
                   Tracking
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleClone} icon={<Copy size={16} />}>
+                  Clonar
                 </Button>
                 <Button variant="secondary" size="sm" onClick={toggleEdicao} icon={<Pencil size={16} />}>
                   Editar

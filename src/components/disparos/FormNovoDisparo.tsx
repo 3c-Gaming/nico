@@ -39,6 +39,8 @@ export function FormNovoDisparo() {
   const [dataDisparo, setDataDisparo] = useState('')
   const [horarioDisparo, setHorarioDisparo] = useState('09:30')
   const [nomenclatura, setNomenclatura] = useState('')
+  const [utm, setUtm] = useState('')
+  const [betmgmPid, setBetmgmPid] = useState('')
   const [criando, setCriando] = useState(false)
 
   const podeAvancar = useMemo(() => {
@@ -86,6 +88,8 @@ export function FormNovoDisparo() {
         base,
         templateDaxx: template,
         numerosSendpulse: numeros.length > 0 ? numeros : undefined,
+        utm: utm || undefined,
+        betmgmPid: betmgmPid || undefined,
         criadoEm: now.toISOString(),
         atualizadoEm: now.toISOString(),
         notas: notas || undefined,
@@ -177,9 +181,13 @@ export function FormNovoDisparo() {
             base={base}
             template={template}
             numeros={numeros}
+            utm={utm}
+            betmgmPid={betmgmPid}
             onChangeData={setDataDisparo}
             onChangeHorario={setHorarioDisparo}
             onChangeNomenclatura={setNomenclatura}
+            onChangeUtm={setUtm}
+            onChangeBetmgmPid={setBetmgmPid}
           />
         )}
       </div>
