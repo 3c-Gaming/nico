@@ -204,7 +204,7 @@ export default function HomePage() {
         return false
       })
         novo[fid] = {
-          registros: matches.filter((e) => e.event === 'reg').length,
+          registros: matches.filter((e) => e.event === 'reg' || e.event === 'registration').length,
           ftds: matches.filter((e) => e.event === 'ftd').length,
         }
       }
