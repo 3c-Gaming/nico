@@ -24,7 +24,7 @@ export async function GET() {
     const resultado = await Promise.race([
       scrapeNumeros(bots),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Scraping timeout apos 25s')), 25_000)
+        setTimeout(() => reject(new Error('Scraping timeout apos 60s')), 60_000)
       ),
     ])
 

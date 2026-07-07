@@ -53,7 +53,7 @@ async function extrairChats(page: Page, botId: string): Promise<{
   botOnline: boolean
 }> {
   try {
-    await page.goto(CHAT_URL(botId), { waitUntil: 'networkidle2', timeout: 15000 })
+    await page.goto(CHAT_URL(botId), { waitUntil: 'domcontentloaded', timeout: 15000 })
   } catch {
     return { chats: [], totalChats: 0, botOnline: false }
   }
@@ -67,41 +67,31 @@ async function extrairChats(page: Page, botId: string): Promise<{
 
   await page.waitForSelector('.media-dialogs-list', { timeout: 10000 }).catch(() => {})
 
-  const chatItems = await page.$$('.media-chat-item')
-  const totalChats = chatItems.length
-
-  const chatsInfo: ScrapeChatInfo[] = []
-
-  for (let i = 0; i < Math.min(chatItems.length, 20); i++) {
-    try {
-      const info = await page.evaluate((idx: number) => {
-        const items = document.querySelectorAll('.media-chat-item')
-        const item = items[idx] as HTMLElement
-        if (!item) return null
-
-        const nomeEl = item.querySelector('.chat-item-name')
-        const dateEl = item.querySelector('.chat-item-date')
-        const linkEl = item.querySelector('a.strip-text')
-
-        return {
-          contactNome: nomeEl?.textContent?.trim() || 'Desconhecido',
-          ultimaAtividade: dateEl?.getAttribute('title') || dateEl?.textContent?.trim() || '',
-          contactLink: linkEl?.getAttribute('href') || '',
-        }
-      }, i)
-
-      if (!info) continue
-
-      chatsInfo.push({
-        contactNome: info.contactNome,
-        ultimaAtividade: info.ultimaAtividade,
-        ultimaMensagemTipo: 'incoming',
-        tempoSemRespostaMin: 0,
+  const chatsRaw = await page.evaluate((max: number) => {
+    const items = document.querySelectorAll('.media-chat-item')
+    const results: { contactNome: string; ultimaAtividade: string; contactLink: string }[] = []
+    for (let i = 0; i < Math.min(items.length, max); i++) {
+      const item = items[i] as HTMLElement
+      if (!item) continue
+      const nomeEl = item.querySelector('.chat-item-name')
+      const dateEl = item.querySelector('.chat-item-date')
+      const linkEl = item.querySelector('a.strip-text')
+      results.push({
+        contactNome: nomeEl?.textContent?.trim() || 'Desconhecido',
+        ultimaAtividade: dateEl?.getAttribute('title') || dateEl?.textContent?.trim() || '',
+        contactLink: linkEl?.getAttribute('href') || '',
       })
-    } catch {
-      continue
     }
-  }
+    return results
+  }, 10)
+
+  const totalChats = chatsRaw.length
+  const chatsInfo: ScrapeChatInfo[] = chatsRaw.map((info) => ({
+    contactNome: info.contactNome,
+    ultimaAtividade: info.ultimaAtividade,
+    ultimaMensagemTipo: 'incoming' as const,
+    tempoSemRespostaMin: 0,
+  }))
 
   if (chatsInfo.length > 0) {
     try {
@@ -111,7 +101,7 @@ async function extrairChats(page: Page, botId: string): Promise<{
       })
 
       if (topLink) {
-        await page.goto(`${BASE_URL}${topLink}`, { waitUntil: 'networkidle2', timeout: 10000 })
+        await page.goto(`${BASE_URL}${topLink}`, { waitUntil: 'domcontentloaded', timeout: 8000 })
 
         const tipoUltimaMsg = await page.evaluate(() => {
           const msgs = document.querySelectorAll('[class*="chat-message"]')
@@ -167,7 +157,7 @@ export async function scrapeNumeros(bots: { id: string; numero: string }[]): Pro
 
     const resultados: ScrapeResultadoNumero[] = []
 
-    for (const bot of bots) {
+    for (const [idx, bot] of bots.entries()) {
       try {
         const dados = await extrairChats(page, bot.id)
         const status = classificarStatus(dados)
@@ -188,6 +178,10 @@ export async function scrapeNumeros(bots: { id: string; numero: string }[]): Pro
           volume5min: 0,
           erro: (err as Error).message,
         })
+      }
+
+      if (idx < bots.length - 1) {
+        await new Promise((r) => setTimeout(r, 800))
       }
     }
 
