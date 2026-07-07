@@ -79,6 +79,7 @@ export default function DetalheDisparoPage() {
   }
 
   const [formData, setFormData] = useState({
+    nomenclatura: disparo?.nomenclatura ?? '',
     status: disparo?.status ?? 'rascunho' as StatusDisparo,
     dataDisparo: disparo?.dataDisparo ?? '',
     horarioDisparo: disparo?.horarioDisparo ?? '',
@@ -215,6 +216,7 @@ export default function DetalheDisparoPage() {
   function toggleEdicao() {
     if (!modoEdicao) {
       setFormData({
+        nomenclatura: disparo.nomenclatura,
         status: disparo.status,
         dataDisparo: disparo.dataDisparo,
         horarioDisparo: disparo.horarioDisparo,
@@ -235,6 +237,7 @@ export default function DetalheDisparoPage() {
 
   function handleSave() {
     const data: Partial<typeof disparo> = {
+      nomenclatura: formData.nomenclatura || undefined,
       status: formData.status,
       dataDisparo: formData.dataDisparo,
       horarioDisparo: formData.horarioDisparo,
@@ -408,15 +411,73 @@ export default function DetalheDisparoPage() {
       <div className="p-6 max-w-2xl">
         {modoEdicao ? (
           <div className="space-y-5">
-            <Select
-              label="Status"
-              options={STATUS_OPTIONS}
-              value={formData.status}
-              onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as StatusDisparo }))}
-            />
             <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Informações Gerais</span>
+              <Input
+                label="Nomenclatura"
+                value={formData.nomenclatura}
+                onChange={(e) => setFormData((prev) => ({ ...prev, nomenclatura: e.target.value }))}
+              />
+              <Select
+                label="Status"
+                options={STATUS_OPTIONS}
+                value={formData.status}
+                onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as StatusDisparo }))}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Data"
+                  type="date"
+                  value={formData.dataDisparo}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, dataDisparo: e.target.value }))}
+                />
+                <Input
+                  label="Horário"
+                  type="time"
+                  value={formData.horarioDisparo}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, horarioDisparo: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Base</span>
+              <Select
+                label="Status da Base"
+                options={BASE_STATUS_OPTIONS}
+                value={formData.baseStatus}
+                onChange={(e) => setFormData((prev) => ({ ...prev, baseStatus: e.target.value as StatusBase }))}
+              />
+            </div>
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Casas de Aposta</span>
+              <div className="flex flex-wrap gap-2">
+                {casasList.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex items-center gap-1.5 px-2.5 h-8 text-xs rounded cursor-pointer border transition-colors"
+                    style={{
+                      borderColor: formData.casasAposta.includes(c.id) ? c.cor : 'var(--border)',
+                      backgroundColor: formData.casasAposta.includes(c.id) ? c.cor + '20' : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.casasAposta.includes(c.id)}
+                      onChange={() => toggleCasa(c.id)}
+                      className="hidden"
+                    />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.cor }} />
+                    {c.nome}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Números e Fluxos</span>
               <div>
-                <span className="text-xs text-[var(--text-muted)] block mb-3">Números Sendpulse</span>
                 <StepNumero
                   numeros={formData.numerosSendpulse}
                   onChange={(n) => setFormData({ ...formData, numerosSendpulse: n })}
@@ -477,106 +538,68 @@ export default function DetalheDisparoPage() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Tracking / CPA</span>
               <Input
-                label="Data"
-                type="date"
-                value={formData.dataDisparo}
-                onChange={(e) => setFormData((prev) => ({ ...prev, dataDisparo: e.target.value }))}
+                label="UTM (Superbet)"
+                placeholder="ex: superbet_fev_d1"
+                value={formData.utm}
+                onChange={(e) => setFormData((prev) => ({ ...prev, utm: e.target.value }))}
               />
               <Input
-                label="Horário"
-                type="time"
-                value={formData.horarioDisparo}
-                onChange={(e) => setFormData((prev) => ({ ...prev, horarioDisparo: e.target.value }))}
+                label="PID (BetMGM)"
+                placeholder="ex: 13382"
+                value={formData.betmgmPid}
+                onChange={(e) => setFormData((prev) => ({ ...prev, betmgmPid: e.target.value }))}
               />
-            </div>
-            <Select
-              label="Status da Base"
-              options={BASE_STATUS_OPTIONS}
-              value={formData.baseStatus}
-              onChange={(e) => setFormData((prev) => ({ ...prev, baseStatus: e.target.value as StatusBase }))}
-            />
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--text-secondary)] font-medium">Casas de Aposta</span>
-              <div className="flex flex-wrap gap-2">
-                {casasList.map((c) => (
-                  <label
-                    key={c.id}
-                    className="flex items-center gap-1.5 px-2.5 h-8 text-xs rounded cursor-pointer border transition-colors"
-                    style={{
-                      borderColor: formData.casasAposta.includes(c.id) ? c.cor : 'var(--border)',
-                      backgroundColor: formData.casasAposta.includes(c.id) ? c.cor + '20' : 'transparent',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.casasAposta.includes(c.id)}
-                      onChange={() => toggleCasa(c.id)}
-                      className="hidden"
-                    />
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: c.cor }}
-                    />
-                    {c.nome}
-                  </label>
-                ))}
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-[var(--text-secondary)] font-medium">Painel CPA</span>
+                <select
+                  value={formData.cpaPainelId}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, cpaPainelId: e.target.value }))}
+                  className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                >
+                  <option value="">Nenhum</option>
+                  {formData.casasAposta.map((cId) => {
+                    const c = casas[cId]
+                    if (!c || !c.paineisCPA?.length) return null
+                    return c.paineisCPA.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {c.nome} — {p.nome} (R$ {p.valorCPA.toFixed(2)})
+                      </option>
+                    ))
+                  })}
+                </select>
               </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--text-secondary)] font-medium">Notas</span>
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Conversão</span>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Disparos entregues DAXX"
+                  type="number"
+                  min="0"
+                  value={formData.entreguesDaxx}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, entreguesDaxx: parseInt(e.target.value) || 0 }))}
+                />
+                <Input
+                  label="Leads no Fluxo"
+                  type="number"
+                  min="0"
+                  value={formData.leadsFluxo}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, leadsFluxo: parseInt(e.target.value) || 0 }))}
+                />
+              </div>
+            </div>
+
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block">Notas</span>
               <textarea
                 value={formData.notas}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notas: e.target.value }))}
                 className="h-24 px-3 py-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-strong)] transition-colors resize-none"
-              />
-            </div>
-            <Input
-              label="UTM (Superbet)"
-              placeholder="ex: superbet_fev_d1"
-              value={formData.utm}
-              onChange={(e) => setFormData((prev) => ({ ...prev, utm: e.target.value }))}
-            />
-            <Input
-              label="PID (BetMGM)"
-              placeholder="ex: 13382"
-              value={formData.betmgmPid}
-              onChange={(e) => setFormData((prev) => ({ ...prev, betmgmPid: e.target.value }))}
-            />
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--text-secondary)] font-medium">Painel CPA</span>
-              <select
-                value={formData.cpaPainelId}
-                onChange={(e) => setFormData((prev) => ({ ...prev, cpaPainelId: e.target.value }))}
-                className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-              >
-                <option value="">Nenhum</option>
-                {formData.casasAposta.map((cId) => {
-                  const c = casas[cId]
-                  if (!c || !c.paineisCPA?.length) return null
-                  return c.paineisCPA.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {c.nome} — {p.nome} (R$ {p.valorCPA.toFixed(2)})
-                    </option>
-                  ))
-                })}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Disparos entregues DAXX"
-                type="number"
-                min="0"
-                value={formData.entreguesDaxx}
-                onChange={(e) => setFormData((prev) => ({ ...prev, entreguesDaxx: parseInt(e.target.value) || 0 }))}
-              />
-              <Input
-                label="Leads no Fluxo"
-                type="number"
-                min="0"
-                value={formData.leadsFluxo}
-                onChange={(e) => setFormData((prev) => ({ ...prev, leadsFluxo: parseInt(e.target.value) || 0 }))}
               />
             </div>
           </div>
@@ -715,38 +738,38 @@ export default function DetalheDisparoPage() {
               </div>
             )}
 
-            {(disparo.utm || disparo.cpaPainelId) && (
-              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
-                <span className="text-xs text-[var(--text-muted)] block mb-2">CPA / UTM</span>
-                <div className="flex items-center gap-4 text-sm">
-                  {disparo.utm && (
-                    <div>
-                      <span className="text-[var(--text-muted)] text-xs block">UTM</span>
-                      <span className="text-[var(--text-primary)] font-mono">{disparo.utm}</span>
-                    </div>
-                  )}
+            <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
+              <span className="text-xs text-[var(--text-muted)] font-medium block mb-2">Tracking / CPA</span>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-[var(--text-muted)] text-xs block">UTM (Superbet)</span>
+                  <span className="text-[var(--text-primary)] font-mono">{disparo.utm || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)] text-xs block">PID (BetMGM)</span>
+                  <span className="text-[var(--text-primary)] font-mono">{disparo.betmgmPid || '—'}</span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                <span className="text-[var(--text-muted)] text-xs block">Painel CPA</span>
+                <span className="text-sm text-[var(--text-primary)]">
                   {(() => {
-                    if (!disparo.cpaPainelId) return null
+                    if (!disparo.cpaPainelId) return '—'
                     for (const cId of disparo.casasAposta) {
                       const c = casas[cId]
                       if (!c) continue
                       const painel = c.paineisCPA?.find((p) => p.id === disparo.cpaPainelId)
-                      if (painel) return (
-                        <div>
-                          <span className="text-[var(--text-muted)] text-xs block">Painel CPA</span>
-                          <span className="text-[var(--text-primary)] font-mono">{c.nome} — {painel.nome} (R$ {painel.valorCPA.toFixed(2)})</span>
-                        </div>
-                      )
+                      if (painel) return <>{c.nome} — {painel.nome} (R$ {painel.valorCPA.toFixed(2)})</>
                     }
-                    return null
+                    return '—'
                   })()}
-                </div>
+                </span>
               </div>
-            )}
+            </div>
 
             {(() => {
               const c = disparo.conversao
-              if (!c && !disparo.conversao) return null
+              if (!c) return null
               const pct = c && c.entreguesDaxx > 0 ? ((c.leadsFluxo / c.entreguesDaxx) * 100).toFixed(1) : null
               return (
                 <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
@@ -777,10 +800,11 @@ export default function DetalheDisparoPage() {
             {(() => {
               const r = disparo.resultados
               if (!r?.registros && !r?.ftds) return null
+              const pct = r.registros > 0 ? ((r.ftds / r.registros) * 100).toFixed(1) : null
               return (
                 <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4">
-                  <span className="text-xs text-[var(--text-muted)] block mb-2">Tracking (3CGG)</span>
-                  <div className="flex items-center gap-6 text-sm">
+                  <span className="text-xs text-[var(--text-muted)] font-medium block mb-2">Tracking (3CGG)</span>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="text-[var(--text-muted)] text-xs block">Registros</span>
                       <span className="text-[var(--text-primary)] font-mono text-base">{r.registros ?? 0}</span>
@@ -789,6 +813,12 @@ export default function DetalheDisparoPage() {
                       <span className="text-[var(--text-muted)] text-xs block">FTDs</span>
                       <span className="text-[var(--d1)] font-mono text-base">{r.ftds ?? 0}</span>
                     </div>
+                    {pct && (
+                      <div>
+                        <span className="text-[var(--text-muted)] text-xs block">Conv. Tracking</span>
+                        <span className="text-[var(--d3)] font-mono text-base">{pct}%</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
