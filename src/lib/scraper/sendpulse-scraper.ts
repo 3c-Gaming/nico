@@ -1,4 +1,4 @@
-﻿import puppeteer, { Browser, Page } from 'puppeteer-core'
+﻿import type { Browser, Page } from 'puppeteer-core'
 import type { ScrapeResultado, ScrapeResultadoNumero, ScrapeChatInfo, StatusInteracaoScrape } from './types'
 import { classificarStatus } from './classificador'
 
@@ -12,6 +12,7 @@ const CHAT_URL = (botId: string) =>
   `${BASE_URL}/chatbots/chats?bot_id=${botId}&channel=whatsapp&status=all&assignee=all&contact_id=all`
 
 async function conectarBrowser(): Promise<{ browser: Browser; page: Page }> {
+  const { default: puppeteer } = await import('puppeteer-core')
   const browser = await puppeteer.connect({
     browserWSEndpoint: `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}&track=${SESSION_NAME}`,
     defaultViewport: { width: 1366, height: 768 },
