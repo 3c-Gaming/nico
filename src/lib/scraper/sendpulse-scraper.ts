@@ -29,13 +29,13 @@ async function garantirLogin(page: Page): Promise<void> {
 
   if (!url.includes('login') && !url.includes('auth')) return
 
-  const emailInput = await page.$('input[type="email"]')
+  const emailInput = await page.$('#login')
   if (!emailInput) throw new Error('Campo de email nao encontrado na pagina de login')
 
   await emailInput.click()
   await emailInput.type(SENDPULSE_EMAIL || '', { delay: 30 })
 
-  const passwordInput = await page.$('input[type="password"]')
+  const passwordInput = await page.$('#password')
   if (!passwordInput) throw new Error('Campo de senha nao encontrado na pagina de login')
 
   await passwordInput.click()
