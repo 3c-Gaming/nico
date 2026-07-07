@@ -276,7 +276,7 @@ export default function NumerosPage() {
       const va = a.ultimoAumentoMs ?? 0
       const vb = b.ultimoAumentoMs ?? 0
       if (va !== vb) return vb - va
-      return (a.numero.nome ?? '').localeCompare(b.numero.nome ?? '')
+      return (a.numero?.nome ?? '').localeCompare(b.numero?.nome ?? '')
     })
   }, [data?.numeros])
 
