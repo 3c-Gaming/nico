@@ -8,7 +8,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento, POLL_INTERVAL } from '@/hooks/useMonitoramento'
 import { useDisparos } from '@/hooks/useDisparos'
 import { getState, togglePinNumero } from '@/lib/store'
-import type { NumeroMonitorado, FluxoSendpulse } from '@/types'
+import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse } from '@/types'
 
 function InteracaoBadge({ status }: { status: NumeroMonitorado['statusInteracao'] }) {
   const config = {
@@ -272,12 +272,14 @@ export default function NumerosPage() {
 
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
-    return [...data.numeros].sort((a, b) => {
-      const va = a.ultimoAumentoMs ?? 0
-      const vb = b.ultimoAumentoMs ?? 0
-      if (va !== vb) return vb - va
-      return (a.numero?.nome ?? '').localeCompare(b.numero?.nome ?? '')
-    })
+    return [...data.numeros]
+      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero)
+      .sort((a, b) => {
+        const va = a.ultimoAumentoMs ?? 0
+        const vb = b.ultimoAumentoMs ?? 0
+        if (va !== vb) return vb - va
+        return a.numero.nome.localeCompare(b.numero.nome)
+      })
   }, [data?.numeros])
 
   return (
