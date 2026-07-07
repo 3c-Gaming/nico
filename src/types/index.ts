@@ -1,4 +1,4 @@
-export type TipoDisparo = 'D1' | 'D3' | 'D5' | 'D7' | 'PONTUAL'
+﻿export type TipoDisparo = 'D1' | 'D3' | 'D5' | 'D7' | 'PONTUAL'
 
 export interface LinkTemplate {
   id: string
@@ -183,7 +183,7 @@ export interface Esteira {
   ativa: boolean
 }
 
-export type StatusInteracao = 'respondendo' | 'ocioso' | 'parado'
+export type StatusInteracao = 'respondendo' | 'ocioso' | 'parado' | 'em_pico' | 'numero_caido'
 
 export interface NumeroMonitorado {
   numero: NumeroSendpulse

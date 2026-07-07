@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { DadosMonitoramento, StatusInteracao } from '@/types'
@@ -36,15 +36,30 @@ export function useMonitoramento() {
     try {
       setRefreshing(true)
       setError(null)
-      const res = await fetch('/api/sendpulse/live-chat', { signal: controller.signal })
-      if (!res.ok) throw new Error(`Erro ${res.status}`)
-      const json: DadosMonitoramento = await res.json()
-      if (!mountedRef.current) return
+
+      let json: DadosMonitoramento & { scrapeFallback?: boolean } | null = null
+      let scrapeFuncionou = false
+
+      try {
+        const res = await fetch('/api/sendpulse/scrape', { signal: controller.signal })
+        if (res.ok) {
+          json = await res.json()
+          if (!json!.scrapeFallback) scrapeFuncionou = true
+        }
+      } catch {}
+
+      if (!scrapeFuncionou) {
+        const res = await fetch('/api/sendpulse/live-chat', { signal: controller.signal })
+        if (!res.ok) throw new Error(`Erro ${res.status}`)
+        json = await res.json()
+      }
+
+      if (!mountedRef.current || !json) return
 
       const atualizado = enriquecer(json)
       setData(atualizado)
       if (typeof window !== 'undefined') {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizado)) } catch { /* noop */ }
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizado)) } catch {}
       }
       setProximaAtualizacao(POLL_INTERVAL / 1000)
       setRefreshing(false)
@@ -66,7 +81,7 @@ export function useMonitoramento() {
         try {
           const parsed = JSON.parse(cache) as DadosMonitoramento
           setData(enriquecer(parsed))
-        } catch { /* noop */ }
+        } catch {}
       }
       fetchData()
     }

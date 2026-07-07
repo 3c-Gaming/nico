@@ -16,6 +16,8 @@ function InteracaoBadge({ status }: { status: NumeroMonitorado['statusInteracao'
     respondendo: { cor: 'text-green-500', icone: Activity, texto: 'Respondendo' },
     ocioso: { cor: 'text-amber-400', icone: Pause, texto: 'Ocioso' },
     parado: { cor: 'text-red-400', icone: XCircle, texto: 'Parado' },
+    em_pico: { cor: 'text-orange-500 animate-pulse', icone: AlertTriangle, texto: 'Em Pico' },
+    numero_caido: { cor: 'text-red-600', icone: XCircle, texto: 'Número Caído' },
   }
   const resolved = status ?? 'ocioso'
   const { cor, icone: Icon, texto } = config[resolved]
