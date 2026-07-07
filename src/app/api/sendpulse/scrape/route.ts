@@ -23,6 +23,9 @@ export async function GET() {
 
     const resultado = await scrapeNumeros(bots)
 
+    const todosFalharam = !resultado.numeros.length || resultado.numeros.every(n => n.erro)
+    if (todosFalharam) throw new Error('Todos os numeros falharam no scrape')
+
     cache = { data: resultado, expires: Date.now() + CACHE_TTL }
     return NextResponse.json(resultado)
   } catch (err) {
