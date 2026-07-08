@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Send, AlertTriangle, CheckCircle, XCircle, Clock, Smartphone, Link, Camera } from 'lucide-react'
+import { RefreshCw, Send, AlertTriangle, CheckCircle, XCircle, Clock, Smartphone, Link, Camera, MessageSquare } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { TestStatus } from '@/lib/testes/types'
-
-const BRIDGE_URL = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:3001'
 
 interface BridgeStatus {
   connected: boolean
@@ -54,11 +52,15 @@ export default function TestesPage() {
   const [testando, setTestando] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+  const [manualNumero, setManualNumero] = useState('')
+  const [manualMsg, setManualMsg] = useState('')
+  const [manualEnviando, setManualEnviando] = useState(false)
+  const [manualResultado, setManualResultado] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(BRIDGE_URL + '/status', { signal: AbortSignal.timeout(5000) })
+      const res = await fetch('/api/testes/status', { signal: AbortSignal.timeout(8000) })
       if (res.ok) {
         const data = await res.json()
         setStatus(data)
@@ -148,6 +150,26 @@ export default function TestesPage() {
       setErro((err as Error).message)
     } finally {
       setTestando(false)
+    }
+  }
+
+  const handleManualEnviar = async () => {
+    if (!manualNumero) return
+    setManualEnviando(true)
+    setManualResultado('')
+    try {
+      const res = await fetch('/api/testes/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: manualNumero, text: manualMsg || 'Olá' }),
+      })
+      const data = await res.json()
+      setManualResultado(data.success ? '✓ Enviado' : '✗ ' + (data.error || 'Erro'))
+      if (data.success) setManualMsg('')
+    } catch (err) {
+      setManualResultado('✗ ' + (err as Error).message)
+    } finally {
+      setManualEnviando(false)
     }
   }
 
@@ -303,6 +325,59 @@ export default function TestesPage() {
             <div className="flex items-center gap-2 mt-3 text-xs text-red-400">
               <AlertTriangle size={12} />
               {erro}
+            </div>
+          )}
+        </section>
+
+        {/* Envio Manual */}
+        <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <MessageSquare size={16} className="text-[var(--d1)]" />
+            Envio Manual
+          </h2>
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Número (com DDD, ex: 5511999999999)</label>
+              <input
+                type="text"
+                value={manualNumero}
+                onChange={(e) => setManualNumero(e.target.value)}
+                placeholder="5511999999999"
+                className="w-full h-9 rounded-md px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)]"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Mensagem</label>
+              <input
+                type="text"
+                value={manualMsg}
+                onChange={(e) => setManualMsg(e.target.value)}
+                placeholder="Olá"
+                className="w-full h-9 rounded-md px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)]"
+              />
+            </div>
+            <button
+              onClick={handleManualEnviar}
+              disabled={!manualNumero || manualEnviando}
+              className="flex items-center gap-1.5 px-4 h-9 rounded-md text-xs font-medium text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+              style={{ backgroundColor: 'var(--d1)' }}
+            >
+              {manualEnviando ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send size={14} />
+                  Enviar
+                </>
+              )}
+            </button>
+          </div>
+          {manualResultado && (
+            <div className={`text-xs mt-2 ${manualResultado.startsWith('✓') ? 'text-green-500' : 'text-red-400'}`}>
+              {manualResultado}
             </div>
           )}
         </section>
