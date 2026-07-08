@@ -37,24 +37,11 @@ export function useMonitoramento() {
       setRefreshing(true)
       setError(null)
 
-      let json: DadosMonitoramento & { scrapeFallback?: boolean } | null = null
-      let scrapeFuncionou = false
+      const res = await fetch('/api/sendpulse/live-chat', { signal: controller.signal })
+      if (!res.ok) throw new Error(`Erro ${res.status}`)
+      const json = await res.json()
 
-      try {
-        const res = await fetch('/api/sendpulse/scrape', { signal: controller.signal })
-        if (res.ok) {
-          json = await res.json()
-          if (!json!.scrapeFallback) scrapeFuncionou = true
-        }
-      } catch {}
-
-      if (!scrapeFuncionou) {
-        const res = await fetch('/api/sendpulse/live-chat', { signal: controller.signal })
-        if (!res.ok) throw new Error(`Erro ${res.status}`)
-        json = await res.json()
-      }
-
-      if (!mountedRef.current || !json) return
+      if (!mountedRef.current) return
 
       const atualizado = enriquecer(json)
       setData(atualizado)
