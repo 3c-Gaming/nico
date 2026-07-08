@@ -1,8 +1,9 @@
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
+  fetchLatestBaileysVersion,
 } from '@whiskeysockets/baileys'
-import { writeFile, readFile, mkdir } from 'node:fs/promises'
+import { writeFile, readFile, mkdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -69,11 +70,13 @@ export async function start() {
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
+  const { version, isLatest } = await fetchLatestBaileysVersion()
+  console.log('[bridge] using wa version', version.join('.'), isLatest ? '(latest)' : '(outdated)')
 
   sock = makeWASocket({
     auth: state,
+    version,
     logger: pino({ level: process.env.LOG_LEVEL || 'silent' }),
-    printQRInTerminal: false,
     browser: ['Nico QA Watcher', 'Chrome', '1.0.0'],
     syncFullHistory: false,
     markOnlineOnConnect: true,
@@ -83,9 +86,24 @@ export async function start() {
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
-      const qrcode = await import('qrcode')
-      latestQr = await qrcode.toDataURL(qr)
+      try {
+        const qrcode = await import('qrcode')
+        latestQr = await qrcode.toDataURL(qr)
+        console.log('[bridge] QR code generated')
+      } catch (err) {
+        console.error('[bridge] QR generation failed', err)
+      }
     }
+
+    const logParts = ['[bridge] connection.update']
+    if (connection) logParts.push('connection=' + connection)
+    if (qr) logParts.push('qr=yes')
+    if (lastDisconnect?.error) {
+      const err = lastDisconnect.error as Error
+      logParts.push('error=' + (err.message?.slice(0, 120) || 'unknown'))
+      if (err.stack) logParts.push('stack=' + err.stack.split('\n')[1]?.trim()?.slice(0, 100))
+    }
+    console.log(logParts.join(' | '))
 
     if (connection === 'open') {
       connectedNumber = sock?.user?.id?.split(':')[0]
@@ -142,6 +160,13 @@ export function getStatus() {
 
 export function getQr(): string | undefined {
   return latestQr
+}
+
+export async function resetAuth() {
+  if (existsSync(AUTH_DIR)) {
+    await rm(AUTH_DIR, { recursive: true, force: true })
+    console.log('[bridge] auth deleted')
+  }
 }
 
 export async function sendMessage(to: string, text: string): Promise<string | undefined> {

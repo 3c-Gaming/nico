@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { RefreshCw, Send, AlertTriangle, CheckCircle, XCircle, Clock, Smartphone, Link, Camera } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { TestStatus } from '@/lib/testes/types'
@@ -45,8 +45,8 @@ const STATUS_LABELS: Record<TestStatus, { label: string; cor: string }> = {
 
 export default function TestesPage() {
   const [status, setStatus] = useState<BridgeStatus | null>(null)
-  const [qrHtml, setQrHtml] = useState<string | null>(null)
-  const [qrLoaded, setQrLoaded] = useState(false)
+  const [qrSrc, setQrSrc] = useState<string | null>(null)
+  const [qrPolling, setQrPolling] = useState(false)
   const [testes, setTestes] = useState<TestResultItem[]>([])
   const [bots, setBots] = useState<BotOption[]>([])
   const [selectedBot, setSelectedBot] = useState('')
@@ -54,6 +54,7 @@ export default function TestesPage() {
   const [testando, setTestando] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -61,22 +62,26 @@ export default function TestesPage() {
       if (res.ok) {
         const data = await res.json()
         setStatus(data)
+        return data
       }
     } catch {
       setStatus(null)
     }
+    return null
   }, [])
 
-  const fetchQr = useCallback(async () => {
+  const pollQr = useCallback(async () => {
     try {
-      const res = await fetch('/api/testes/qr', { signal: AbortSignal.timeout(10000) })
+      const res = await fetch('/api/testes/qr', { signal: AbortSignal.timeout(8000) })
       const html = await res.text()
-      setQrHtml(html)
-      setQrLoaded(true)
-    } catch {
-      setQrHtml(null)
-      setQrLoaded(true)
-    }
+      const qrMatch = html.match(/src="([^"]+base64[^"]+)"/)
+      if (qrMatch) {
+        setQrSrc(qrMatch[1])
+        setQrPolling(false)
+      } else if (html.includes('Conectado')) {
+        setStatus((prev) => prev ? { ...prev, connected: true } : null)
+      }
+    } catch {}
   }, [])
 
   const fetchTestes = useCallback(async () => {
@@ -110,10 +115,18 @@ export default function TestesPage() {
   }, [fetchStatus, fetchTestes, fetchBots])
 
   useEffect(() => {
-    if (status && !status.connected) {
-      fetchQr()
+    if (status && !status.connected && !qrSrc) {
+      setQrPolling(true)
+      pollRef.current = setInterval(pollQr, 3000)
+      pollQr()
     }
-  }, [status, fetchQr])
+    if (status?.connected || (status && qrSrc)) {
+      setQrPolling(false)
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [status?.connected, qrSrc, pollQr])
 
   const handleTestar = async () => {
     if (!selectedBot) return
@@ -200,22 +213,17 @@ export default function TestesPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs text-amber-400">
                 <AlertTriangle size={12} />
-                Aguardando conexão — escaneie o QR code abaixo
+                Aguardando conexão — escaneie o QR code abaixo com o WhatsApp
               </div>
-              {qrHtml && !qrLoaded && (
-                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <RefreshCw size={12} className="animate-spin" />
-                  Carregando QR...
+              {qrSrc ? (
+                <div className="bg-white inline-block rounded-lg p-2">
+                  <img src={qrSrc} style={{ width: 256, height: 256, imageRendering: 'pixelated' }} alt="QR Code" />
                 </div>
-              )}
-              <div
-                className="bg-white inline-block rounded-lg p-2"
-                dangerouslySetInnerHTML={qrHtml && qrLoaded ? { __html: qrHtml } : undefined}
-              />
-              {qrLoaded && !qrHtml && (
-                <p className="text-xs text-[var(--text-muted)]">
-                  QR code temporariamente indisponível. A página atualiza automaticamente quando um QR for gerado.
-                </p>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  <RefreshCw size={12} className={qrPolling ? 'animate-spin' : ''} />
+                  {qrPolling ? 'Aguardando QR code...' : 'Bridge offline'}
+                </div>
               )}
             </div>
           )}
