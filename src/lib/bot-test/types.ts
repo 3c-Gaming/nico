@@ -1,0 +1,33 @@
+export type BotTestStatus = 'pendente' | 'ok' | 'sem_resposta' | 'erro'
+
+export interface BotConfig {
+  numero: string
+  contactId: string
+  flowId: string
+  nome: string
+}
+
+export interface BotTestResult {
+  botId: string
+  numero: string
+  nome: string
+  ultimoTeste: string
+  status: BotTestStatus
+  duracaoMs: number
+  erro?: string
+  pendente?: boolean
+  preTriggerTimestamp?: string | null
+  triggeredAt?: string
+  ultimoTesteOkMs?: number
+}
+
+export interface BotTestConfig {
+  pollIntervalMs: number
+}
+
+export interface BotTestDatabase {
+  resultados: Record<string, BotTestResult>
+  config?: BotTestConfig
+}
+
+export const DEFAULT_POLL_INTERVAL_MS = 900_000

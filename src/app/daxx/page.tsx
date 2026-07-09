@@ -1,103 +1,92 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
-import { RefreshCw, ChevronRight, ChevronDown, AlertTriangle, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Search, RefreshCw, ExternalLink, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import Link from 'next/link'
-import type { DisparoAgendadoDaxx } from '@/types'
+import type { DisparoDaxx } from '@/types'
 
-const TOKEN_KEY = 'nico_daxx_token'
-const KNOWN_FIELDS = new Set(['id', 'cliente_id', 'status', 'agendado_para', 'criado_em', 'atualizado_em', 'marcas'])
+const CACHE_KEY = 'daxx-campanhas'
+const TS_KEY = 'daxx-campanhas-timestamp'
+
+function parseDataDaxx(str: string): Date | null {
+  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return null
+  return new Date(+match[3], +match[2] - 1, +match[1])
+}
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function formatNumero(n: number): string {
+  return n.toLocaleString('pt-BR')
+}
+
+function carregarCache(): { data: DisparoDaxx[]; timestamp: string } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    const ts = localStorage.getItem(TS_KEY)
+    if (!raw || !ts) return null
+    return { data: JSON.parse(raw), timestamp: ts }
+  } catch {
+    return null
+  }
+}
+
+function salvarCache(data: DisparoDaxx[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data))
+    localStorage.setItem(TS_KEY, new Date().toISOString())
+  } catch {
+    /* quota */
+  }
+}
 
 function StatusBadge({ status }: { status: string }) {
-  const cor = status === 'executando' ? 'var(--d3)' : status === 'agendado' ? 'var(--d1)' : 'var(--text-muted)'
+  const cor =
+    status === 'Concluído' ? 'var(--success)' :
+    status === 'Executando' ? 'var(--d3)' :
+    'var(--warning)'
   return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
-      style={{ backgroundColor: `${cor}18`, color: cor }}
-    >
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium" style={{ backgroundColor: `${cor}18`, color: cor }}>
       {status}
     </span>
   )
 }
 
-function CamposExpandidos({ data, ignorar }: { data: Record<string, unknown>; ignorar: Set<string> }) {
-  const entradas = Object.entries(data).filter(([k]) => !ignorar.has(k))
-  if (entradas.length === 0) {
-    return <span className="text-xs text-[var(--text-muted)] italic">Nenhum campo adicional</span>
-  }
-  return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-      {entradas.map(([key, val]) => (
-        <Fragment key={key}>
-          <span className="text-[var(--text-muted)] font-mono text-right">{key}</span>
-          <span className="text-[var(--text-primary)] font-mono break-all">{formatarValor(val)}</span>
-        </Fragment>
-      ))}
-    </div>
-  )
-}
-
-function formatarValor(val: unknown): string {
-  if (val === null || val === undefined) return '—'
-  if (typeof val === 'object') return JSON.stringify(val)
-  return String(val)
-}
-
-function formatarData(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
 export default function DaxxPage() {
-  const [disparos, setDisparos] = useState<DisparoAgendadoDaxx[]>([])
+  const [campanhas, setCampanhas] = useState<DisparoDaxx[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [token, setToken] = useState<string | null>(null)
-  const [tokenOk, setTokenOk] = useState<boolean | null>(null)
+  const [loadingLink, setLoadingLink] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<string | null>(null)
 
-  useEffect(() => {
-    const saved = localStorage.getItem(TOKEN_KEY)
-    setToken(saved)
-  }, [])
+  const [dataInicio, setDataInicio] = useState(hojeISO)
+  const [dataFim, setDataFim] = useState(hojeISO)
+  const [busca, setBusca] = useState('')
 
-  const fetchData = useCallback(async (isRefresh = false) => {
-    const tk = localStorage.getItem(TOKEN_KEY) || ''
-    if (!tk) {
-      setError('Token daxX não configurado')
-      setLoading(false)
-      setRefreshing(false)
-      setTokenOk(false)
-      return
-    }
-
+  const fetchData = useCallback(async (isRefresh = false, background = false) => {
     if (isRefresh) setRefreshing(true)
+    else if (background) setRefreshing(true)
     else setLoading(true)
     setError(null)
 
     try {
-      const res = await fetch('/api/daxx/disparos-agendados', {
-        headers: { 'x-daxx-token': tk },
-      })
-
-      if (res.status === 401) {
-        const data = await res.json()
-        setError(data.error || 'Token inválido ou expirado')
-        setTokenOk(false)
-        return
-      }
-
+      const url = isRefresh ? '/api/daxx/campanhas/refresh' : '/api/daxx/campanhas'
+      const res = await fetch(url)
       if (!res.ok) {
-        throw new Error(`Erro ${res.status}`)
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || `Erro ${res.status}`)
       }
-
-      const data = await res.json()
-      setDisparos(data.disparos ?? [])
-      setTokenOk(true)
+      const d = await res.json()
+      const lista = d.campanhas ?? []
+      if (lista.length > 0 || isRefresh) {
+        setCampanhas(lista)
+        salvarCache(lista)
+      }
+      setLastUpdate(new Date().toLocaleTimeString('pt-BR'))
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -106,13 +95,54 @@ export default function DaxxPage() {
     }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    const cached = carregarCache()
+    if (cached) {
+      setCampanhas(cached.data)
+      setLastUpdate(new Date(cached.timestamp).toLocaleTimeString('pt-BR'))
+      setLoading(false)
+      fetchData(false, true)
+    } else {
+      fetchData()
+    }
+  }, [fetchData])
+
+  const filtradas = useMemo(() => {
+    const termo = busca.toLowerCase().trim()
+    return campanhas.filter((c) => {
+      if (termo && !c.nome.toLowerCase().includes(termo)) return false
+      const dt = parseDataDaxx(c.dataCriacao)
+      if (!dt) return true
+      if (dataInicio && dt < new Date(dataInicio + 'T00:00:00')) return false
+      if (dataFim) {
+        const fim = new Date(dataFim + 'T23:59:59')
+        if (dt > fim) return false
+      }
+      return true
+    })
+  }, [campanhas, dataInicio, dataFim, busca])
+
+  async function handleVerMensagem(id: string) {
+    setLoadingLink(id)
+    try {
+      const res = await fetch(`/api/daxx/campanhas/${id}/template`)
+      if (!res.ok) throw new Error('Erro ao carregar template')
+      const data = await res.json()
+      if (data.link) {
+        window.open(data.link, '_blank')
+      }
+    } catch {
+      /* nada */
+    } finally {
+      setLoadingLink(null)
+    }
+  }
 
   return (
     <>
       <PageHeader
-        titulo="Disparos daxX"
-        descricao="Agendamentos na plataforma DisparosSimples"
+        titulo="Campanhas DAXX"
+        descricao="Disparos reais na plataforma DisparosSimples"
         acoes={
           <button
             onClick={() => fetchData(true)}
@@ -125,21 +155,48 @@ export default function DaxxPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
-        {!token && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
-            <AlertTriangle size={14} />
-            Token daxX não configurado.
-            <Link href="/configuracoes" className="underline hover:no-underline ml-1">Configurar em Configurações</Link>
-          </div>
-        )}
-
+      <div className="p-6 space-y-4">
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
             <AlertTriangle size={14} />
             {error}
-            {tokenOk === false && token && (
-              <Link href="/configuracoes" className="underline hover:no-underline ml-1">Atualizar token</Link>
+          </div>
+        )}
+
+        {!loading && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[160px] max-w-[240px]">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome..."
+                className="w-full pl-8 pr-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] outline-none focus:border-[var(--d3)] transition-colors"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[var(--text-muted)]">De</span>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="px-2 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[var(--text-muted)]">Até</span>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="px-2 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] outline-none"
+              />
+            </div>
+            {lastUpdate && (
+              <span className="text-xs text-[var(--text-muted)] ml-auto">
+                Última atualização: {lastUpdate}
+              </span>
             )}
           </div>
         )}
@@ -150,65 +207,56 @@ export default function DaxxPage() {
           </div>
         )}
 
-        {!loading && token && disparos.length === 0 && !error && (
+        {!loading && campanhas.length === 0 && !error && (
           <div className="text-center py-16 text-sm text-[var(--text-muted)]">
-            Nenhum agendamento encontrado.
+            Nenhuma campanha encontrada na DAXX.
           </div>
         )}
 
-        {!loading && disparos.length > 0 && (
+        {!loading && campanhas.length > 0 && (
           <>
-            <div className="flex items-center justify-end gap-2 text-xs text-[var(--text-muted)]">
-              {tokenOk && <span className="text-green-500">✓ Token válido</span>}
-              <span>{disparos.length} agendamento(s)</span>
+            <div className="text-xs text-[var(--text-muted)] text-right">
+              {filtradas.length} de {campanhas.length} campanha(s)
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)] w-6"></th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Agendado para</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Marca</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Rejeitados</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Responsável</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Data</th>
+                    <th className="py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Msg</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {disparos.map((item) => {
-                    const isExpanded = expandedId === item.id
-                    const ignorar = new Set(KNOWN_FIELDS)
-
-                    return (
-                      <Fragment key={item.id}>
-                        <tr
-                          className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer"
-                          onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                  {filtradas.map((c) => (
+                    <tr key={c.id || `${c.nome}-${c.dataCriacao}`} className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50 transition-colors">
+                      <td className="py-3 px-3 font-medium text-[var(--text-primary)] max-w-[240px] truncate" title={c.nome}>{c.nome}</td>
+                      <td className="py-3 px-3"><StatusBadge status={c.status} /></td>
+                      <td className="py-3 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(c.totalBase)}</td>
+                      <td className="py-3 px-3 text-right font-mono text-green-500">{formatNumero(c.entregues)}</td>
+                      <td className="py-3 px-3 text-right font-mono text-[var(--d1)]">{formatNumero(c.lidas)}</td>
+                      <td className="py-3 px-3 text-right font-mono text-red-400">{formatNumero(c.rejeitados)}</td>
+                      <td className="py-3 px-3 text-[var(--text-secondary)]">{c.responsavel}</td>
+                      <td className="py-3 px-3 text-[var(--text-muted)] text-xs">{c.dataCriacao}</td>
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          onClick={() => handleVerMensagem(c.id)}
+                          disabled={loadingLink === c.id}
+                          className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+                          title="Ver mensagem"
                         >
-                          <td className="py-3 px-3">
-                            {isExpanded ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-medium text-[var(--text-primary)]">{formatarData(item.agendado_para)}</span>
-                          </td>
-                          <td className="py-3 px-3">
-                            <StatusBadge status={item.status} />
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="text-[var(--text-primary)]">{item.marcas?.nome ?? '—'}</span>
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={4} className="p-0">
-                              <div className="py-4 px-6 bg-[var(--bg-elevated)]/30 border-b border-[var(--border)]">
-                                <CamposExpandidos data={item as unknown as Record<string, unknown>} ignorar={ignorar} />
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    )
-                  })}
+                          {loadingLink === c.id ? <Spinner size={14} /> : <ExternalLink size={14} />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

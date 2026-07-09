@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Activity, XCircle, Layers, Pin } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Activity, XCircle, Layers, Pin, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
@@ -269,6 +269,33 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
 export default function NumerosPage() {
   const { data, loading, refreshing, error, atualizar, proximaAtualizacao } = useMonitoramento()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
+  const [testeFeedback, setTesteFeedback] = useState<Record<string, 'ok' | 'erro' | 'sem_resposta' | null>>({})
+
+  const handleTestarBot = useCallback(async (botId: string) => {
+    if (testandoBotId) return
+    setTestandoBotId(botId)
+    setTesteFeedback(prev => ({ ...prev, [botId]: null }))
+    try {
+      const res = await fetch('/api/bot-test/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botId }),
+      })
+      if (!res.ok) throw new Error()
+      await new Promise(r => setTimeout(r, 3000))
+      const res2 = await fetch('/api/bot-test/resultados')
+      if (res2.ok) {
+        const json = await res2.json()
+        const botResult = (json.resultados ?? []).find((r: { botId: string }) => r.botId === botId)
+        if (botResult) setTesteFeedback(prev => ({ ...prev, [botId]: botResult.status }))
+      }
+    } catch {
+      setTesteFeedback(prev => ({ ...prev, [botId]: 'erro' }))
+    } finally {
+      setTestandoBotId(null)
+    }
+  }, [testandoBotId])
 
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
@@ -384,6 +411,22 @@ export default function NumerosPage() {
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <InteracaoBadge status={item.statusInteracao} />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleTestarBot(item.numero.id) }}
+                            disabled={testandoBotId === item.numero.id}
+                            className="shrink-0 flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
+                            title="Testar bot"
+                          >
+                            {testeFeedback[item.numero.id] === 'ok' ? (
+                              <CheckCircle2 size={13} className="text-green-500" />
+                            ) : testeFeedback[item.numero.id] === 'erro' || testeFeedback[item.numero.id] === 'sem_resposta' ? (
+                              <XCircle size={13} className="text-red-500" />
+                            ) : testandoBotId === item.numero.id ? (
+                              <Spinner size={12} />
+                            ) : (
+                              <Play size={13} />
+                            )}
+                          </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); togglePinNumero(item.numero.id) }}
                             className="shrink-0 flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"

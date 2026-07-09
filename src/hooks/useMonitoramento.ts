@@ -6,14 +6,37 @@ import type { DadosMonitoramento, StatusInteracao } from '@/types'
 export const POLL_INTERVAL = 30_000
 const STORAGE_KEY = 'nico_monitoramento_cache'
 
-function enriquecer(json: DadosMonitoramento): DadosMonitoramento {
+interface BotTestApiResult {
+  botId: string
+  status: string
+  ultimoTesteOkMs?: number
+}
+
+function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[]): DadosMonitoramento {
   const agora = Date.now()
+  const botTestMap = new Map<string, { status: string; ultimoTesteOkMs?: number }>()
+  if (botTestResults) {
+    for (const r of botTestResults) {
+      botTestMap.set(r.botId, { status: r.status, ultimoTesteOkMs: r.ultimoTesteOkMs })
+    }
+  }
+
   const numeros = json.numeros.map((n) => {
     let status: StatusInteracao
-    const aumento = n.ultimoAumentoMs
-    if (aumento && (agora - aumento) < 5 * 60 * 1000) status = 'respondendo'
-    else if (aumento && (agora - aumento) < 30 * 60 * 1000) status = 'ocioso'
-    else status = 'parado'
+    const botInfo = n.numero?.id ? botTestMap.get(n.numero.id) : undefined
+
+    if (botInfo?.status === 'sem_resposta' || botInfo?.status === 'erro') {
+      status = 'numero_caido'
+    } else if (botInfo?.status === 'ok') {
+      status = 'respondendo'
+    } else {
+      const aumento = n.ultimoAumentoMs
+      if (aumento && (agora - aumento) < 30 * 60 * 1000) {
+        status = 'respondendo'
+      } else {
+        status = 'numero_caido'
+      }
+    }
     return { ...n, statusInteracao: status }
   })
   return { ...json, numeros }
@@ -27,6 +50,7 @@ export function useMonitoramento() {
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const fetchedRef = useRef(false)
+  const botTestCacheRef = useRef<BotTestApiResult[]>([])
 
   const fetchData = useCallback(async () => {
     abortRef.current?.abort()
@@ -37,13 +61,28 @@ export function useMonitoramento() {
       setRefreshing(true)
       setError(null)
 
-      const res = await fetch('/api/sendpulse/live-chat', { signal: controller.signal })
-      if (!res.ok) throw new Error(`Erro ${res.status}`)
-      const json = await res.json()
+      const [monitoramentoRes, botTestRes] = await Promise.all([
+        fetch('/api/sendpulse/live-chat', { signal: controller.signal }),
+        fetch('/api/bot-test/resultados', { signal: controller.signal }).catch(() => null),
+      ])
 
       if (!mountedRef.current) return
 
-      const atualizado = enriquecer(json)
+      if (!monitoramentoRes.ok) throw new Error(`Erro ${monitoramentoRes.status}`)
+      const json = await monitoramentoRes.json()
+
+      let botTestResults: BotTestApiResult[] = []
+      if (botTestRes && botTestRes.ok) {
+        const botTestJson = await botTestRes.json()
+        botTestResults = botTestJson.resultados ?? []
+        botTestCacheRef.current = botTestResults
+      } else {
+        botTestResults = botTestCacheRef.current
+      }
+
+      if (!mountedRef.current) return
+
+      const atualizado = enriquecer(json, botTestResults)
       setData(atualizado)
       if (typeof window !== 'undefined') {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizado)) } catch {}

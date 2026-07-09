@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Send, AlertTriangle, CheckCircle, XCircle, Clock, Smartphone, Link, Camera, MessageSquare } from 'lucide-react'
+import { RefreshCw, Send, AlertTriangle, CheckCircle, XCircle, Clock, Smartphone, Link, Camera, MessageSquare, Radio } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { TestStatus } from '@/lib/testes/types'
 
@@ -56,6 +56,7 @@ export default function TestesPage() {
   const [manualMsg, setManualMsg] = useState('')
   const [manualEnviando, setManualEnviando] = useState(false)
   const [manualResultado, setManualResultado] = useState('')
+  const [botTestResults, setBotTestResults] = useState<{ botId: string; nome: string; status: string; ultimoTeste: string; duracaoMs: number }[]>([])
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const fetchStatus = useCallback(async () => {
@@ -112,9 +113,24 @@ export default function TestesPage() {
     } catch {}
   }, [])
 
+  const fetchBotTest = useCallback(async () => {
+    try {
+      const res = await fetch('/api/bot-test/resultados', { signal: AbortSignal.timeout(10000) })
+      if (res.ok) {
+        const data = await res.json()
+        setBotTestResults(data.resultados || [])
+      }
+    } catch {}
+  }, [])
+
   useEffect(() => {
-    Promise.all([fetchStatus(), fetchTestes(), fetchBots()]).finally(() => setCarregando(false))
-  }, [fetchStatus, fetchTestes, fetchBots])
+    Promise.all([fetchStatus(), fetchTestes(), fetchBots(), fetchBotTest()]).finally(() => setCarregando(false))
+  }, [fetchStatus, fetchTestes, fetchBots, fetchBotTest])
+
+  useEffect(() => {
+    const interval = setInterval(fetchBotTest, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchBotTest])
 
   useEffect(() => {
     if (status && !status.connected && !qrSrc) {
@@ -249,6 +265,44 @@ export default function TestesPage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* Status dos Bots (Bot-Test) */}
+        <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Radio size={16} className="text-[var(--d1)]" />
+            Status dos Bots
+          </h2>
+          <div className="grid grid-cols-3 gap-2">
+            {botTestResults.map((r) => {
+              const isOk = r.status === 'ok'
+              const isPendente = r.status === 'pendente'
+              const statusCor = isOk ? 'text-green-500' : isPendente ? 'text-amber-400' : 'text-red-400'
+              const statusLabel = isOk ? 'Online' : isPendente ? 'Testando...' : 'Offline'
+              const diff = Date.now() - new Date(r.ultimoTeste).getTime()
+              const haQuanto = diff < 120_000 ? 'agora' : `há ${Math.floor(diff / 60000)}min`
+              return (
+                <div
+                  key={r.botId}
+                  className="flex items-center gap-3 rounded-md p-3 bg-[var(--bg-surface)] border border-[var(--border)]"
+                >
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${isOk ? 'bg-green-500' : isPendente ? 'bg-amber-400' : 'bg-red-400'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-[var(--text-primary)] truncate">{r.nome}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-medium ${statusCor}`}>{statusLabel}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{haQuanto}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {botTestResults.length === 0 && (
+              <div className="col-span-3 text-xs text-[var(--text-muted)] text-center py-4">
+                Nenhum resultado ainda. O primeiro teste roda em até 60s.
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Estatísticas */}

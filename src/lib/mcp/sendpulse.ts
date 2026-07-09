@@ -88,6 +88,46 @@ export async function listAvailableTools() {
   }))
 }
 
+export async function runFlow(params: {
+  channel: string
+  contactId: string
+  flowId: string
+  externalData?: Record<string, unknown>
+}) {
+  const mcp = await getClient()
+  const result = await mcp.callTool({
+    name: 'chatbots_flows_run',
+    arguments: {
+      channel: params.channel,
+      contactId: params.contactId,
+      flowId: params.flowId,
+      ...(params.externalData ? { externalData: params.externalData } : {}),
+    },
+  })
+  return extrairTexto(result.content as unknown[])
+}
+
+export async function listChatMessages(params: {
+  channel: string
+  contactId: string
+  limit?: number
+  offset?: number
+  order?: 'asc' | 'desc'
+}) {
+  const mcp = await getClient()
+  const result = await mcp.callTool({
+    name: 'chatbots_chats_messages_list',
+    arguments: {
+      channel: params.channel,
+      contactId: params.contactId,
+      ...(params.limit !== undefined ? { limit: params.limit } : {}),
+      ...(params.offset !== undefined ? { offset: params.offset } : {}),
+      ...(params.order ? { order: params.order } : {}),
+    },
+  })
+  return extrairTexto(result.content as unknown[])
+}
+
 export async function getContactInfo(contactId: string) {
   const mcp = await getClient()
   const result = await mcp.callTool({

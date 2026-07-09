@@ -3,39 +3,58 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getState } from '@/lib/store'
-import type { TipoDisparo, Disparo, BaseCSV, TemplateDaxx, NumeroSendpulse, FluxoSendpulse } from '@/types'
+import type { TipoDisparo, Disparo, BaseCSV, NumeroSendpulse, FluxoSendpulse, DisparoDaxx, CasaAposta } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useEsteiras } from '@/hooks/useEsteiras'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { criarEsteira } from '@/lib/esteira'
 import { gerarNomenclatura } from '@/lib/nomenclatura'
 import { Button } from '../ui/Button'
+import { Input } from '../ui/Input'
+import { TimePicker } from '../ui/TimePicker'
 import { useToast } from '../ui/Toast'
-import { StepBase } from './StepBase'
-import { StepBaseDrive } from './StepBaseDrive'
-import { StepTemplate } from './StepTemplate'
+import { TagInput } from '../ui/TagInput'
+import { StepDaxxCampanha } from './StepDaxxCampanha'
 import { StepNumero } from './StepNumero'
-import { StepAgendamento } from './StepAgendamento'
+import { PreviewNomenclatura } from './PreviewNomenclatura'
+import { EsteiraPreview } from './EsteiraPreview'
 
-const STEPS = ['Básico', 'Base CSV', 'Template', 'Número', 'Agendamento']
+const STEPS = ['Campanha DAXX', 'Configuração']
 
 function fireAndForget(url: string, opts: RequestInit) {
   fetch(url, opts).catch(() => {})
+}
+
+function detectCasa(nome: string, casas: Record<string, CasaAposta>): string | undefined {
+  const slug = nome
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .split(/\s+/)
+    .find((w) => {
+      const lower = w.toLowerCase()
+      return Object.values(casas).some((c) =>
+        c.slug.toLowerCase().includes(lower) || lower.includes(c.slug.toLowerCase())
+      )
+    })
+  if (!slug) return
+  const found = Object.values(casas).find((c) =>
+    c.slug.toLowerCase().includes(slug.toLowerCase()) || slug.toLowerCase().includes(c.slug.toLowerCase())
+  )
+  return found?.id
 }
 
 export function FormNovoDisparo() {
   const router = useRouter()
   const { create: createDisparo } = useDisparos()
   const { create: createEsteira } = useEsteiras()
-  const { casas: casasDisponiveis } = useCasasAposta()
+  const { casas: casasDisponiveis, add: addCasa } = useCasasAposta()
   const { addToast } = useToast()
 
   const [step, setStep] = useState(1)
+  const [campanha, setCampanha] = useState<DisparoDaxx | undefined>()
+
   const [tipo, setTipo] = useState<TipoDisparo | null>(null)
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [notas, setNotas] = useState('')
-  const [base, setBase] = useState<BaseCSV>({ status: 'pendente' })
-  const [template, setTemplate] = useState<TemplateDaxx | undefined>()
   const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [dataDisparo, setDataDisparo] = useState('')
   const [horarioDisparo, setHorarioDisparo] = useState('09:30')
@@ -63,19 +82,29 @@ export function FormNovoDisparo() {
     }).finally(() => setCarregandoFluxos(false))
   }, [numeros])
 
+  useEffect(() => {
+    if (campanha && !nomenclatura) {
+      setNomenclatura(campanha.nome)
+    }
+  }, [campanha])
+
+  useEffect(() => {
+    if (campanha && casasSelecionadas.length === 0) {
+      const casaId = detectCasa(campanha.nome, casasDisponiveis)
+      if (casaId) setCasasSelecionadas([casaId])
+    }
+  }, [campanha, casasDisponiveis])
+
   const podeAvancar = useMemo(() => {
     switch (step) {
-      case 1: return !!tipo && casasSelecionadas.length > 0
-      case 2: return base.status !== 'pendente' && base.status !== 'baixando'
-      case 3: return true
-      case 4: return true
-      case 5: return !!dataDisparo && !!horarioDisparo
+      case 1: return !!campanha
+      case 2: return !!tipo && !!dataDisparo && !!horarioDisparo
       default: return false
     }
-  }, [step, tipo, casasSelecionadas, base, dataDisparo, horarioDisparo])
+  }, [step, campanha, tipo, dataDisparo, horarioDisparo])
 
   function handleAvancar() {
-    if (step < 5) setStep(step + 1)
+    if (step < 2) setStep(step + 1)
   }
 
   function handleVoltar() {
@@ -83,7 +112,7 @@ export function FormNovoDisparo() {
   }
 
   async function handleCriar() {
-    if (!tipo) return
+    if (!tipo || !campanha) return
     setCriando(true)
 
     try {
@@ -97,6 +126,12 @@ export function FormNovoDisparo() {
         casas: casasSelecionadas.map((id) => casasDisponiveis[id]).filter(Boolean),
       })
 
+      const base: BaseCSV = {
+        status: 'disponivel',
+        totalRegistros: campanha.totalBase,
+        nomeArquivo: `DAXX: ${campanha.nome}`,
+      }
+
       const disparoData: Disparo = {
         id: crypto.randomUUID(),
         tipo,
@@ -106,7 +141,12 @@ export function FormNovoDisparo() {
         dataDisparo,
         horarioDisparo,
         base,
-        templateDaxx: template,
+        templateDaxx: {
+          id: campanha.id,
+          nome: campanha.nome,
+          url: campanha.linkTemplate,
+          descricao: `Base: ${campanha.totalBase} | Entregues: ${campanha.entregues} | Lidas: ${campanha.lidas}`,
+        },
         numerosSendpulse: numeros.length > 0 ? numeros : undefined,
         utm: utm || undefined,
         betmgmPid: betmgmPid || undefined,
@@ -114,6 +154,12 @@ export function FormNovoDisparo() {
         criadoEm: now.toISOString(),
         atualizadoEm: now.toISOString(),
         notas: notas || undefined,
+        valorTotalBase: campanha.totalBase,
+        conversao: {
+          entreguesDaxx: campanha.entregues,
+          leadsFluxo: 0,
+          atualizadoEm: now.toISOString(),
+        },
       }
 
       if (tipo === 'D1') {
@@ -179,22 +225,90 @@ export function FormNovoDisparo() {
 
       <div className="min-h-[300px]">
         {step === 1 && (
-          <StepBase
-            tipo={tipo}
-            casasSelecionadas={casasSelecionadas}
-            notas={notas}
-            onChangeTipo={setTipo}
-            onChangeCasas={setCasasSelecionadas}
-            onChangeNotas={setNotas}
-          />
+          <StepDaxxCampanha campanha={campanha} onChange={setCampanha} />
         )}
-        {step === 2 && <StepBaseDrive base={base} onChange={setBase} />}
-        {step === 3 && <StepTemplate template={template} onChange={setTemplate} />}
-        {step === 4 && (
+
+        {step === 2 && (
           <div className="space-y-6">
+            <div>
+              <span className="text-xs text-[var(--text-secondary)] font-medium mb-3 block">
+                Tipo de Disparo
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'D1' as const, label: 'D1 — Base Nova', desc: 'Cria esteira automática D3/D5/D7' },
+                  { value: 'PONTUAL' as const, label: 'Pontual — Sem esteira', desc: 'Disparo avulso, sem sequência' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTipo(opt.value)}
+                    className={`p-4 rounded-md border text-left transition-all ${
+                      tipo === opt.value
+                        ? 'border-[var(--d1)] bg-[var(--d1)]/10'
+                        : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    <span
+                      className={`text-sm font-semibold ${tipo === opt.value ? 'text-[var(--d1)]' : 'text-[var(--text-primary)]'}`}
+                    >
+                      {opt.label}
+                    </span>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-xs text-[var(--text-secondary)] font-medium mb-2 block">Casas de Aposta</span>
+              <TagInput
+                tags={casasSelecionadas}
+                casasDisponiveis={Object.values(casasDisponiveis).map((c) => ({ id: c.id, nome: c.nome, cor: c.cor }))}
+                onAdd={(nome) => {
+                  const casa = addCasa(nome)
+                  setCasasSelecionadas((prev) => prev.includes(casa.id) ? prev : [...prev, casa.id])
+                  return { id: casa.id, nome: casa.nome, cor: casa.cor }
+                }}
+                onRemove={(id) => setCasasSelecionadas((prev) => prev.filter((c) => c !== id))}
+                placeholder="Digite o nome da casa..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Data do Disparo"
+                type="date"
+                value={dataDisparo}
+                onChange={(e) => setDataDisparo(e.target.value)}
+              />
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">Horário</span>
+                <TimePicker value={horarioDisparo} onChange={setHorarioDisparo} />
+              </div>
+            </div>
+
+            <PreviewNomenclatura
+              dataCriacao={new Date()}
+              tipoDisparo={tipo ?? 'D1'}
+              dataDisparo={dataDisparo ? new Date(dataDisparo + 'T12:00:00') : new Date()}
+              casas={casasSelecionadas.map((id) => casasDisponiveis[id]).filter(Boolean)}
+              value={nomenclatura}
+              onChange={setNomenclatura}
+              editavel
+            />
+
+            {tipo === 'D1' && (
+              <EsteiraPreview
+                dataDisparo={dataDisparo}
+                casas={casasSelecionadas.map((id) => casasDisponiveis[id]).filter(Boolean)}
+                horario={horarioDisparo}
+              />
+            )}
+
             <StepNumero numeros={numeros} onChange={setNumeros} />
+
             {numeros.length > 0 && (
-              <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-3">
+              <div className="rounded-md border border-[var(--border)] p-4 space-y-3">
                 <span className="text-xs text-[var(--text-muted)] font-medium block">Fluxos Receptivos</span>
                 {carregandoFluxos && !fluxosDisponiveis.length ? (
                   <span className="text-[10px] text-[var(--text-muted)]">carregando fluxos...</span>
@@ -236,27 +350,51 @@ export function FormNovoDisparo() {
                 )}
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="UTM"
+                placeholder="ex: superbet_fev_d1"
+                value={utm}
+                onChange={(e) => setUtm(e.target.value)}
+              />
+              <Input
+                label="PID (BetMGM)"
+                placeholder="ex: 13382"
+                value={betmgmPid}
+                onChange={(e) => setBetmgmPid(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">Notas (opcional)</span>
+              <textarea
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                placeholder="Observações sobre o disparo..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-md text-sm bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--d1)] resize-none"
+              />
+            </div>
+
+            {campanha && (
+              <div className="rounded-md border border-[var(--border)] p-3 space-y-2 text-sm">
+                <span className="text-xs text-[var(--text-secondary)] font-medium block">Dados da DAXX</span>
+                <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-primary)]">
+                  <span className="text-[var(--text-muted)]">Campanha:</span>
+                  <span>{campanha.nome}</span>
+                  <span className="text-[var(--text-muted)]">Base:</span>
+                  <span>{campanha.totalBase.toLocaleString('pt-BR')}</span>
+                  <span className="text-[var(--text-muted)]">Entregues:</span>
+                  <span className="text-green-500">{campanha.entregues.toLocaleString('pt-BR')}</span>
+                  <span className="text-[var(--text-muted)]">Lidas:</span>
+                  <span className="text-[var(--d1)]">{campanha.lidas.toLocaleString('pt-BR')}</span>
+                  <span className="text-[var(--text-muted)]">Status:</span>
+                  <span>{campanha.status}</span>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        {step === 5 && (
-          <StepAgendamento
-            tipo={tipo!}
-            casasSelecionadas={casasSelecionadas}
-            casasDisponiveis={casasDisponiveis}
-            dataDisparo={dataDisparo}
-            horarioDisparo={horarioDisparo}
-            nomenclatura={nomenclatura}
-            base={base}
-            template={template}
-            numeros={numeros}
-            utm={utm}
-            betmgmPid={betmgmPid}
-            onChangeData={setDataDisparo}
-            onChangeHorario={setHorarioDisparo}
-            onChangeNomenclatura={setNomenclatura}
-            onChangeUtm={setUtm}
-            onChangeBetmgmPid={setBetmgmPid}
-          />
         )}
       </div>
 
@@ -264,7 +402,7 @@ export function FormNovoDisparo() {
         <Button variant="ghost" onClick={handleVoltar} disabled={step === 1}>
           Voltar
         </Button>
-        {step < 5 ? (
+        {step < 2 ? (
           <Button onClick={handleAvancar} disabled={!podeAvancar}>
             Avançar
           </Button>

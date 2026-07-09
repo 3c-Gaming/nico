@@ -169,9 +169,68 @@ export async function resetAuth() {
   }
 }
 
-export async function sendMessage(to: string, text: string): Promise<string | undefined> {
+export async function sendMessage(to: string, text: string, timeoutMs = 20000): Promise<string> {
   if (!sock || !connectedNumber) throw new Error('WhatsApp nao conectado')
+
   const jid = to.includes('@s.whatsapp.net') ? to : to + '@s.whatsapp.net'
-  const result = await sock.sendMessage(jid, { text })
-  return result?.key?.id ?? undefined
+
+  const messageId = await new Promise<string>((resolve, reject) => {
+    let resolved = false
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        cleanup()
+        reject(new Error('Timeout: mensagem enviada mas sem confirmacao do WhatsApp (' + timeoutMs + 'ms)'))
+      }
+    }, timeoutMs)
+
+    const listener = ({ messages }: { messages: any[] }) => {
+      for (const msg of messages) {
+        if (!msg.key?.fromMe || msg.key?.remoteJid !== jid) continue
+
+        const msgText =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          ''
+
+        if (msgText === text) {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timer)
+            cleanup()
+            console.log('[bridge] mensagem confirmada, id=' + msg.key.id)
+            resolve(msg.key.id)
+          }
+          return
+        }
+
+        if (!resolved) {
+          console.log('[bridge] fromMe ignorada (texto diferente)',
+            'esperado=' + JSON.stringify(text),
+            'recebido=' + JSON.stringify(msgText),
+            'tipos=' + Object.keys(msg.message || {}).join(','))
+        }
+      }
+    }
+
+    const cleanup = () => {
+      try { sock?.ev?.off('messages.upsert', listener) } catch {}
+    }
+
+    sock!.ev.on('messages.upsert', listener)
+
+    sock!.sendMessage(jid, { text }).then((result) => {
+      console.log('[bridge] sendMessage enfileirada, id=' + (result?.key?.id || 'unknown'))
+    }).catch((err: Error) => {
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timer)
+        cleanup()
+        console.error('[bridge] sendMessage error:', err.message)
+        reject(err)
+      }
+    })
+  })
+
+  return messageId
 }

@@ -185,6 +185,69 @@ function DaxxTokenSection() {
   )
 }
 
+function BotTestConfigSection() {
+  const [intervaloMinutos, setIntervaloMinutos] = useState(15)
+  const [carregando, setCarregando] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+  const [salvo, setSalvo] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/bot-test/config')
+      .then(r => r.json())
+      .then(data => {
+        setIntervaloMinutos(data.config.pollIntervalMs / 60000)
+      })
+      .catch(() => {})
+      .finally(() => setCarregando(false))
+  }, [])
+
+  async function handleSave() {
+    setSalvando(true)
+    setSalvo(false)
+    try {
+      const res = await fetch('/api/bot-test/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pollIntervalMs: intervaloMinutos * 60000,
+        }),
+      })
+      if (res.ok) setSalvo(true)
+    } catch {}
+    setSalvando(false)
+  }
+
+  if (carregando) return <Spinner size={16} />
+
+  return (
+    <div className="space-y-3">
+      <div className="max-w-xs">
+        <label className="block text-xs text-[var(--text-muted)] mb-1">Intervalo entre ciclos (minutos)</label>
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          value={intervaloMinutos}
+          onChange={e => setIntervaloMinutos(Number(e.target.value))}
+          className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={handleSave} loading={salvando}>
+          <Save size={12} />
+          Salvar
+        </Button>
+        {salvo && (
+          <span className="flex items-center gap-1 text-xs text-green-500">
+            <Check size={12} />
+            Configuração salva
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ConfiguracoesPage() {
   const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [fluxosPorBot, setFluxosPorBot] = useState<Record<string, FluxoSendpulse[]>>({})
@@ -240,6 +303,15 @@ export default function ConfiguracoesPage() {
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Token daxX</h2>
 
         <DaxxTokenSection />
+      </div>
+
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Teste de Bots</h2>
+        <p className="text-xs text-[var(--text-muted)] mb-4">
+          Configurações do monitoramento automático de bots via SendPulse.
+        </p>
+
+        <BotTestConfigSection />
       </div>
 
       <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">

@@ -8,6 +8,11 @@ import { Spinner } from '@/components/ui/Spinner'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
+function getLocalDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 interface FlowRow {
   botId: string
   botNome: string
@@ -257,7 +262,7 @@ function FunisPageInner() {
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
-  const [trackingData, setTrackingData] = useState(new Date().toISOString().split('T')[0])
+  const [trackingData, setTrackingData] = useState(getLocalDate())
   const [trackingLoaded, setTrackingLoaded] = useState(false)
 
   async function carregarDados() {
@@ -346,21 +351,26 @@ function FunisPageInner() {
 
       const superbetEvents: any[] = (superbetRes as any)?.data ?? []
       const betmgmEvents: any[] = (betmgmRes as any)?.data ?? []
-      const todos = [
-        ...superbetEvents.map((e) => ({ ...e, bethouse: 'superbet' as const })),
-        ...betmgmEvents.map((e) => ({ ...e, bethouse: 'betmgm' as const })),
-      ]
 
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const cfg of withUtm) {
         const utm = cfg.utm!
-        const matches = todos.filter(
-          (e) => e.acid?.includes(utm) || String(e.pid) === utm,
-        )
-        novo[cfg.flowId] = {
-          registros: matches.filter((e) => e.event === 'reg' || e.event === 'registration').length,
-          ftds: matches.filter((e) => e.event === 'ftd').length,
+        let registros = 0
+        let ftds = 0
+        for (const item of superbetEvents) {
+          const sbUtm = utm.replace(/-/g, '_')
+          if (String(item.acid).includes(sbUtm)) {
+            registros += item.registrations ?? 0
+            ftds += item.ftds ?? 0
+          }
         }
+        for (const item of betmgmEvents) {
+          if (String(item.marketing_source_id) === utm) {
+            registros += item.registrations ?? 0
+            ftds += item.ftds ?? 0
+          }
+        }
+        novo[cfg.flowId] = { registros, ftds }
       }
       setTrackingMap(novo)
 

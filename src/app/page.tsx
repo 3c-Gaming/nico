@@ -2,14 +2,19 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight } from 'lucide-react'
+import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight, Play, CheckCircle2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
+
+function getLocalDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function InteracaoBadge({ status }: { status: NumeroMonitorado['statusInteracao'] }) {
   const config = {
@@ -68,6 +73,8 @@ interface FunilBotDetail {
   ultimoLeadAt: string | null
   registros: number
   ftds: number
+  entregues: number
+  lidas: number
 }
 
 interface FunilRow {
@@ -82,6 +89,10 @@ interface FunilRow {
   ultimoLeadAt: string | null
   registros: number
   ftds: number
+  entregues: number
+  lidas: number
+  conversaoLidasReg: number
+  conversaoLidasFtd: number
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
 }
@@ -97,10 +108,14 @@ export default function HomePage() {
   const [pinnedNumeros, setPinnedNumeros] = useState<string[]>([])
   const [pinnedFunis, setPinnedFunis] = useState<string[]>([])
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
-  const [trackingData, setTrackingData] = useState(new Date().toISOString().split('T')[0])
+  const [trackingData, setTrackingData] = useState(getLocalDate())
   const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
   const [liveLeadsLoaded, setLiveLeadsLoaded] = useState(false)
   const [liveTrackingLoaded, setLiveTrackingLoaded] = useState(false)
+  const [daxxCampanhas, setDaxxCampanhas] = useState<DisparoDaxx[]>([])
+  const [daxxLoaded, setDaxxLoaded] = useState(false)
+  const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
+  const [testeFeedback, setTesteFeedback] = useState<Record<string, 'ok' | 'erro' | 'sem_resposta' | null>>({})
 
   useEffect(() => {
     const s = getState()
@@ -189,36 +204,72 @@ export default function HomePage() {
         fetch(`/api/tracking/export?casa=superbet&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
         fetch(`/api/tracking/export?casa=betmgm&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
       ])
-      const todos = [
-        ...((superbetRes as any)?.data ?? []).map((e: any) => ({ ...e, bethouse: 'superbet' })),
-        ...((betmgmRes as any)?.data ?? []).map((e: any) => ({ ...e, bethouse: 'betmgm' })),
-      ]
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const [fid, c] of flowIdsComUtm) {
         const utm = c.utm!
-        const matches = todos.filter((e) => {
-        if (e.bethouse === 'superbet' && e.acid) {
-          return e.acid.includes(utm)
+        let registros = 0
+        let ftds = 0
+        for (const item of (superbetRes as any)?.data ?? []) {
+          const sbUtm = utm.replace(/-/g, '_')
+          if (String(item.acid).includes(sbUtm)) {
+            registros += item.registrations ?? 0
+            ftds += item.ftds ?? 0
+          }
         }
-        if (e.bethouse === 'betmgm') {
-          return String(e.pid) === utm
+        for (const item of (betmgmRes as any)?.data ?? []) {
+          if (String(item.marketing_source_id) === utm) {
+            registros += item.registrations ?? 0
+            ftds += item.ftds ?? 0
+          }
         }
-        return false
-      })
-        novo[fid] = {
-          registros: matches.filter((e) => e.event === 'reg' || e.event === 'registration').length,
-          ftds: matches.filter((e) => e.event === 'ftd').length,
-        }
+        novo[fid] = { registros, ftds }
       }
       setTrackingMap(novo)
       setLiveTrackingLoaded(true)
     }
 
+    async function fetchDaxx() {
+      try {
+        const res = await fetch('/api/daxx/campanhas')
+        if (res.ok) {
+          const data = await res.json()
+          setDaxxCampanhas(data.campanhas ?? [])
+          setDaxxLoaded(true)
+        }
+      } catch { /* noop */ }
+    }
+
     fetchData()
     fetchTracking()
-    const interval = setInterval(() => { fetchData(); fetchTracking() }, POLL_FUNIL_MS)
+    fetchDaxx()
+    const interval = setInterval(() => { fetchData(); fetchTracking(); fetchDaxx() }, POLL_FUNIL_MS)
     return () => clearInterval(interval)
   }, [pinnedFunis, pinVersion, trackingData])
+
+  const handleTestarBot = useCallback(async (botId: string) => {
+    if (testandoBotId) return
+    setTestandoBotId(botId)
+    setTesteFeedback(prev => ({ ...prev, [botId]: null }))
+    try {
+      const res = await fetch('/api/bot-test/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botId }),
+      })
+      if (!res.ok) throw new Error()
+      await new Promise(r => setTimeout(r, 3000))
+      const res2 = await fetch('/api/bot-test/resultados')
+      if (res2.ok) {
+        const json = await res2.json()
+        const botResult = (json.resultados ?? []).find((r: { botId: string }) => r.botId === botId)
+        if (botResult) setTesteFeedback(prev => ({ ...prev, [botId]: botResult.status }))
+      }
+    } catch {
+      setTesteFeedback(prev => ({ ...prev, [botId]: 'erro' }))
+    } finally {
+      setTestandoBotId(null)
+    }
+  }, [testandoBotId])
 
   const funilRows = useMemo<FunilRow[]>(() => {
     if (!pinnedFunis.length) return []
@@ -278,7 +329,8 @@ export default function HomePage() {
 
       const disparos = Object.values(getState().disparos)
       const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
-      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm))
+      const hoje = getLocalDate()
+      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm) && d.dataDisparo === hoje)
 
       const baseCustoPorBot = new Map<string, number>()
       const baseLinhasPorBot = new Map<string, number>()
@@ -309,6 +361,40 @@ export default function HomePage() {
 
       const baseCusto = [...baseCustoPorBot.values()].reduce((a, b) => a + b, 0)
       const baseLinhas = Math.round([...baseLinhasPorBot.values()].reduce((a, b) => a + b, 0))
+
+      // DAXX entregues/lidas via templateDaxx.id match
+      const daxxPorId = new Map(daxxCampanhas.map((c) => [c.id, c]))
+      const entreguesPorBot = new Map<string, number>()
+      const lidasPorBot = new Map<string, number>()
+      for (const botId of porBot.keys()) {
+        entreguesPorBot.set(botId, 0)
+        lidasPorBot.set(botId, 0)
+      }
+      for (const d of disparosDoFunil) {
+        if (d.templateDaxx?.id) {
+          const daxx = daxxPorId.get(d.templateDaxx.id)
+          if (daxx) {
+            const numFunis = utmParaFunis.get(d.utm!)?.size ?? 1
+            const entPorFunil = daxx.entregues / numFunis
+            const lidPorFunil = daxx.lidas / numFunis
+            const matchingBots = [...porBot.entries()]
+              .filter(([_, data]) => data.utms.has(d.utm!))
+              .map(([botId]) => botId)
+            if (matchingBots.length > 0) {
+              const shareEnt = entPorFunil / matchingBots.length
+              const shareLid = lidPorFunil / matchingBots.length
+              for (const botId of matchingBots) {
+                entreguesPorBot.set(botId, (entreguesPorBot.get(botId) ?? 0) + shareEnt)
+                lidasPorBot.set(botId, (lidasPorBot.get(botId) ?? 0) + shareLid)
+              }
+            }
+          }
+        }
+      }
+      const entreguesTotal = [...entreguesPorBot.values()].reduce((a, b) => a + b, 0)
+      const lidasTotal = [...lidasPorBot.values()].reduce((a, b) => a + b, 0)
+      const conversaoLidasReg = registros > 0 ? Math.round((lidasTotal / registros) * 10000) / 100 : 0
+      const conversaoLidasFtd = ftds > 0 ? Math.round((lidasTotal / ftds) * 10000) / 100 : 0
 
       // collect unique casas and first casa color for badge
       const casas = [...new Set(flows.flatMap(([fid]) => configs[fid]?.casas ?? []))]
@@ -343,12 +429,14 @@ export default function HomePage() {
           ftds: liveTrackingLoaded
             ? data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
             : (cache?.ftds ?? 0),
+          entregues: Math.round(entreguesPorBot.get(botId) ?? 0),
+          lidas: Math.round(lidasPorBot.get(botId) ?? 0),
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, bots, tipo }
+      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), conversaoLidasReg, conversaoLidasFtd, bots, tipo }
     })
-  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap])
+  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0
 
@@ -448,6 +536,30 @@ export default function HomePage() {
               </td>
             </>
           )}
+          {isDisparo && (
+            <>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.entregues > 0 ? 'text-green-500' : 'text-[var(--text-muted)]'}`}>
+                  {row.entregues > 0 ? row.entregues.toLocaleString('pt-BR') : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.lidas > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.lidas > 0 ? row.lidas.toLocaleString('pt-BR') : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.conversaoLidasReg > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.conversaoLidasReg > 0 ? `${row.conversaoLidasReg}%` : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.conversaoLidasFtd > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.conversaoLidasFtd > 0 ? `${row.conversaoLidasFtd}%` : '—'}
+                </span>
+              </td>
+            </>
+          )}
           <td className="py-3 px-3 text-right">
             <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
               {row.registros}
@@ -474,7 +586,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 9 : 7} className="p-0">
+            <td colSpan={isDisparo ? 13 : 7} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -487,6 +599,8 @@ export default function HomePage() {
                         <>
                           <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Base</th>
                           <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Custo/Gasto</th>
+                          <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Entregues</th>
+                          <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Lidas</th>
                         </>
                       )}
                       <th className="text-right py-2 px-3 text-[10px] font-medium text-[var(--text-muted)]">Reg</th>
@@ -542,6 +656,16 @@ export default function HomePage() {
                                 title={bot.baseLinhas > 0 ? `${bot.baseLinhas.toLocaleString('pt-BR')} linhas` : undefined}
                               >
                                 {bot.baseCusto > 0 ? `R$ ${bot.baseCusto.toFixed(2).replace('.', ',')}` : '—'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <span className={`font-semibold font-mono ${bot.entregues > 0 ? 'text-green-500' : 'text-[var(--text-muted)]'}`}>
+                                {bot.entregues > 0 ? bot.entregues.toLocaleString('pt-BR') : '—'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <span className={`font-semibold font-mono ${bot.lidas > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
+                                {bot.lidas > 0 ? bot.lidas.toLocaleString('pt-BR') : '—'}
                               </span>
                             </td>
                           </>
@@ -641,7 +765,7 @@ export default function HomePage() {
               )}
             </div>
 
-            <div className="grid gap-3 grid-cols-2">
+            <div className={`grid gap-3 ${pinnedNumeros.length < 4 ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {numerosPinados.map((item) => (
                 <div
                   key={item.numero.id}
@@ -677,7 +801,24 @@ export default function HomePage() {
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/50">
-                    <InteracaoBadge status={item.statusInteracao} />
+                    <div className="flex items-center gap-2">
+                      <InteracaoBadge status={item.statusInteracao} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleTestarBot(item.numero.id) }}
+                        disabled={testandoBotId === item.numero.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-[var(--bg-elevated)] hover:bg-[var(--d1)]/20 text-[var(--text-muted)] hover:text-[var(--d1)] disabled:opacity-40 transition-colors"
+                        title="Testar bot"
+                      >
+                        {testandoBotId === item.numero.id ? (
+                          <RefreshCw size={10} className="animate-spin" />
+                        ) : testeFeedback[item.numero.id] === 'ok' ? (
+                          <CheckCircle2 size={10} className="text-green-500" />
+                        ) : (
+                          <Play size={10} />
+                        )}
+                        {testeFeedback[item.numero.id] === 'ok' ? 'OK' : testeFeedback[item.numero.id] === 'sem_resposta' ? 'Sem resposta' : testeFeedback[item.numero.id] === 'erro' ? 'Erro' : 'Testar'}
+                      </button>
+                    </div>
                     <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                       <span>última:</span>
                       <UltimaResposta ultimoAumentoMs={item.ultimoAumentoMs} />
@@ -711,6 +852,10 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Ld/Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Ld/FTD</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>

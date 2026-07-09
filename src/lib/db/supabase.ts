@@ -57,7 +57,7 @@ function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
   return result
 }
 
-function getSupabase() {
+export function getSupabase() {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null
   if (!globalForSupabase.supabase) {
     globalForSupabase.supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {

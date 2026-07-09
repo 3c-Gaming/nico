@@ -63,6 +63,19 @@ export interface TemplateDaxx {
   url?: string
 }
 
+export interface DisparoDaxx {
+  id: string
+  nome: string
+  status: string
+  responsavel: string
+  totalBase: number
+  entregues: number
+  lidas: number
+  rejeitados: number
+  dataCriacao: string
+  linkTemplate?: string
+}
+
 export interface DisparoAgendadoDaxx {
   id: string
   cliente_id: string
