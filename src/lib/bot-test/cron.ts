@@ -17,7 +17,6 @@ export async function iniciarCron() {
   if (intervalId) return
   const cfg = await carregarConfig()
   console.log(`[bot-test] Cron iniciado — testando bots a cada ${cfg.pollIntervalMs / 1000}s`)
-  executarCicloCompleto()
   intervalId = setInterval(executarCicloCompleto, cfg.pollIntervalMs)
 }
 

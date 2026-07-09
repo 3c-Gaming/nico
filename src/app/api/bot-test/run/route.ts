@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { BOT_IDS } from '@/lib/bot-test/contact-map'
 import { executarCicloTeste, executarTesteManual } from '@/lib/bot-test/runner'
+import { iniciarCron } from '@/lib/bot-test/cron'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ executado: true, botId: botIdParam, manual: !!manual })
   }
+
+  iniciarCron()
 
   for (const botId of BOT_IDS) {
     executarCicloTeste(botId).catch(err => {
