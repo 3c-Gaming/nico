@@ -30,11 +30,16 @@ function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[
     } else if (botInfo?.status === 'ok') {
       status = 'respondendo'
     } else {
-      const aumento = n.ultimoAumentoMs
-      if (aumento && (agora - aumento) < 30 * 60 * 1000) {
+      const ultimoOk = botInfo?.ultimoTesteOkMs
+      if (ultimoOk && (agora - ultimoOk) < 30 * 60 * 1000) {
         status = 'respondendo'
       } else {
-        status = 'numero_caido'
+        const aumento = n.ultimoAumentoMs
+        if (aumento && (agora - aumento) < 30 * 60 * 1000) {
+          status = 'respondendo'
+        } else {
+          status = 'numero_caido'
+        }
       }
     }
     return { ...n, statusInteracao: status }

@@ -15,10 +15,10 @@ function extrairUltimoTimestamp(texto: string): string | null {
     for (const msg of arr) {
       if (msg?.created_at) return msg.created_at
       if (msg?.date) return msg.date
-      if (msg?.timestamp) return msg.timestamp
+      if (msg?.timestamp) return String(msg.timestamp)
     }
   } catch {
-    // nao esta em JSON — ignora
+    console.error('[bot-test] extrairUltimoTimestamp: erro ao parsear JSON —', texto.slice(0, 500))
   }
   return null
 }
@@ -38,13 +38,15 @@ async function verificarPendente(botId: string, config: typeof CONTACT_MAP[strin
   const temNovaMensagem = posTimestamp !== null && posTimestamp !== anterior.preTriggerTimestamp
   const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
 
+  console.log(`[bot-test] verificarPendente ${botId}: preTimestamp=${anterior.preTriggerTimestamp} posTimestamp=${posTimestamp} temNovaMensagem=${temNovaMensagem} -> ${status}`)
+
   await salvarResultado({
     ...anterior,
     status,
     pendente: false,
     preTriggerTimestamp: undefined,
     triggeredAt: undefined,
-    ultimoTesteOkMs: status === 'ok' ? Date.now() : undefined,
+    ultimoTesteOkMs: status === 'ok' ? Date.now() : (anterior.ultimoTesteOkMs ?? undefined),
   })
 }
 
@@ -77,16 +79,19 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
     return
   }
 
+  const existente = await obterResultado(botId)
+
   await salvarResultado({
     botId,
     numero: config.numero,
     nome: config.nome,
     ultimoTeste: nowISO(),
-    status: 'pendente',
+    status: existente?.status ?? 'pendente',
     duracaoMs: 0,
     pendente: true,
     preTriggerTimestamp: preTimestamp,
     triggeredAt: nowISO(),
+    ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
   })
 }
 
@@ -106,9 +111,9 @@ export async function executarCicloTeste(botId: string): Promise<BotTestResult> 
 
   try {
     await verificarPendente(botId, config)
+    const resolvido = await obterResultado(botId)
     await iniciarNovoCiclo(botId, config)
-    const resultado = await obterResultado(botId)
-    return resultado ?? {
+    return resolvido ?? {
       botId,
       numero: config.numero,
       nome: config.nome,
@@ -191,6 +196,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
     const temNovaMensagem = posTimestamp !== null && posTimestamp !== preTimestamp
     const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
 
+    const existente = await obterResultado(botId)
     const resultado: BotTestResult = {
       botId,
       numero: config.numero,
@@ -198,7 +204,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       ultimoTeste: nowISO(),
       status,
       duracaoMs: Date.now() - inicio,
-      ultimoTesteOkMs: status === 'ok' ? Date.now() : undefined,
+      ultimoTesteOkMs: status === 'ok' ? Date.now() : (existente?.ultimoTesteOkMs ?? undefined),
     }
     await salvarResultado(resultado)
     return resultado
