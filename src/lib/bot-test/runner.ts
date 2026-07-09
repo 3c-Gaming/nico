@@ -1,4 +1,4 @@
-import { runFlow, listChatMessages } from '@/lib/mcp/sendpulse'
+import { runFlow, getContactWhatsApp } from '@/lib/mcp/sendpulse'
 import { CONTACT_MAP } from './contact-map'
 import { salvarResultado, obterResultado } from './store'
 import type { BotTestResult, BotTestStatus } from './types'
@@ -7,74 +7,60 @@ function nowISO(): string {
   return new Date().toISOString()
 }
 
-function isToolError(texto: string): boolean {
-  return texto.startsWith('Tool execution failed')
-}
-
 const TAG = '[bot-test]'
 
-function extrairUltimoTimestamp(texto: string): string | null {
-  try {
-    const parsed = JSON.parse(texto)
-    const data = parsed.data ?? parsed ?? []
-    const arr = Array.isArray(data) ? data : [data]
-    for (const msg of arr) {
-      if (msg?.created_at) return msg.created_at
-      if (msg?.date) return msg.date
-      if (msg?.timestamp) return String(msg.timestamp)
-    }
-  } catch {
-    console.error(TAG, 'extrairUltimoTimestamp: erro ao parsear JSON —', texto.slice(0, 500))
-  }
-  return null
+function extrairAtividade(info: Record<string, unknown> | null): string | null {
+  if (!info) return null
+  return (info.last_activity as string) ??
+    (info.ultima_actividade as string) ??
+    (info.updated_at as string) ??
+    (info.date_added as string) ??
+    null
 }
 
-async function listChatMessagesComRetry(params: {
-  channel: string
-  contactId: string
-  limit: number
-  order: 'asc' | 'desc'
-}, tentativas = 2): Promise<string | null> {
+async function obterAtividadeContato(contactId: string, tentativas = 2): Promise<{
+  atividade: string | null
+  raw: Record<string, unknown> | null
+  erro?: string
+}> {
   for (let i = 0; i <= tentativas; i++) {
-    const result = await listChatMessages(params)
-    if (result && !isToolError(result)) return result
-    console.warn(TAG, `listChatMessages tentativa ${i + 1}/${tentativas + 1} falhou:`, result?.slice(0, 200))
+    const info = await getContactWhatsApp(contactId)
+    if (info) {
+      const atividade = extrairAtividade(info)
+      console.log(TAG, `obterAtividadeContato ${contactId}: atividade=${atividade}`, JSON.stringify(info).slice(0, 400))
+      return { atividade, raw: info }
+    }
+    console.warn(TAG, `getContactWhatsApp tentativa ${i + 1}/${tentativas + 1} falhou`)
     if (i < tentativas) await new Promise(r => setTimeout(r, 2000))
   }
-  return null
+  return { atividade: null, raw: null, erro: 'getContactWhatsApp falhou apos todas as tentativas' }
 }
 
 async function verificarPendente(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
   const anterior = await obterResultado(botId)
   if (!anterior?.pendente) return
 
-  const posMessagesText = await listChatMessagesComRetry({
-    channel: 'whatsapp',
-    contactId: config.contactId,
-    limit: 5,
-    order: 'desc',
-  })
+  const pos = await obterAtividadeContato(config.contactId)
 
-  if (!posMessagesText) {
-    console.error(TAG, `verificarPendente ${botId}: todas as tentativas falharam`)
+  if (!pos.atividade) {
+    console.error(TAG, `verificarPendente ${botId}: falha ao obter atividade —`, pos.erro)
     await salvarResultado({
       ...anterior,
       status: 'erro',
       pendente: false,
       preTriggerTimestamp: undefined,
       triggeredAt: undefined,
-      erro: 'listChatMessages falhou apos todas as tentativas',
+      erro: pos.erro ?? 'sem atividade do contato',
       ultimoTesteOkMs: anterior.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
 
-  const posTimestamp = extrairUltimoTimestamp(posMessagesText)
-  const temNovaMensagem = posTimestamp !== null && posTimestamp !== anterior.preTriggerTimestamp
-  const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
+  const temNovaAtividade = pos.atividade !== anterior.preTriggerTimestamp
+  const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
 
-  console.log(TAG, `verificarPendente ${botId}: pre=${anterior.preTriggerTimestamp} pos=${posTimestamp} nova=${temNovaMensagem} -> ${status}`)
+  console.log(TAG, `verificarPendente ${botId}: pre=${anterior.preTriggerTimestamp} pos=${pos.atividade} nova=${temNovaAtividade} -> ${status}`)
 
   await salvarResultado({
     ...anterior,
@@ -102,7 +88,7 @@ async function dispararFlow(botId: string, config: typeof CONTACT_MAP[string]): 
   const text = typeof flowResult === 'string' ? flowResult : JSON.stringify(flowResult)
   console.log(TAG, `dispararFlow ${botId}: resposta (200 chars)`, text.slice(0, 200))
 
-  if (isToolError(text)) {
+  if (text.startsWith('Tool execution failed')) {
     console.error(TAG, `dispararFlow ${botId}: erro tool:`, text.slice(0, 200))
     return { ok: false, erro: text }
   }
@@ -111,15 +97,10 @@ async function dispararFlow(botId: string, config: typeof CONTACT_MAP[string]): 
 }
 
 async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
-  const preMessagesText = await listChatMessagesComRetry({
-    channel: 'whatsapp',
-    contactId: config.contactId,
-    limit: 1,
-    order: 'desc',
-  })
+  const pre = await obterAtividadeContato(config.contactId)
 
-  if (!preMessagesText) {
-    console.error(TAG, `iniciarNovoCiclo ${botId}: todas as tentativas falharam`)
+  if (!pre.atividade) {
+    console.error(TAG, `iniciarNovoCiclo ${botId}: falha ao obter atividade —`, pre.erro)
     const existente = await obterResultado(botId)
     await salvarResultado({
       botId,
@@ -128,14 +109,12 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
       ultimoTeste: nowISO(),
       status: 'erro',
       duracaoMs: 0,
-      erro: 'listChatMessages falhou apos todas as tentativas',
+      erro: pre.erro ?? 'sem atividade do contato',
       ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
-
-  const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
   const flow = await dispararFlow(botId, config)
   const existente = await obterResultado(botId)
@@ -163,7 +142,7 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
     status: existente?.status ?? 'pendente',
     duracaoMs: 0,
     pendente: true,
-    preTriggerTimestamp: preTimestamp,
+    preTriggerTimestamp: pre.atividade,
     triggeredAt: nowISO(),
     ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
     ultimoTriggerOkMs: Date.now(),
@@ -229,14 +208,9 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
   const inicio = Date.now()
 
   try {
-    const preMessagesText = await listChatMessagesComRetry({
-      channel: 'whatsapp',
-      contactId: config.contactId,
-      limit: 1,
-      order: 'desc',
-    })
+    const pre = await obterAtividadeContato(config.contactId)
 
-    if (!preMessagesText) {
+    if (!pre.atividade) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -244,13 +218,11 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: 'listChatMessages falhou apos todas as tentativas',
+        erro: pre.erro ?? 'sem atividade do contato',
       }
       await salvarResultado(resultado)
       return resultado
     }
-
-    const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
     const flow = await dispararFlow(botId, config)
     if (!flow.ok) {
@@ -276,7 +248,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       status: existente?.status ?? 'pendente',
       duracaoMs: 0,
       pendente: true,
-      preTriggerTimestamp: preTimestamp,
+      preTriggerTimestamp: pre.atividade,
       triggeredAt: nowISO(),
       ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: Date.now(),
@@ -284,14 +256,9 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
 
     await new Promise(resolve => setTimeout(resolve, 55_000))
 
-    const posMessagesText = await listChatMessagesComRetry({
-      channel: 'whatsapp',
-      contactId: config.contactId,
-      limit: 5,
-      order: 'desc',
-    })
+    const pos = await obterAtividadeContato(config.contactId)
 
-    if (!posMessagesText) {
+    if (!pos.atividade) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -299,7 +266,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: 'listChatMessages falhou apos todas as tentativas (pos)',
+        erro: pos.erro ?? 'sem atividade do contato (pos)',
         ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
         ultimoTriggerOkMs: Date.now(),
       }
@@ -307,9 +274,8 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       return resultado
     }
 
-    const posTimestamp = extrairUltimoTimestamp(posMessagesText)
-    const temNovaMensagem = posTimestamp !== null && posTimestamp !== preTimestamp
-    const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
+    const temNovaAtividade = pos.atividade !== pre.atividade
+    const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
 
     const resultado: BotTestResult = {
       botId,

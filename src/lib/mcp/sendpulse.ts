@@ -128,22 +128,29 @@ export async function listChatMessages(params: {
   return extrairTexto(result.content as unknown[])
 }
 
-export async function getContactInfo(contactId: string) {
+async function callContactsShow(channel: string, contactId: string) {
   const mcp = await getClient()
   const result = await mcp.callTool({
     name: 'chatbots_contacts_show',
-    arguments: {
-      channel: 'messenger',
-      id: contactId,
-    },
+    arguments: { channel, id: contactId },
   })
 
   const texto = extrairTexto(result.content as unknown[])
   if (!texto) return null
 
+  if (texto.startsWith('Tool execution failed')) return null
+
   try {
-    return JSON.parse(texto)
+    return JSON.parse(texto) as Record<string, unknown>
   } catch {
     return null
   }
+}
+
+export async function getContactInfo(contactId: string) {
+  return callContactsShow('messenger', contactId)
+}
+
+export async function getContactWhatsApp(contactId: string) {
+  return callContactsShow('whatsapp', contactId)
 }
