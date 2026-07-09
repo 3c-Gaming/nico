@@ -9,26 +9,28 @@ const STORAGE_KEY = 'nico_monitoramento_cache'
 interface BotTestApiResult {
   botId: string
   status: string
+  pendente?: boolean
   ultimoTesteOkMs?: number
 }
 
 function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[]): DadosMonitoramento {
   const agora = Date.now()
-  const botTestMap = new Map<string, { status: string; ultimoTesteOkMs?: number }>()
+  const botTestMap = new Map<string, { status: string; pendente?: boolean; ultimoTesteOkMs?: number }>()
   if (botTestResults) {
     for (const r of botTestResults) {
-      botTestMap.set(r.botId, { status: r.status, ultimoTesteOkMs: r.ultimoTesteOkMs })
+      botTestMap.set(r.botId, { status: r.status, pendente: r.pendente, ultimoTesteOkMs: r.ultimoTesteOkMs })
     }
   }
 
   const numeros = json.numeros.map((n) => {
     let status: StatusInteracao
     const botInfo = n.numero?.id ? botTestMap.get(n.numero.id) : undefined
+    const isPendente = botInfo?.pendente === true
 
-    if (botInfo?.status === 'sem_resposta' || botInfo?.status === 'erro') {
-      status = 'numero_caido'
-    } else if (botInfo?.status === 'ok') {
+    if (botInfo?.status === 'ok') {
       status = 'respondendo'
+    } else if ((botInfo?.status === 'sem_resposta' || botInfo?.status === 'erro') && !isPendente) {
+      status = 'numero_caido'
     } else {
       const ultimoOk = botInfo?.ultimoTesteOkMs
       if (ultimoOk && (agora - ultimoOk) < 30 * 60 * 1000) {

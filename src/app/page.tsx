@@ -257,13 +257,8 @@ export default function HomePage() {
         body: JSON.stringify({ botId }),
       })
       if (!res.ok) throw new Error()
-      await new Promise(r => setTimeout(r, 3000))
-      const res2 = await fetch('/api/bot-test/resultados')
-      if (res2.ok) {
-        const json = await res2.json()
-        const botResult = (json.resultados ?? []).find((r: { botId: string }) => r.botId === botId)
-        if (botResult) setTesteFeedback(prev => ({ ...prev, [botId]: botResult.status }))
-      }
+      const data = await res.json()
+      if (data.status) setTesteFeedback(prev => ({ ...prev, [botId]: data.status }))
     } catch {
       setTesteFeedback(prev => ({ ...prev, [botId]: 'erro' }))
     } finally {
