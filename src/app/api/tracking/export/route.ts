@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const TRACKING_BASE = 'https://3cgg-tracking-system.up.railway.app'
-const API_KEY = process.env.TRACKING_API_KEY
+const TRACKING_BASE = 'https://3cgg-api-server-production.up.railway.app'
+const API_KEY = process.env.EXPORT_API_KEY
 
 const CASAS = ['superbet', 'betmgm'] as const
 type Casa = (typeof CASAS)[number]
 
 export async function GET(request: NextRequest) {
   if (!API_KEY) {
-    return NextResponse.json({ error: 'TRACKING_API_KEY não configurada' }, { status: 500 })
+    return NextResponse.json({ error: 'EXPORT_API_KEY não configurada' }, { status: 500 })
   }
 
   const casa = request.nextUrl.searchParams.get('casa') as Casa | null
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const resultados: Record<string, unknown> = {}
 
     for (const c of casasParaBuscar) {
-      const url = `${TRACKING_BASE}/export/${c}?key=${API_KEY}${date ? `&date=${date}` : ''}`
+      const url = `${TRACKING_BASE}/export/${c}?key=${API_KEY}&project=pilhado${date ? `&date=${date}` : ''}`
       const res = await fetch(url, {
         signal: AbortSignal.timeout(15_000),
       })
