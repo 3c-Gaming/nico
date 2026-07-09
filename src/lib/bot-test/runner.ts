@@ -7,6 +7,10 @@ function nowISO(): string {
   return new Date().toISOString()
 }
 
+function isToolError(texto: string): boolean {
+  return texto.startsWith('Tool execution failed')
+}
+
 function extrairUltimoTimestamp(texto: string): string | null {
   try {
     const parsed = JSON.parse(texto)
@@ -34,6 +38,20 @@ async function verificarPendente(botId: string, config: typeof CONTACT_MAP[strin
     order: 'desc',
   })
 
+  if (isToolError(posMessagesText)) {
+    console.error(`[bot-test] verificarPendente ${botId}: erro tool —`, posMessagesText.slice(0, 200))
+    await salvarResultado({
+      ...anterior,
+      status: 'erro',
+      pendente: false,
+      preTriggerTimestamp: undefined,
+      triggeredAt: undefined,
+      erro: posMessagesText,
+      ultimoTesteOkMs: anterior.ultimoTesteOkMs ?? undefined,
+    })
+    return
+  }
+
   const posTimestamp = extrairUltimoTimestamp(posMessagesText)
   const temNovaMensagem = posTimestamp !== null && posTimestamp !== anterior.preTriggerTimestamp
   const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
@@ -57,6 +75,22 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
     limit: 1,
     order: 'desc',
   })
+
+  if (isToolError(preMessagesText)) {
+    console.error(`[bot-test] iniciarNovoCiclo ${botId}: erro tool —`, preMessagesText.slice(0, 200))
+    const existente = await obterResultado(botId)
+    await salvarResultado({
+      botId,
+      numero: config.numero,
+      nome: config.nome,
+      ultimoTeste: nowISO(),
+      status: 'erro',
+      duracaoMs: 0,
+      erro: preMessagesText,
+      ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+    })
+    return
+  }
 
   const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
@@ -161,6 +195,20 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       order: 'desc',
     })
 
+    if (isToolError(preMessagesText)) {
+      const resultado: BotTestResult = {
+        botId,
+        numero: config.numero,
+        nome: config.nome,
+        ultimoTeste: nowISO(),
+        status: 'erro',
+        duracaoMs: Date.now() - inicio,
+        erro: preMessagesText,
+      }
+      await salvarResultado(resultado)
+      return resultado
+    }
+
     const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
     const flowResult = await runFlow({
@@ -191,6 +239,20 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       limit: 5,
       order: 'desc',
     })
+
+    if (isToolError(posMessagesText)) {
+      const resultado: BotTestResult = {
+        botId,
+        numero: config.numero,
+        nome: config.nome,
+        ultimoTeste: nowISO(),
+        status: 'erro',
+        duracaoMs: Date.now() - inicio,
+        erro: posMessagesText,
+      }
+      await salvarResultado(resultado)
+      return resultado
+    }
 
     const posTimestamp = extrairUltimoTimestamp(posMessagesText)
     const temNovaMensagem = posTimestamp !== null && posTimestamp !== preTimestamp
