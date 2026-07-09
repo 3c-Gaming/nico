@@ -11,14 +11,18 @@ interface BotTestApiResult {
   status: string
   pendente?: boolean
   ultimoTesteOkMs?: number
+  ultimoTriggerOkMs?: number
+}
+
+function dentroDosUltimos30Min(ms: number | undefined): boolean {
+  return !!ms && (Date.now() - ms) < 30 * 60 * 1000
 }
 
 function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[]): DadosMonitoramento {
-  const agora = Date.now()
-  const botTestMap = new Map<string, { status: string; pendente?: boolean; ultimoTesteOkMs?: number }>()
+  const botTestMap = new Map<string, BotTestApiResult>()
   if (botTestResults) {
     for (const r of botTestResults) {
-      botTestMap.set(r.botId, { status: r.status, pendente: r.pendente, ultimoTesteOkMs: r.ultimoTesteOkMs })
+      botTestMap.set(r.botId, r)
     }
   }
 
@@ -32,16 +36,12 @@ function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[
     } else if ((botInfo?.status === 'sem_resposta' || botInfo?.status === 'erro') && !isPendente) {
       status = 'numero_caido'
     } else {
-      const ultimoOk = botInfo?.ultimoTesteOkMs
-      if (ultimoOk && (agora - ultimoOk) < 30 * 60 * 1000) {
+      if (dentroDosUltimos30Min(botInfo?.ultimoTesteOkMs) ||
+          dentroDosUltimos30Min(botInfo?.ultimoTriggerOkMs) ||
+          dentroDosUltimos30Min(n.ultimoAumentoMs)) {
         status = 'respondendo'
       } else {
-        const aumento = n.ultimoAumentoMs
-        if (aumento && (agora - aumento) < 30 * 60 * 1000) {
-          status = 'respondendo'
-        } else {
-          status = 'numero_caido'
-        }
+        status = 'numero_caido'
       }
     }
     return { ...n, statusInteracao: status }

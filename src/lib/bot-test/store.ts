@@ -21,6 +21,7 @@ function toRow(r: BotTestResult): Record<string, unknown> {
     pre_trigger_timestamp: r.preTriggerTimestamp ?? null,
     triggered_at: r.triggeredAt ?? null,
     pendente: r.pendente ?? false,
+    ultimo_trigger_ok_ms: r.ultimoTriggerOkMs ?? null,
     updated_at: new Date().toISOString(),
   }
 }
@@ -38,6 +39,7 @@ function fromRow(row: Record<string, unknown>): BotTestResult {
     preTriggerTimestamp: (row.pre_trigger_timestamp as string) ?? undefined,
     triggeredAt: (row.triggered_at as string) ?? undefined,
     pendente: (row.pendente as boolean) ?? false,
+    ultimoTriggerOkMs: (row.ultimo_trigger_ok_ms as number) ?? undefined,
   }
 }
 

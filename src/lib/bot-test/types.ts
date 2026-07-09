@@ -19,6 +19,7 @@ export interface BotTestResult {
   preTriggerTimestamp?: string | null
   triggeredAt?: string
   ultimoTesteOkMs?: number
+  ultimoTriggerOkMs?: number
 }
 
 export interface BotTestConfig {

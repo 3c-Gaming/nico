@@ -11,6 +11,8 @@ function isToolError(texto: string): boolean {
   return texto.startsWith('Tool execution failed')
 }
 
+const TAG = '[bot-test]'
+
 function extrairUltimoTimestamp(texto: string): string | null {
   try {
     const parsed = JSON.parse(texto)
@@ -22,7 +24,22 @@ function extrairUltimoTimestamp(texto: string): string | null {
       if (msg?.timestamp) return String(msg.timestamp)
     }
   } catch {
-    console.error('[bot-test] extrairUltimoTimestamp: erro ao parsear JSON —', texto.slice(0, 500))
+    console.error(TAG, 'extrairUltimoTimestamp: erro ao parsear JSON —', texto.slice(0, 500))
+  }
+  return null
+}
+
+async function listChatMessagesComRetry(params: {
+  channel: string
+  contactId: string
+  limit: number
+  order: 'asc' | 'desc'
+}, tentativas = 2): Promise<string | null> {
+  for (let i = 0; i <= tentativas; i++) {
+    const result = await listChatMessages(params)
+    if (result && !isToolError(result)) return result
+    console.warn(TAG, `listChatMessages tentativa ${i + 1}/${tentativas + 1} falhou:`, result?.slice(0, 200))
+    if (i < tentativas) await new Promise(r => setTimeout(r, 2000))
   }
   return null
 }
@@ -31,23 +48,24 @@ async function verificarPendente(botId: string, config: typeof CONTACT_MAP[strin
   const anterior = await obterResultado(botId)
   if (!anterior?.pendente) return
 
-  const posMessagesText = await listChatMessages({
+  const posMessagesText = await listChatMessagesComRetry({
     channel: 'whatsapp',
     contactId: config.contactId,
     limit: 5,
     order: 'desc',
   })
 
-  if (isToolError(posMessagesText)) {
-    console.error(`[bot-test] verificarPendente ${botId}: erro tool —`, posMessagesText.slice(0, 200))
+  if (!posMessagesText) {
+    console.error(TAG, `verificarPendente ${botId}: todas as tentativas falharam`)
     await salvarResultado({
       ...anterior,
       status: 'erro',
       pendente: false,
       preTriggerTimestamp: undefined,
       triggeredAt: undefined,
-      erro: posMessagesText,
+      erro: 'listChatMessages falhou apos todas as tentativas',
       ultimoTesteOkMs: anterior.ultimoTesteOkMs ?? undefined,
+      ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
@@ -56,7 +74,7 @@ async function verificarPendente(botId: string, config: typeof CONTACT_MAP[strin
   const temNovaMensagem = posTimestamp !== null && posTimestamp !== anterior.preTriggerTimestamp
   const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
 
-  console.log(`[bot-test] verificarPendente ${botId}: preTimestamp=${anterior.preTriggerTimestamp} posTimestamp=${posTimestamp} temNovaMensagem=${temNovaMensagem} -> ${status}`)
+  console.log(TAG, `verificarPendente ${botId}: pre=${anterior.preTriggerTimestamp} pos=${posTimestamp} nova=${temNovaMensagem} -> ${status}`)
 
   await salvarResultado({
     ...anterior,
@@ -65,19 +83,43 @@ async function verificarPendente(botId: string, config: typeof CONTACT_MAP[strin
     preTriggerTimestamp: undefined,
     triggeredAt: undefined,
     ultimoTesteOkMs: status === 'ok' ? Date.now() : (anterior.ultimoTesteOkMs ?? undefined),
+    ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
   })
 }
 
+async function dispararFlow(botId: string, config: typeof CONTACT_MAP[string]): Promise<{ ok: boolean; erro?: string }> {
+  const flowResult = await runFlow({
+    channel: 'whatsapp',
+    contactId: config.contactId,
+    flowId: config.flowId,
+  })
+
+  if (!flowResult) {
+    console.error(TAG, `dispararFlow ${botId}: resposta vazia`)
+    return { ok: false, erro: 'Flow retornou resposta vazia' }
+  }
+
+  const text = typeof flowResult === 'string' ? flowResult : JSON.stringify(flowResult)
+  console.log(TAG, `dispararFlow ${botId}: resposta (200 chars)`, text.slice(0, 200))
+
+  if (isToolError(text)) {
+    console.error(TAG, `dispararFlow ${botId}: erro tool:`, text.slice(0, 200))
+    return { ok: false, erro: text }
+  }
+
+  return { ok: true }
+}
+
 async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
-  const preMessagesText = await listChatMessages({
+  const preMessagesText = await listChatMessagesComRetry({
     channel: 'whatsapp',
     contactId: config.contactId,
     limit: 1,
     order: 'desc',
   })
 
-  if (isToolError(preMessagesText)) {
-    console.error(`[bot-test] iniciarNovoCiclo ${botId}: erro tool —`, preMessagesText.slice(0, 200))
+  if (!preMessagesText) {
+    console.error(TAG, `iniciarNovoCiclo ${botId}: todas as tentativas falharam`)
     const existente = await obterResultado(botId)
     await salvarResultado({
       botId,
@@ -86,21 +128,19 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
       ultimoTeste: nowISO(),
       status: 'erro',
       duracaoMs: 0,
-      erro: preMessagesText,
+      erro: 'listChatMessages falhou apos todas as tentativas',
       ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+      ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
 
   const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
-  const flowResult = await runFlow({
-    channel: 'whatsapp',
-    contactId: config.contactId,
-    flowId: config.flowId,
-  })
+  const flow = await dispararFlow(botId, config)
+  const existente = await obterResultado(botId)
 
-  if (!flowResult) {
+  if (!flow.ok) {
     await salvarResultado({
       botId,
       numero: config.numero,
@@ -108,12 +148,12 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
       ultimoTeste: nowISO(),
       status: 'erro',
       duracaoMs: 0,
-      erro: 'Flow retornou resposta vazia',
+      erro: flow.erro,
+      ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+      ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
-
-  const existente = await obterResultado(botId)
 
   await salvarResultado({
     botId,
@@ -126,6 +166,7 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
     preTriggerTimestamp: preTimestamp,
     triggeredAt: nowISO(),
     ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+    ultimoTriggerOkMs: Date.now(),
   })
 }
 
@@ -188,14 +229,14 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
   const inicio = Date.now()
 
   try {
-    const preMessagesText = await listChatMessages({
+    const preMessagesText = await listChatMessagesComRetry({
       channel: 'whatsapp',
       contactId: config.contactId,
       limit: 1,
       order: 'desc',
     })
 
-    if (isToolError(preMessagesText)) {
+    if (!preMessagesText) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -203,7 +244,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: preMessagesText,
+        erro: 'listChatMessages falhou apos todas as tentativas',
       }
       await salvarResultado(resultado)
       return resultado
@@ -211,13 +252,8 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
 
     const preTimestamp = extrairUltimoTimestamp(preMessagesText)
 
-    const flowResult = await runFlow({
-      channel: 'whatsapp',
-      contactId: config.contactId,
-      flowId: config.flowId,
-    })
-
-    if (!flowResult) {
+    const flow = await dispararFlow(botId, config)
+    if (!flow.ok) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -225,22 +261,37 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: 'Flow retornou resposta vazia',
+        erro: flow.erro,
       }
       await salvarResultado(resultado)
       return resultado
     }
 
+    const existente = await obterResultado(botId)
+    await salvarResultado({
+      botId,
+      numero: config.numero,
+      nome: config.nome,
+      ultimoTeste: nowISO(),
+      status: existente?.status ?? 'pendente',
+      duracaoMs: 0,
+      pendente: true,
+      preTriggerTimestamp: preTimestamp,
+      triggeredAt: nowISO(),
+      ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+      ultimoTriggerOkMs: Date.now(),
+    })
+
     await new Promise(resolve => setTimeout(resolve, 55_000))
 
-    const posMessagesText = await listChatMessages({
+    const posMessagesText = await listChatMessagesComRetry({
       channel: 'whatsapp',
       contactId: config.contactId,
       limit: 5,
       order: 'desc',
     })
 
-    if (isToolError(posMessagesText)) {
+    if (!posMessagesText) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -248,7 +299,9 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: posMessagesText,
+        erro: 'listChatMessages falhou apos todas as tentativas (pos)',
+        ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
+        ultimoTriggerOkMs: Date.now(),
       }
       await salvarResultado(resultado)
       return resultado
@@ -258,7 +311,6 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
     const temNovaMensagem = posTimestamp !== null && posTimestamp !== preTimestamp
     const status: BotTestStatus = temNovaMensagem ? 'ok' : 'sem_resposta'
 
-    const existente = await obterResultado(botId)
     const resultado: BotTestResult = {
       botId,
       numero: config.numero,
@@ -267,6 +319,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       status,
       duracaoMs: Date.now() - inicio,
       ultimoTesteOkMs: status === 'ok' ? Date.now() : (existente?.ultimoTesteOkMs ?? undefined),
+      ultimoTriggerOkMs: Date.now(),
     }
     await salvarResultado(resultado)
     return resultado
