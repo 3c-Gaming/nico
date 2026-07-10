@@ -1,4 +1,5 @@
-import { runFlow, getContactWhatsApp } from '@/lib/mcp/sendpulse'
+import { runFlow } from '@/lib/mcp/sendpulse'
+import { listarChats } from '@/lib/integrações/liveChat'
 import { CONTACT_MAP } from './contact-map'
 import { salvarResultado, obterResultado } from './store'
 import type { BotTestResult, BotTestStatus } from './types'
@@ -9,58 +10,53 @@ function nowISO(): string {
 
 const TAG = '[bot-test]'
 
-function extrairAtividade(info: Record<string, unknown> | null): string | null {
-  if (!info) return null
-  return (info.last_activity as string) ??
-    (info.ultima_actividade as string) ??
-    (info.updated_at as string) ??
-    (info.date_added as string) ??
-    null
-}
+const MAX_PAGES = 5
+const PAGE_SIZE = 100
 
-async function obterAtividadeContato(contactId: string, tentativas = 2): Promise<{
-  atividade: string | null
-  raw: Record<string, unknown> | null
-  erro?: string
-}> {
-  for (let i = 0; i <= tentativas; i++) {
-    const info = await getContactWhatsApp(contactId)
-    if (info) {
-      const atividade = extrairAtividade(info)
-      console.log(TAG, `obterAtividadeContato ${contactId}: atividade=${atividade}`, JSON.stringify(info).slice(0, 400))
-      return { atividade, raw: info }
+async function obterAtividadeContato(botId: string, contactId: string): Promise<string | null> {
+  for (let pagina = 0; pagina < MAX_PAGES; pagina++) {
+    try {
+      const { chats } = await listarChats(botId, PAGE_SIZE, pagina * PAGE_SIZE)
+      const contato = chats.find(c => c.contactId === contactId)
+      if (contato?.ultimaAtividade) {
+        return contato.ultimaAtividade
+      }
+      if (chats.length === 0) break
+    } catch (err) {
+      console.error(TAG, `obterAtividadeContato ${botId}: erro na pagina ${pagina}`, err)
+      return null
     }
-    console.warn(TAG, `getContactWhatsApp tentativa ${i + 1}/${tentativas + 1} falhou`)
-    if (i < tentativas) await new Promise(r => setTimeout(r, 2000))
   }
-  return { atividade: null, raw: null, erro: 'getContactWhatsApp falhou apos todas as tentativas' }
+  return null
 }
 
 async function verificarPendente(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
   const anterior = await obterResultado(botId)
   if (!anterior?.pendente) return
 
-  const pos = await obterAtividadeContato(config.contactId)
+  const posAtividade = await obterAtividadeContato(botId, config.contactId)
 
-  if (!pos.atividade) {
-    console.error(TAG, `verificarPendente ${botId}: falha ao obter atividade —`, pos.erro)
+  if (!posAtividade) {
+    console.error(TAG, `verificarPendente ${botId}: falha ao obter atividade pos-flow`)
     await salvarResultado({
       ...anterior,
       status: 'erro',
       pendente: false,
       preTriggerTimestamp: undefined,
       triggeredAt: undefined,
-      erro: pos.erro ?? 'sem atividade do contato',
+      erro: 'obterAtividadeContato falhou',
       ultimoTesteOkMs: anterior.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
 
-  const temNovaAtividade = pos.atividade !== anterior.preTriggerTimestamp
+  const preMs = anterior.preTriggerTimestamp ? new Date(anterior.preTriggerTimestamp).getTime() : NaN
+  const posMs = new Date(posAtividade).getTime()
+  const temNovaAtividade = !isNaN(preMs) && !isNaN(posMs) && posMs > preMs
   const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
 
-  console.log(TAG, `verificarPendente ${botId}: pre=${anterior.preTriggerTimestamp} pos=${pos.atividade} nova=${temNovaAtividade} -> ${status}`)
+  console.log(TAG, `verificarPendente ${botId}: preMs=${preMs} posMs=${posMs} nova=${temNovaAtividade} -> ${status}`)
 
   await salvarResultado({
     ...anterior,
@@ -97,24 +93,7 @@ async function dispararFlow(botId: string, config: typeof CONTACT_MAP[string]): 
 }
 
 async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
-  const pre = await obterAtividadeContato(config.contactId)
-
-  if (!pre.atividade) {
-    console.error(TAG, `iniciarNovoCiclo ${botId}: falha ao obter atividade —`, pre.erro)
-    const existente = await obterResultado(botId)
-    await salvarResultado({
-      botId,
-      numero: config.numero,
-      nome: config.nome,
-      ultimoTeste: nowISO(),
-      status: 'erro',
-      duracaoMs: 0,
-      erro: pre.erro ?? 'sem atividade do contato',
-      ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
-      ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
-    })
-    return
-  }
+  const preTimestamp = nowISO()
 
   const flow = await dispararFlow(botId, config)
   const existente = await obterResultado(botId)
@@ -142,7 +121,7 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
     status: existente?.status ?? 'pendente',
     duracaoMs: 0,
     pendente: true,
-    preTriggerTimestamp: pre.atividade,
+    preTriggerTimestamp: preTimestamp,
     triggeredAt: nowISO(),
     ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
     ultimoTriggerOkMs: Date.now(),
@@ -208,21 +187,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
   const inicio = Date.now()
 
   try {
-    const pre = await obterAtividadeContato(config.contactId)
-
-    if (!pre.atividade) {
-      const resultado: BotTestResult = {
-        botId,
-        numero: config.numero,
-        nome: config.nome,
-        ultimoTeste: nowISO(),
-        status: 'erro',
-        duracaoMs: Date.now() - inicio,
-        erro: pre.erro ?? 'sem atividade do contato',
-      }
-      await salvarResultado(resultado)
-      return resultado
-    }
+    const preTimestamp = nowISO()
 
     const flow = await dispararFlow(botId, config)
     if (!flow.ok) {
@@ -248,7 +213,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       status: existente?.status ?? 'pendente',
       duracaoMs: 0,
       pendente: true,
-      preTriggerTimestamp: pre.atividade,
+      preTriggerTimestamp: preTimestamp,
       triggeredAt: nowISO(),
       ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: Date.now(),
@@ -256,17 +221,17 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
 
     await new Promise(resolve => setTimeout(resolve, 55_000))
 
-    const pos = await obterAtividadeContato(config.contactId)
+    const posAtividade = await obterAtividadeContato(botId, config.contactId)
+    const preMs = new Date(preTimestamp).getTime()
 
-    if (!pos.atividade) {
+    if (!posAtividade) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
         nome: config.nome,
         ultimoTeste: nowISO(),
-        status: 'erro',
+        status: 'sem_resposta',
         duracaoMs: Date.now() - inicio,
-        erro: pos.erro ?? 'sem atividade do contato (pos)',
         ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
         ultimoTriggerOkMs: Date.now(),
       }
@@ -274,7 +239,8 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       return resultado
     }
 
-    const temNovaAtividade = pos.atividade !== pre.atividade
+    const posMs = new Date(posAtividade).getTime()
+    const temNovaAtividade = !isNaN(preMs) && !isNaN(posMs) && posMs > preMs
     const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
 
     const resultado: BotTestResult = {

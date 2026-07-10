@@ -84,7 +84,7 @@ export async function listAvailableTools() {
   return result.tools.map(t => ({
     name: t.name,
     description: t.description?.slice(0, 120),
-    inputSchema: t.inputSchema ? JSON.stringify(t.inputSchema).slice(0, 200) : null,
+    inputSchema: t.inputSchema ? JSON.stringify(t.inputSchema).slice(0, 800) : null,
   }))
 }
 
@@ -154,3 +154,5 @@ export async function getContactInfo(contactId: string) {
 export async function getContactWhatsApp(contactId: string) {
   return callContactsShow('whatsapp', contactId)
 }
+
+
