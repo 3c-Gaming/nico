@@ -358,8 +358,7 @@ function FunisPageInner() {
         let registros = 0
         let ftds = 0
         for (const item of superbetEvents) {
-          const sbUtm = utm.replace(/-/g, '_')
-          if (String(item.acid).includes(sbUtm)) {
+          if (String(item.acid).includes(utm)) {
             registros += item.registrations ?? 0
             ftds += item.ftds ?? 0
           }

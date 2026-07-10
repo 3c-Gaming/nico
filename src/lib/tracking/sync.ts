@@ -1,6 +1,6 @@
 import type { Disparo } from '@/types'
 
-const ACID_REGEX = /^\d{2}_\d{2}_\d{2}_\d{2}_(\w+)_(\w+)_/
+const ACID_REGEX = /^\d{2}[-_]\d{2}[-_]\d{2}[-_]\d{2}[-_](\w+)[-_](\w+)/
 
 export function parseAcid(acid: string): { funil: string; projeto: string } | null {
   const m = acid.match(ACID_REGEX)
@@ -9,7 +9,7 @@ export function parseAcid(acid: string): { funil: string; projeto: string } | nu
 }
 
 export function matchEventToDisparo(
-  evento: { bethouse: string; event: string; acid?: string; pid?: number },
+  evento: { bethouse: string; event: string; acid?: string; pid?: string },
   disparos: Disparo[],
 ): Disparo | null {
   if (evento.bethouse === 'superbet' && evento.acid) {
@@ -18,9 +18,9 @@ export function matchEventToDisparo(
     return disparos.find((d) => d.utm && d.utm === parsed.funil) ?? null
   }
 
-  if (evento.bethouse === 'betmgm' && evento.pid != null) {
+  if (evento.bethouse === 'betmgm' && evento.pid) {
     return disparos.find(
-      (d) => d.betmgmPid && d.betmgmPid === String(evento.pid),
+      (d) => d.betmgmPid && d.betmgmPid === evento.pid,
     ) ?? null
   }
 
@@ -33,7 +33,7 @@ export interface TrackingResultado {
 }
 
 export function agregarPorDisparo(
-  eventos: { bethouse: string; event: string; acid?: string; pid?: number }[],
+  eventos: { bethouse: string; event: string; acid?: string; pid?: string }[],
   disparos: Disparo[],
 ): Record<string, TrackingResultado> {
   const acc: Record<string, TrackingResultado> = {}
@@ -51,6 +51,43 @@ export function agregarPorDisparo(
   }
 
   return acc
+}
+
+interface TrackingEvent {
+  event: string
+  occurred_at: string
+  acid?: string
+  pid?: string
+}
+
+function aggregateEvents(events: TrackingEvent[]): {
+  superbet: { acid: string; registrations: number; ftds: number }[]
+  betmgm: { marketing_source_id: string; registrations: number; ftds: number }[]
+} {
+  const sbMap = new Map<string, { acid: string; registrations: number; ftds: number }>()
+  const mgmMap = new Map<string, { marketing_source_id: string; registrations: number; ftds: number }>()
+
+  for (const ev of events) {
+    if (ev.acid) {
+      const acid = ev.acid
+      if (!sbMap.has(acid)) sbMap.set(acid, { acid, registrations: 0, ftds: 0 })
+      const agg = sbMap.get(acid)!
+      if (ev.event === 'reg') agg.registrations++
+      else if (ev.event === 'ftd') agg.ftds++
+    }
+    if (ev.pid) {
+      const pid = ev.pid
+      if (!mgmMap.has(pid)) mgmMap.set(pid, { marketing_source_id: pid, registrations: 0, ftds: 0 })
+      const agg = mgmMap.get(pid)!
+      if (ev.event === 'registration') agg.registrations++
+      else if (ev.event === 'ftd') agg.ftds++
+    }
+  }
+
+  return {
+    superbet: Array.from(sbMap.values()),
+    betmgm: Array.from(mgmMap.values()),
+  }
 }
 
 export async function sincronizarDisparos(
@@ -91,7 +128,7 @@ export async function sincronizarDisparos(
         const acid = String(item.acid ?? '')
         if (!acid) continue
         const match = comTracking.find((disparo) =>
-          disparo.utm && acid.includes(disparo.utm.replace(/-/g, '_'))
+          disparo.utm && acid.includes(disparo.utm),
         )
         if (!match) continue
         if (!result[match.id]) result[match.id] = { registros: 0, ftds: 0 }
@@ -108,52 +145,56 @@ export async function sincronizarDisparosServer(
   disparos: Disparo[],
   date?: string,
 ): Promise<Record<string, TrackingResultado>> {
-  const TRACKING_BASE = 'https://3cgg-api-server-production.up.railway.app'
-  const API_KEY = process.env.EXPORT_API_KEY
-  const PROJECT = 'pilhado'
+  const TRACKING_BASE = 'https://3cgg-tracking-system.up.railway.app'
+  const API_KEY = process.env.TRACKING_API_KEY
 
   if (!API_KEY) {
-    throw new Error('EXPORT_API_KEY não configurada')
+    throw new Error('TRACKING_API_KEY não configurada')
   }
 
   const comTracking = disparos.filter((d) => d.utm || d.betmgmPid)
   if (!comTracking.length) return {}
 
-  async function fetchCasa(casa: string) {
-    const url = `${TRACKING_BASE}/export/${casa}?key=${API_KEY}&project=${PROJECT}${date ? `&date=${date}` : ''}`
+  async function fetchCasa(casa: string): Promise<TrackingEvent[]> {
+    const url = `${TRACKING_BASE}/export/${casa}?key=${API_KEY}${date ? `&date=${date}` : ''}`
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) return []
     const json = await res.json()
     return json.data ?? []
   }
 
-  const [superbetData, betmgmData] = await Promise.all([
+  const [superbetEvents, betmgmEvents] = await Promise.all([
     fetchCasa('superbet'),
     fetchCasa('betmgm'),
   ])
 
+  const { superbet: superbetAgg, betmgm: betmgmAgg } = aggregateEvents([
+    ...superbetEvents.map((e) => ({ ...e, bethouse: 'superbet' as const })),
+    ...betmgmEvents.map((e) => ({ ...e, bethouse: 'betmgm' as const })),
+  ])
+
   const result: Record<string, TrackingResultado> = {}
 
-  for (const item of superbetData) {
-    const acid = String(item.acid ?? '')
+  for (const item of superbetAgg) {
+    const acid = item.acid
     if (!acid) continue
     const match = comTracking.find((d) =>
-      d.utm && acid.includes(d.utm.replace(/-/g, '_'))
+      d.utm && acid.includes(d.utm),
     )
     if (!match) continue
     if (!result[match.id]) result[match.id] = { registros: 0, ftds: 0 }
-    result[match.id].registros += item.registrations ?? 0
-    result[match.id].ftds += item.ftds ?? 0
+    result[match.id].registros += item.registrations
+    result[match.id].ftds += item.ftds
   }
 
-  for (const item of betmgmData) {
-    const pid = String(item.marketing_source_id ?? '')
+  for (const item of betmgmAgg) {
+    const pid = item.marketing_source_id
     if (!pid) continue
     const match = comTracking.find((d) => d.betmgmPid === pid)
     if (!match) continue
     if (!result[match.id]) result[match.id] = { registros: 0, ftds: 0 }
-    result[match.id].registros += item.registrations ?? 0
-    result[match.id].ftds += item.ftds ?? 0
+    result[match.id].registros += item.registrations
+    result[match.id].ftds += item.ftds
   }
 
   return result
