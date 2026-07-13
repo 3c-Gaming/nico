@@ -536,8 +536,9 @@ function FunisPageInner() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
+                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
+                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Flow ID</th>
+                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Tags</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
@@ -592,14 +593,19 @@ function FunisPageInner() {
                         <td className="py-3 px-3">
                           <span className="text-[var(--text-muted)] text-xs font-mono">{row.botNumero}</span>
                         </td>
-                        <td className="py-3 px-3">
-                          <div className="text-[var(--text-primary)] font-medium text-sm">{row.flow.nome}</div>
-                          {row.flow.triggers.length > 0 && (
-                            <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                              {row.flow.triggers.map((t) => t.nome).join(', ')}
-                            </div>
-                          )}
-                        </td>
+                         <td className="py-3 px-3">
+                           <div className="text-[var(--text-primary)] font-medium text-sm">{row.flow.nome}</div>
+                           {row.flow.triggers.length > 0 && (
+                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                               {row.flow.triggers.map((t) => t.nome).join(', ')}
+                             </div>
+                           )}
+                         </td>
+                         <td className="py-3 px-3">
+                           <span className="text-[10px] text-[var(--text-muted)]/60 font-mono truncate block max-w-[140px]" title={row.flow.id}>
+                             {row.flow.id}
+                           </span>
+                         </td>
                         <td className="py-3 px-3">
                           <FlowStatusBadge status={row.flow.status} />
                         </td>
@@ -705,7 +711,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={12} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={13} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}

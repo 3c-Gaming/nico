@@ -66,6 +66,7 @@ interface FunilBotDetail {
   botId: string
   botNome: string
   flowNomes: string[]
+  flowIds: string[]
   tags: string[]
   leadsHoje: number
   baseCusto: number
@@ -407,6 +408,7 @@ export default function HomePage() {
           botId,
           botNome,
           flowNomes: botFluxos.map((f) => f.nome).filter(Boolean),
+          flowIds: data.flowIds,
           tags: botTags,
           leadsHoje: liveLeadsLoaded
             ? botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
@@ -620,13 +622,22 @@ export default function HomePage() {
                             {bot.flowNomes.length === 0 ? (
                               <span className="text-[var(--text-muted)]/40">—</span>
                             ) : (
-                              bot.flowNomes.map((fn) => (
-                                <span key={fn} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]">
+                              bot.flowNomes.map((fn, i) => (
+                                <span key={fn} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]" title={bot.flowIds[i]}>
                                   {fn}
                                 </span>
                               ))
                             )}
                           </div>
+                          {bot.flowIds.length > 0 && (
+                            <div className="flex flex-wrap gap-0.5 mt-0.5">
+                              {bot.flowIds.map((fid) => (
+                                <span key={fid} className="text-[9px] text-[var(--text-muted)]/40 font-mono truncate max-w-[120px] block" title={fid}>
+                                  {fid}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex flex-wrap gap-0.5">
