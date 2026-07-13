@@ -3,5 +3,11 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "regions": ["gru1"]
+  "regions": ["gru1"],
+  "crons": [
+    {
+      "path": "/api/cron/bot-test",
+      "schedule": "*/15 * * * *"
+    }
+  ]
 }

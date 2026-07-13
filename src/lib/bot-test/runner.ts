@@ -1,104 +1,74 @@
-import { runFlow } from '@/lib/mcp/sendpulse'
-import { listarChats } from '@/lib/integrações/liveChat'
 import { CONTACT_MAP } from './contact-map'
 import { salvarResultado, obterResultado } from './store'
 import type { BotTestResult, BotTestStatus } from './types'
+
+const BRIDGE_URL = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:3333'
 
 function nowISO(): string {
   return new Date().toISOString()
 }
 
 const TAG = '[bot-test]'
+const PENDENTE_TIMEOUT_MS = 5 * 60 * 1000
+const WAIT_FOR_RESPONSE_MS = 60_000
+const POLL_INTERVAL_MS = 5_000
 
-const MAX_PAGES = 5
-const PAGE_SIZE = 100
+async function enviarTesteNumero(numero: string, texto: string): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(BRIDGE_URL + '/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: numero, text: texto }),
+      signal: AbortSignal.timeout(30_000),
+    })
 
-async function obterAtividadeContato(botId: string, contactId: string): Promise<string | null> {
-  for (let pagina = 0; pagina < MAX_PAGES; pagina++) {
-    try {
-      const { chats } = await listarChats(botId, PAGE_SIZE, pagina * PAGE_SIZE)
-      const contato = chats.find(c => c.contactId === contactId)
-      if (contato?.ultimaAtividade) {
-        return contato.ultimaAtividade
-      }
-      if (chats.length === 0) break
-    } catch (err) {
-      console.error(TAG, `obterAtividadeContato ${botId}: erro na pagina ${pagina}`, err)
-      return null
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return { ok: false, erro: body.error || 'Bridge retornou ' + res.status }
     }
+
+    const body = await res.json()
+    if (!body.success) {
+      return { ok: false, erro: body.error || 'Bridge retornou falha' }
+    }
+
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, erro: (err as Error).message }
   }
-  return null
 }
 
 async function verificarPendente(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
   const anterior = await obterResultado(botId)
   if (!anterior?.pendente) return
 
-  const posAtividade = await obterAtividadeContato(botId, config.contactId)
+  const preMs = anterior.preTriggerTimestamp ? new Date(anterior.preTriggerTimestamp).getTime() : 0
+  const elapsed = Date.now() - preMs
 
-  if (!posAtividade) {
-    console.error(TAG, `verificarPendente ${botId}: falha ao obter atividade pos-flow`)
-    await salvarResultado({
-      ...anterior,
-      status: 'erro',
-      pendente: false,
-      preTriggerTimestamp: undefined,
-      triggeredAt: undefined,
-      erro: 'obterAtividadeContato falhou',
-      ultimoTesteOkMs: anterior.ultimoTesteOkMs ?? undefined,
-      ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
-    })
+  if (elapsed < PENDENTE_TIMEOUT_MS) {
+    console.log(TAG, `verificarPendente ${botId}: ainda aguardando webhook (${Math.round(elapsed / 1000)}s)`)
     return
   }
 
-  const preMs = anterior.preTriggerTimestamp ? new Date(anterior.preTriggerTimestamp).getTime() : NaN
-  const posMs = new Date(posAtividade).getTime()
-  const temNovaAtividade = !isNaN(preMs) && !isNaN(posMs) && posMs > preMs
-  const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
-
-  console.log(TAG, `verificarPendente ${botId}: preMs=${preMs} posMs=${posMs} nova=${temNovaAtividade} -> ${status}`)
-
+  console.log(TAG, `verificarPendente ${botId}: timeout sem webhook -> sem_resposta`)
   await salvarResultado({
     ...anterior,
-    status,
+    status: 'sem_resposta',
     pendente: false,
     preTriggerTimestamp: undefined,
     triggeredAt: undefined,
-    ultimoTesteOkMs: status === 'ok' ? Date.now() : (anterior.ultimoTesteOkMs ?? undefined),
     ultimoTriggerOkMs: anterior.ultimoTriggerOkMs ?? undefined,
   })
-}
-
-async function dispararFlow(botId: string, config: typeof CONTACT_MAP[string]): Promise<{ ok: boolean; erro?: string }> {
-  const flowResult = await runFlow({
-    channel: 'whatsapp',
-    contactId: config.contactId,
-    flowId: config.flowId,
-  })
-
-  if (!flowResult) {
-    console.error(TAG, `dispararFlow ${botId}: resposta vazia`)
-    return { ok: false, erro: 'Flow retornou resposta vazia' }
-  }
-
-  const text = typeof flowResult === 'string' ? flowResult : JSON.stringify(flowResult)
-  console.log(TAG, `dispararFlow ${botId}: resposta (200 chars)`, text.slice(0, 200))
-
-  if (text.startsWith('Tool execution failed')) {
-    console.error(TAG, `dispararFlow ${botId}: erro tool:`, text.slice(0, 200))
-    return { ok: false, erro: text }
-  }
-
-  return { ok: true }
 }
 
 async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string]): Promise<void> {
   const preTimestamp = nowISO()
 
-  const flow = await dispararFlow(botId, config)
+  const envio = await enviarTesteNumero(config.numero, 'TESTE_NUMERO')
   const existente = await obterResultado(botId)
 
-  if (!flow.ok) {
+  if (!envio.ok) {
+    console.error(TAG, `iniciarNovoCiclo ${botId}: envio falhou -`, envio.erro)
     await salvarResultado({
       botId,
       numero: config.numero,
@@ -106,12 +76,14 @@ async function iniciarNovoCiclo(botId: string, config: typeof CONTACT_MAP[string
       ultimoTeste: nowISO(),
       status: 'erro',
       duracaoMs: 0,
-      erro: flow.erro,
+      erro: envio.erro,
       ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
     })
     return
   }
+
+  console.log(TAG, `iniciarNovoCiclo ${botId}: TESTE_NUMERO enviado para ${config.numero}`)
 
   await salvarResultado({
     botId,
@@ -189,8 +161,8 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
   try {
     const preTimestamp = nowISO()
 
-    const flow = await dispararFlow(botId, config)
-    if (!flow.ok) {
+    const envio = await enviarTesteNumero(config.numero, 'TESTE_NUMERO')
+    if (!envio.ok) {
       const resultado: BotTestResult = {
         botId,
         numero: config.numero,
@@ -198,7 +170,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
         ultimoTeste: nowISO(),
         status: 'erro',
         duracaoMs: Date.now() - inicio,
-        erro: flow.erro,
+        erro: envio.erro,
       }
       await salvarResultado(resultado)
       return resultado
@@ -219,38 +191,31 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
       ultimoTriggerOkMs: Date.now(),
     })
 
-    await new Promise(resolve => setTimeout(resolve, 55_000))
+    console.log(TAG, `executarTesteManual ${botId}: aguardando resposta do bot...`)
 
-    const posAtividade = await obterAtividadeContato(botId, config.contactId)
-    const preMs = new Date(preTimestamp).getTime()
-
-    if (!posAtividade) {
-      const resultado: BotTestResult = {
-        botId,
-        numero: config.numero,
-        nome: config.nome,
-        ultimoTeste: nowISO(),
-        status: 'sem_resposta',
-        duracaoMs: Date.now() - inicio,
-        ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
-        ultimoTriggerOkMs: Date.now(),
+    const deadline = Date.now() + WAIT_FOR_RESPONSE_MS
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+      const atual = await obterResultado(botId)
+      if (atual && !atual.pendente) {
+        const resultado: BotTestResult = {
+          ...atual,
+          duracaoMs: Date.now() - inicio,
+        }
+        await salvarResultado(resultado)
+        return resultado
       }
-      await salvarResultado(resultado)
-      return resultado
     }
 
-    const posMs = new Date(posAtividade).getTime()
-    const temNovaAtividade = !isNaN(preMs) && !isNaN(posMs) && posMs > preMs
-    const status: BotTestStatus = temNovaAtividade ? 'ok' : 'sem_resposta'
-
+    console.log(TAG, `executarTesteManual ${botId}: timeout ${WAIT_FOR_RESPONSE_MS}ms sem resposta`)
     const resultado: BotTestResult = {
       botId,
       numero: config.numero,
       nome: config.nome,
       ultimoTeste: nowISO(),
-      status,
+      status: 'sem_resposta',
       duracaoMs: Date.now() - inicio,
-      ultimoTesteOkMs: status === 'ok' ? Date.now() : (existente?.ultimoTesteOkMs ?? undefined),
+      ultimoTesteOkMs: existente?.ultimoTesteOkMs ?? undefined,
       ultimoTriggerOkMs: Date.now(),
     }
     await salvarResultado(resultado)

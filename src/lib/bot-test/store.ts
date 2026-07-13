@@ -5,7 +5,7 @@ import { DEFAULT_POLL_INTERVAL_MS } from './types'
 function supabase() {
   const s = getSupabase()
   if (!s) throw new Error('Supabase não disponível')
-  return s
+  return s as any
 }
 
 function toRow(r: BotTestResult): Record<string, unknown> {
@@ -73,10 +73,29 @@ export async function carregarConfig(): Promise<BotTestConfig> {
   try {
     const { data } = await supabase().from('bot_test_config').select('*').eq('id', 1).maybeSingle()
     if (data) {
-      return { pollIntervalMs: (data as any).poll_interval_ms ?? DEFAULT_POLL_INTERVAL_MS }
+      return {
+        pollIntervalMs: (data as any).poll_interval_ms ?? DEFAULT_POLL_INTERVAL_MS,
+        currentBotIndex: (data as any).current_bot_index ?? 0,
+      }
     }
   } catch { /* noop */ }
-  return { pollIntervalMs: DEFAULT_POLL_INTERVAL_MS }
+  return { pollIntervalMs: DEFAULT_POLL_INTERVAL_MS, currentBotIndex: 0 }
+}
+
+export async function obterIndiceAtual(): Promise<number> {
+  const cfg = await carregarConfig()
+  return cfg.currentBotIndex ?? 0
+}
+
+export async function incrementarIndiceAtual(total: number): Promise<number> {
+  const atual = await obterIndiceAtual()
+  const proximo = (atual + 1) % total
+  try {
+    await supabase().from('bot_test_config').update({ current_bot_index: proximo, updated_at: new Date().toISOString() }).eq('id', 1)
+  } catch (err) {
+    console.error('[bot-test.store] incrementarIndiceAtual error:', err)
+  }
+  return proximo
 }
 
 export async function salvarConfig(config: BotTestConfig) {

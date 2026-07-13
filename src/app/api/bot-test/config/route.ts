@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { carregarConfig, salvarConfig } from '@/lib/bot-test/store'
-import { reiniciarCron } from '@/lib/bot-test/cron'
 import type { BotTestConfig } from '@/lib/bot-test/types'
 
 export async function GET() {
@@ -25,7 +24,6 @@ export async function PUT(request: Request) {
     }
 
     await salvarConfig(novaConfig)
-    await reiniciarCron()
 
     return NextResponse.json({ config: novaConfig })
   } catch (err) {

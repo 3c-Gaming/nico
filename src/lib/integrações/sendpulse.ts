@@ -90,6 +90,32 @@ export async function enviarMensagem(params: {
   return { sucesso: true, mensagemId: json.data?.id }
 }
 
+export async function executarFlow(params: {
+  botId: string
+  contactId: string
+  flowId: string
+  externalData?: Record<string, unknown>
+}): Promise<{ success: boolean; rawBody?: unknown }> {
+  const body: Record<string, unknown> = {
+    bot_id: params.botId,
+    contact_id: params.contactId,
+    flow_id: params.flowId,
+  }
+  if (params.externalData) body.external_data = params.externalData
+
+  const res = await fetch(`${BASE_URL}/flows/run`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+  })
+  const rawBody = await res.json().catch(() => null)
+  if (!res.ok) {
+    const text = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody)
+    throw new Error(`Sendpulse flow run error ${res.status}: ${text}`)
+  }
+  return { success: rawBody?.success ?? true, rawBody }
+}
+
 function extrairTexto(msg: Record<string, unknown> | undefined): string | undefined {
   if (!msg) return undefined
   if (typeof msg.text === 'string') return msg.text

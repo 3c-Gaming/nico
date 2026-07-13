@@ -24,6 +24,7 @@ export interface BotTestResult {
 
 export interface BotTestConfig {
   pollIntervalMs: number
+  currentBotIndex?: number
 }
 
 export interface BotTestDatabase {

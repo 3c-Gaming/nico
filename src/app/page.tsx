@@ -91,8 +91,9 @@ interface FunilRow {
   ftds: number
   entregues: number
   lidas: number
-  conversaoLidasReg: number
-  conversaoLidasFtd: number
+  custoPorReg: number
+  custoPorFtd: number
+  regParaFtd: number
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
 }
@@ -387,8 +388,9 @@ export default function HomePage() {
       }
       const entreguesTotal = [...entreguesPorBot.values()].reduce((a, b) => a + b, 0)
       const lidasTotal = [...lidasPorBot.values()].reduce((a, b) => a + b, 0)
-      const conversaoLidasReg = registros > 0 ? Math.round((lidasTotal / registros) * 10000) / 100 : 0
-      const conversaoLidasFtd = ftds > 0 ? Math.round((lidasTotal / ftds) * 10000) / 100 : 0
+      const custoPorReg = registros > 0 ? Math.round((baseCusto / registros) * 100) / 100 : 0
+      const custoPorFtd = ftds > 0 ? Math.round((baseCusto / ftds) * 100) / 100 : 0
+      const regParaFtd = registros > 0 ? Math.round((ftds / registros) * 10000) / 100 : 0
 
       // collect unique casas and first casa color for badge
       const casas = [...new Set(flows.flatMap(([fid]) => configs[fid]?.casas ?? []))]
@@ -428,7 +430,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), conversaoLidasReg, conversaoLidasFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
   }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas])
 
@@ -543,13 +545,18 @@ export default function HomePage() {
                 </span>
               </td>
               <td className="py-3 px-3 text-right">
-                <span className={`font-semibold font-mono ${row.conversaoLidasReg > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                  {row.conversaoLidasReg > 0 ? `${row.conversaoLidasReg}%` : '—'}
+                <span className={`font-semibold font-mono ${row.regParaFtd > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.regParaFtd > 0 ? `${row.regParaFtd}%` : '—'}
                 </span>
               </td>
               <td className="py-3 px-3 text-right">
-                <span className={`font-semibold font-mono ${row.conversaoLidasFtd > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                  {row.conversaoLidasFtd > 0 ? `${row.conversaoLidasFtd}%` : '—'}
+                <span className={`font-semibold font-mono ${row.custoPorReg > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                  {row.custoPorReg > 0 ? `R$ ${row.custoPorReg.toFixed(2).replace('.', ',')}` : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className={`font-semibold font-mono ${row.custoPorFtd > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                  {row.custoPorFtd > 0 ? `R$ ${row.custoPorFtd.toFixed(2).replace('.', ',')}` : '—'}
                 </span>
               </td>
             </>
@@ -580,7 +587,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 13 : 7} className="p-0">
+            <td colSpan={isDisparo ? 14 : 7} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -848,8 +855,9 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Ld/Reg</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Ld/FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg/FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
