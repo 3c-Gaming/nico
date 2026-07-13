@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
@@ -20,6 +20,7 @@ interface FlowRow {
   flow: FluxoSendpulse
   funil?: string
   utm?: string
+  lpUrl?: string
   tags: string[]
   casas: string[]
   leadsHoje: number
@@ -90,6 +91,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const existing = configs[flow.id]
   const [funil, setFunil] = useState(existing?.funil ?? '')
   const [utm, setUtm] = useState(existing?.utm ?? '')
+  const [lpUrl, setLpUrl] = useState(existing?.lpUrl ?? '')
   const [tipo, setTipo] = useState<'traffic' | 'disparo'>(existing?.tipo ?? 'disparo')
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
   const [casas, setCasas] = useState<string[]>(existing?.casas ?? [])
@@ -120,7 +122,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, tags, casas, tipo })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, lpUrl: lpUrl || undefined, tags, casas, tipo })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
@@ -128,8 +130,9 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   const prevFunil = existing?.funil ?? ''
   const prevUtm = existing?.utm ?? ''
+  const prevLpUrl = existing?.lpUrl ?? ''
   const prevCasas = (existing?.casas ?? []).join(',')
-  const hasChanges = prevFunil !== funil || prevUtm !== utm || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
+  const hasChanges = prevFunil !== funil || prevUtm !== utm || prevLpUrl !== lpUrl || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
 
   return (
     <div className="space-y-3 p-4 glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded">
@@ -150,6 +153,16 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
           value={utm}
           onChange={(e) => setUtm(e.target.value)}
           placeholder="ex: pilhado-disp-traf-odm ou 13382"
+          className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-16">LP URL:</span>
+        <input
+          type="url"
+          value={lpUrl}
+          onChange={(e) => setLpUrl(e.target.value)}
+          placeholder="https://..."
           className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
         />
       </div>
@@ -427,6 +440,7 @@ function FunisPageInner() {
           flow,
           funil,
           utm: configs[flow.id]?.utm,
+          lpUrl: configs[flow.id]?.lpUrl,
           tags,
           casas: configs[flow.id]?.casas ?? [],
           leadsHoje: leads,
@@ -538,6 +552,7 @@ function FunisPageInner() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Flow ID</th>
+                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">LP</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Tags</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
@@ -605,6 +620,22 @@ function FunisPageInner() {
                            <span className="text-[10px] text-[var(--text-muted)]/60 font-mono truncate block max-w-[140px]" title={row.flow.id}>
                              {row.flow.id}
                            </span>
+                         </td>
+                         <td className="py-3 px-3">
+                           {row.lpUrl ? (
+                             <a
+                               href={row.lpUrl}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="inline-flex items-center gap-1 text-[11px] text-[var(--d1)] hover:underline font-mono truncate max-w-[160px]"
+                               title={row.lpUrl}
+                             >
+                               <ExternalLink size={10} className="shrink-0" />
+                               {row.lpUrl.replace(/^https?:\/\//, '').slice(0, 30)}
+                             </a>
+                           ) : (
+                             <span className="text-[10px] text-[var(--text-muted)]/40">—</span>
+                           )}
                          </td>
                         <td className="py-3 px-3">
                           <FlowStatusBadge status={row.flow.status} />
@@ -711,7 +742,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={13} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}

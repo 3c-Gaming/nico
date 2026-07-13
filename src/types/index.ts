@@ -229,6 +229,7 @@ export interface FlowTagConfig {
   utm?: string
   casas?: string[]
   tipo?: 'traffic' | 'disparo'
+  lpUrl?: string
 }
 
 export interface CopaMatch {
