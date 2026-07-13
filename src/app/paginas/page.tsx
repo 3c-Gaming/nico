@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FileText, Plus, RefreshCw, Trash2, Pencil, ExternalLink, Phone, Hash, Weight } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Trash2, Pencil, ExternalLink, Phone, Hash } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
@@ -23,6 +23,20 @@ interface Pagina {
   updated_at: string
 }
 
+interface Numero {
+  id: string
+  numero: string
+  nome: string
+  status: 'ativo' | 'inativo'
+}
+
+interface Fluxo {
+  id: string
+  botId: string
+  nome: string
+  status: 'ativo' | 'inativo' | 'rascunho'
+}
+
 export default function PaginasPage() {
   const [paginas, setPaginas] = useState<Pagina[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +55,11 @@ export default function PaginasPage() {
   const [editDestinations, setEditDestinations] = useState<Destination[]>([])
   const [editText, setEditText] = useState('')
 
+  // Sendpulse data
+  const [numeros, setNumeros] = useState<Numero[]>([])
+  const [fluxosPorBot, setFluxosPorBot] = useState<Record<string, Fluxo[]>>({})
+  const [loadingFluxos, setLoadingFluxos] = useState<Record<string, boolean>>({})
+
   const carregarPaginas = useCallback(async () => {
     setLoading(true)
     try {
@@ -52,6 +71,27 @@ export default function PaginasPage() {
   }, [])
 
   useEffect(() => { carregarPaginas() }, [carregarPaginas])
+
+  // Carregar números do Sendpulse
+  async function carregarNumeros() {
+    try {
+      const res = await fetch('/api/sendpulse/numeros')
+      const json = await res.json()
+      setNumeros(json.numeros ?? [])
+    } catch { /* empty */ }
+  }
+
+  // Carregar fluxos de um bot específico
+  async function carregarFluxos(botId: string) {
+    if (fluxosPorBot[botId] || loadingFluxos[botId]) return
+    setLoadingFluxos(prev => ({ ...prev, [botId]: true }))
+    try {
+      const res = await fetch(`/api/sendpulse/fluxos?bot_id=${botId}`)
+      const json = await res.json()
+      setFluxosPorBot(prev => ({ ...prev, [botId]: json.fluxos ?? [] }))
+    } catch { /* empty */ }
+    setLoadingFluxos(prev => ({ ...prev, [botId]: false }))
+  }
 
   // Cadastrar nova página
   async function cadastrar() {
@@ -92,7 +132,6 @@ export default function PaginasPage() {
       })
       const json = await res.json()
       if (res.ok) {
-        // Salvar no Supabase
         await fetch('/api/paginas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -114,6 +153,27 @@ export default function PaginasPage() {
     setEditDestinations(pagina.destinations?.length ? [...pagina.destinations] : [{ phone: '', flowId: '', weight: 100 }])
     setEditText(pagina.text ?? '')
     setModalEdicao(true)
+    carregarNumeros()
+  }
+
+  // Quando seleciona um número, buscar os fluxos daquele bot
+  function selecionarNumero(index: number, botId: string) {
+    const numero = numeros.find(n => n.id === botId)
+    if (!numero) return
+    updateDest(index, 'phone', numero.numero)
+    updateDest(index, 'flowId', '')
+    carregarFluxos(botId)
+  }
+
+  // Quando seleciona um fluxo
+  function selecionarFluxo(index: number, flowId: string) {
+    updateDest(index, 'flowId', flowId)
+  }
+
+  // Encontrar o botId de um número pelo phone
+  function getBotIdByPhone(phone: string): string | null {
+    const numero = numeros.find(n => n.numero === phone)
+    return numero?.id ?? null
   }
 
   // Salvar edição (commit no GitHub + update Supabase)
@@ -121,7 +181,6 @@ export default function PaginasPage() {
     if (!paginaSelecionada) return
     setSaving(true)
     try {
-      // 1. Commit no GitHub
       const res = await fetch('/api/paginas/sync', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -134,7 +193,6 @@ export default function PaginasPage() {
       })
 
       if (res.ok) {
-        // 2. Atualizar no Supabase
         await fetch('/api/paginas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -146,8 +204,13 @@ export default function PaginasPage() {
         })
         setModalEdicao(false)
         await carregarPaginas()
+      } else {
+        const json = await res.json()
+        alert(`Erro ao commitar: ${json.error}`)
       }
-    } catch { /* empty */ }
+    } catch (e: any) {
+      alert(`Erro: ${e?.message}`)
+    }
     setSaving(false)
   }
 
@@ -170,6 +233,8 @@ export default function PaginasPage() {
   function removeDest(index: number) {
     setEditDestinations(prev => prev.filter((_, i) => i !== index))
   }
+
+  const selectClass = 'h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-strong)] transition-colors w-full'
 
   return (
     <>
@@ -204,7 +269,6 @@ export default function PaginasPage() {
                 key={pagina.id}
                 className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 hover:border-[var(--border-strong)] transition-colors"
               >
-                {/* Header do card */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <FileText size={16} className="text-[var(--d1)]" />
@@ -244,19 +308,16 @@ export default function PaginasPage() {
                   </div>
                 </div>
 
-                {/* Repo info */}
                 <p className="text-xs text-[var(--text-muted)] font-mono mb-3">
                   {pagina.github_owner}/{pagina.github_repo}
                 </p>
 
-                {/* Text */}
                 {pagina.text && (
                   <p className="text-xs text-[var(--text-secondary)] mb-3 truncate" title={pagina.text}>
                     💬 {pagina.text}
                   </p>
                 )}
 
-                {/* Destinations */}
                 {pagina.destinations?.length > 0 ? (
                   <div className="space-y-2">
                     <p className="text-xs text-[var(--text-muted)] font-medium">Destinos:</p>
@@ -279,7 +340,6 @@ export default function PaginasPage() {
                   </p>
                 )}
 
-                {/* Updated at */}
                 {pagina.updated_at && (
                   <p className="text-[10px] text-[var(--text-muted)] mt-3">
                     Atualizado: {new Date(pagina.updated_at).toLocaleString('pt-BR')}
@@ -305,9 +365,8 @@ export default function PaginasPage() {
       </Modal>
 
       {/* Modal Edição */}
-      <Modal open={modalEdicao} onClose={() => setModalEdicao(false)} title={`Editar — ${paginaSelecionada?.nome}`} width="600px">
+      <Modal open={modalEdicao} onClose={() => setModalEdicao(false)} title={`Editar — ${paginaSelecionada?.nome}`} width="680px">
         <div className="space-y-4">
-          {/* TEXT */}
           <Input
             label="Mensagem WhatsApp (TEXT)"
             value={editText}
@@ -315,7 +374,6 @@ export default function PaginasPage() {
             placeholder="Ex: Quero entrar no grupo..."
           />
 
-          {/* DESTINATIONS */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs text-[var(--text-secondary)] font-medium">Destinos (DESTINATIONS)</label>
@@ -323,46 +381,103 @@ export default function PaginasPage() {
             </div>
 
             <div className="space-y-3">
-              {editDestinations.map((dest, i) => (
-                <div key={i} className="flex items-end gap-2 bg-[var(--bg-elevated)] rounded-lg p-3">
-                  <div className="flex-1">
-                    <Input
-                      label="Telefone"
-                      value={dest.phone}
-                      onChange={e => updateDest(i, 'phone', e.target.value)}
-                      placeholder="5511999999999"
-                    />
+              {editDestinations.map((dest, i) => {
+                const botId = getBotIdByPhone(dest.phone)
+                const fluxos = botId ? fluxosPorBot[botId] ?? [] : []
+
+                // Auto-carregar fluxos se temos o botId
+                if (botId && !fluxosPorBot[botId] && !loadingFluxos[botId]) {
+                  carregarFluxos(botId)
+                }
+
+                return (
+                  <div key={i} className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
+                    <div className="flex items-end gap-2">
+                      {/* Select Número */}
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-secondary)] font-medium block mb-1">Número</label>
+                        <select
+                          className={selectClass}
+                          value={botId ?? ''}
+                          onChange={e => selecionarNumero(i, e.target.value)}
+                        >
+                          <option value="">Selecione um número...</option>
+                          {numeros.filter(n => n.status === 'ativo').map(n => (
+                            <option key={n.id} value={n.id}>
+                              {n.nome} ({n.numero})
+                            </option>
+                          ))}
+                          {/* Mostrar inativos separados */}
+                          {numeros.filter(n => n.status === 'inativo').length > 0 && (
+                            <optgroup label="Inativos">
+                              {numeros.filter(n => n.status === 'inativo').map(n => (
+                                <option key={n.id} value={n.id}>
+                                  {n.nome} ({n.numero})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                        {dest.phone && (
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5 block">{dest.phone}</span>
+                        )}
+                      </div>
+
+                      {/* Select Fluxo */}
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-secondary)] font-medium block mb-1">Fluxo</label>
+                        <select
+                          className={selectClass}
+                          value={dest.flowId}
+                          onChange={e => selecionarFluxo(i, e.target.value)}
+                          disabled={!botId}
+                        >
+                          <option value="">{!botId ? 'Selecione um número primeiro' : loadingFluxos[botId] ? 'Carregando...' : 'Selecione um fluxo...'}</option>
+                          {fluxos.filter(f => f.status === 'ativo').map(f => (
+                            <option key={f.id} value={f.id}>
+                              {f.nome}
+                            </option>
+                          ))}
+                          {fluxos.filter(f => f.status !== 'ativo').length > 0 && (
+                            <optgroup label="Inativos/Rascunho">
+                              {fluxos.filter(f => f.status !== 'ativo').map(f => (
+                                <option key={f.id} value={f.id}>
+                                  {f.nome} ({f.status})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                        {dest.flowId && (
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5 block">{dest.flowId}</span>
+                        )}
+                      </div>
+
+                      {/* Peso */}
+                      <div className="w-20">
+                        <Input
+                          label="Peso %"
+                          type="number"
+                          value={String(dest.weight)}
+                          onChange={e => updateDest(i, 'weight', Number(e.target.value))}
+                          placeholder="100"
+                        />
+                      </div>
+
+                      {editDestinations.length > 1 && (
+                        <button
+                          onClick={() => removeDest(i)}
+                          className="p-2 text-[var(--text-muted)] hover:text-[var(--error)] transition-colors mb-0.5"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <Input
-                      label="Flow ID"
-                      value={dest.flowId}
-                      onChange={e => updateDest(i, 'flowId', e.target.value)}
-                      placeholder="abc123..."
-                    />
-                  </div>
-                  <div className="w-20">
-                    <Input
-                      label="Peso %"
-                      type="number"
-                      value={String(dest.weight)}
-                      onChange={e => updateDest(i, 'weight', Number(e.target.value))}
-                      placeholder="100"
-                    />
-                  </div>
-                  {editDestinations.length > 1 && (
-                    <button
-                      onClick={() => removeDest(i)}
-                      className="p-2 text-[var(--text-muted)] hover:text-[var(--error)] transition-colors mb-0.5"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
 
-            {/* Soma dos pesos */}
             {editDestinations.length > 0 && (
               <p className={`text-xs mt-2 ${editDestinations.reduce((s, d) => s + d.weight, 0) === 100 ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
                 Soma dos pesos: {editDestinations.reduce((s, d) => s + d.weight, 0)}% {editDestinations.reduce((s, d) => s + d.weight, 0) !== 100 && '(deve ser 100%)'}
