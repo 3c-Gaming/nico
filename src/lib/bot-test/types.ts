@@ -20,6 +20,8 @@ export interface BotTestResult {
   triggeredAt?: string
   ultimoTesteOkMs?: number
   ultimoTriggerOkMs?: number
+  requestBody?: unknown
+  responseBody?: unknown
 }
 
 export interface BotTestConfig {
