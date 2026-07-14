@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "npx playwright install chromium",
+    "postinstall": "npx playwright install",
     "dev": "tsx watch src/index.ts",
     "dev:nodemon": "nodemon --exec tsx src/index.ts --ext ts,json,env",
     "start": "tsx src/index.ts",

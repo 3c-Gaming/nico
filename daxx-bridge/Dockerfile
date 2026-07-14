@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright:v1.52.0-noble
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-RUN npx playwright install chromium
+RUN npx playwright install
 COPY src ./src
 
 EXPOSE 3334
