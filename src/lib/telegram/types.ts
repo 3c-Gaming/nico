@@ -3,6 +3,7 @@ export interface EstadoEdicao {
   destIndex: number
   novoPhone: string
   novoFlowId: string
+  novoFlowNome: string
 }
 
 // In-memory state per chat (suficiente para uso operacional)

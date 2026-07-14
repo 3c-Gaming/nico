@@ -14,11 +14,12 @@ export function listaPaginas(paginas: Array<{ id: string; nome: string }>, indic
   return kb
 }
 
-export function detalhesPagina(paginaIdx: number, destinations: Array<{ phone: string; weight: number }>): InlineKeyboard {
+export function detalhesPagina(paginaIdx: number, destinations: Array<{ phone: string; flowId: string; weight: number }>): InlineKeyboard {
   const kb = new InlineKeyboard()
   for (let i = 0; i < destinations.length; i++) {
     const d = destinations[i]
-    kb.text(`📞 ${d.phone} (peso ${d.weight})`, `pg:e:${paginaIdx}:${i}`).row()
+    const flowShort = d.flowId ? d.flowId.slice(0, 8) + '...' : 'sem flow'
+    kb.text(`📞 ${d.phone} · #${flowShort} · ${d.weight}%`, `pg:e:${paginaIdx}:${i}`).row()
   }
   kb.text('⬅️ Voltar', 'pg:list')
   return kb
@@ -27,8 +28,18 @@ export function detalhesPagina(paginaIdx: number, destinations: Array<{ phone: s
 export function listaNumeros(numeros: Array<{ id: string; numero: string; nome: string }>, paginaIdx: number, destIndex: number): InlineKeyboard {
   const kb = new InlineKeyboard()
   for (const n of numeros) {
-    const label = n.numero ? `${n.numero} (${n.nome})` : n.nome
+    const label = n.numero ? `${n.nome} (${n.numero})` : n.nome
     kb.text(label, `pg:n:${paginaIdx}:${destIndex}:${n.id}`).row()
+  }
+  kb.text('❌ Cancelar', `pg:c:${paginaIdx}`)
+  return kb
+}
+
+export function listaFluxos(fluxos: Array<{ id: string; nome: string; status: string }>, paginaIdx: number, destIndex: number): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  for (const f of fluxos) {
+    const statusTag = f.status !== 'ativo' ? ` (${f.status})` : ''
+    kb.text(`${f.nome}${statusTag}`, `pg:f:${paginaIdx}:${destIndex}:${f.id}`).row()
   }
   kb.text('❌ Cancelar', `pg:c:${paginaIdx}`)
   return kb
