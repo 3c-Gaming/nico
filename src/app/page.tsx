@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight, Play, CheckCircle2, ExternalLink } from 'lucide-react'
+import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
@@ -16,20 +16,54 @@ function getLocalDate(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function InteracaoBadge({ status }: { status: NumeroMonitorado['statusInteracao'] }) {
-  const config = {
-    respondendo: { cor: 'text-green-500', icone: Activity, texto: 'Respondendo' },
-    ocioso: { cor: 'text-amber-400', icone: Pause, texto: 'Ocioso' },
-    parado: { cor: 'text-red-400', icone: XCircle, texto: 'Parado' },
-    em_pico: { cor: 'text-orange-500 animate-pulse', icone: AlertTriangle, texto: 'Em Pico' },
-    numero_caido: { cor: 'text-red-600', icone: XCircle, texto: 'Número Caído' },
+interface BotTestApiResult {
+  botId: string
+  nome?: string
+  status: string
+  ultimoTeste?: string
+  erro?: string
+  duracaoMs?: number
+  pendente?: boolean
+  ultimoTesteOkMs?: number
+  ultimoTriggerOkMs?: number
+}
+
+const TESTE_STATUS: Record<string, { label: string; cor: string; dot: string }> = {
+  ok: { label: 'Online', cor: 'text-green-500', dot: 'bg-green-500' },
+  erro: { label: 'Erro', cor: 'text-red-500', dot: 'bg-red-500' },
+  sem_resposta: { label: 'Sem resposta', cor: 'text-amber-400', dot: 'bg-amber-400' },
+  pendente: { label: 'Testando...', cor: 'text-blue-400', dot: 'bg-blue-400' },
+}
+
+function formatTempoRelativo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 0) return 'agora'
+  if (diff < 60_000) return 'agora'
+  if (diff < 3_600_000) return `há ${Math.floor(diff / 60_000)}min`
+  if (diff < 86_400_000) return `há ${Math.floor(diff / 3_600_000)}h`
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function TesteStatusBadge({ resultado }: { resultado?: BotTestApiResult }) {
+  if (!resultado) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)]">
+        <span className="inline-block w-2 h-2 rounded-full bg-[var(--text-muted)]/30" />
+        Sem teste
+      </span>
+    )
   }
-  const resolved = status ?? 'ocioso'
-  const { cor, icone: Icon, texto } = config[resolved]
+  const cfg = TESTE_STATUS[resultado.status] ?? TESTE_STATUS.pendente
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium ${cor}`}>
-      <Icon size={12} />
-      {texto}
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${cfg.cor}`}>
+      <span className={`inline-block w-2 h-2 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+      {resultado.ultimoTeste && (
+        <span className="text-[10px] text-[var(--text-muted)] ml-1">{formatTempoRelativo(resultado.ultimoTeste)}</span>
+      )}
+      {resultado.erro && (
+        <span className="text-[10px] text-[var(--error)] ml-1 truncate max-w-[120px]" title={resultado.erro}>{resultado.erro}</span>
+      )}
     </span>
   )
 }
@@ -103,7 +137,7 @@ interface FunilRow {
 
 export default function HomePage() {
   const router = useRouter()
-  const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao } = useMonitoramento()
+  const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
   const [contagens, setContagens] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
@@ -119,7 +153,6 @@ export default function HomePage() {
   const [daxxCampanhas, setDaxxCampanhas] = useState<DisparoDaxx[]>([])
   const [daxxLoaded, setDaxxLoaded] = useState(false)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
-  const [testeFeedback, setTesteFeedback] = useState<Record<string, 'ok' | 'erro' | 'sem_resposta' | null>>({})
 
   useEffect(() => {
     const s = getState()
@@ -252,7 +285,6 @@ export default function HomePage() {
   const handleTestarBot = useCallback(async (botId: string) => {
     if (testandoBotId) return
     setTestandoBotId(botId)
-    setTesteFeedback(prev => ({ ...prev, [botId]: null }))
     try {
       const res = await fetch('/api/bot-test/run', {
         method: 'POST',
@@ -260,14 +292,12 @@ export default function HomePage() {
         body: JSON.stringify({ botId }),
       })
       if (!res.ok) throw new Error()
-      const data = await res.json()
-      if (data.status) setTesteFeedback(prev => ({ ...prev, [botId]: data.status }))
+      await atualizar()
     } catch {
-      setTesteFeedback(prev => ({ ...prev, [botId]: 'erro' }))
     } finally {
       setTestandoBotId(null)
     }
-  }, [testandoBotId])
+  }, [testandoBotId, atualizar])
 
   const funilRows = useMemo<FunilRow[]>(() => {
     if (!pinnedFunis.length) return []
@@ -818,7 +848,7 @@ export default function HomePage() {
 
                   <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/50">
                     <div className="flex items-center gap-2">
-                      <InteracaoBadge status={item.statusInteracao} />
+                      <TesteStatusBadge resultado={botTestMap.get(item.numero.id)} />
                       <button
                         onClick={(e) => { e.stopPropagation(); handleTestarBot(item.numero.id) }}
                         disabled={testandoBotId === item.numero.id}
@@ -827,12 +857,10 @@ export default function HomePage() {
                       >
                         {testandoBotId === item.numero.id ? (
                           <RefreshCw size={10} className="animate-spin" />
-                        ) : testeFeedback[item.numero.id] === 'ok' ? (
-                          <CheckCircle2 size={10} className="text-green-500" />
                         ) : (
                           <Play size={10} />
                         )}
-                        {testeFeedback[item.numero.id] === 'ok' ? 'OK' : testeFeedback[item.numero.id] === 'sem_resposta' ? 'Sem resposta' : testeFeedback[item.numero.id] === 'erro' ? 'Erro' : 'Testar'}
+                        Testar
                       </button>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
