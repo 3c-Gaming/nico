@@ -9,7 +9,17 @@ if (!token) {
 const globalForBot = globalThis as unknown as { telegramBot: Bot | undefined }
 
 if (!globalForBot.telegramBot && token) {
-  globalForBot.telegramBot = new Bot(token)
+  globalForBot.telegramBot = new Bot(token, {
+    botInfo: {
+      id: 8868340783,
+      is_bot: true,
+      first_name: 'Nico',
+      username: 'nico_3c_bot',
+      can_join_groups: true,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+    },
+  })
 }
 
 export const bot = globalForBot.telegramBot!
