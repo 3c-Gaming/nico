@@ -16,6 +16,7 @@ export interface PaginaCache {
   github_repo: string
   destinations: Array<{ phone: string; flowId: string; weight: number }>
   text: string
+  lovable_project_id?: string
 }
 
 // Cache de páginas por chatId

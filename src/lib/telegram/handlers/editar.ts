@@ -187,8 +187,21 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const flowShort = '...' + estado.novoFlowId.slice(-8)
 
+    // Deploy no Lovable se tiver project_id
+    let deployMsg = ''
+    if (pagina.lovable_project_id) {
+      try {
+        await ctx.editMessageText('⏳ Deployando no Lovable...')
+        const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
+        const deploy = await deployLovable(pagina.lovable_project_id)
+        deployMsg = `\n🚀 Deploy: [${deploy.url}](${deploy.url})`
+      } catch (e) {
+        deployMsg = `\n⚠️ Deploy falhou: ${(e as Error).message}`
+      }
+    }
+
     await ctx.editMessageText(
-      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\``,
+      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\`${deployMsg}`,
       { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
     )
   } catch (err) {

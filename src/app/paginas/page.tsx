@@ -21,6 +21,7 @@ interface Pagina {
   destinations: Destination[]
   text: string
   updated_at: string
+  lovable_project_id?: string
 }
 
 interface Numero {
@@ -50,6 +51,7 @@ export default function PaginasPage() {
   const [novoNome, setNovoNome] = useState('')
   const [novoOwner, setNovoOwner] = useState('3c-Gaming')
   const [novoRepo, setNovoRepo] = useState('')
+  const [novoLovableId, setNovoLovableId] = useState('')
 
   // Form edição
   const [editDestinations, setEditDestinations] = useState<Destination[]>([])
@@ -109,12 +111,14 @@ export default function PaginasPage() {
           destinations: [],
           text: '',
           updated_at: new Date().toISOString(),
+          ...(novoLovableId && { lovable_project_id: novoLovableId }),
         }),
       })
       if (res.ok) {
         setModalCadastro(false)
         setNovoNome('')
         setNovoRepo('')
+        setNovoLovableId('')
         await carregarPaginas()
       }
     } catch { /* empty */ }
@@ -189,6 +193,7 @@ export default function PaginasPage() {
           repo: paginaSelecionada.github_repo,
           destinations: editDestinations,
           text: editText,
+          lovable_project_id: paginaSelecionada.lovable_project_id,
         }),
       })
 
@@ -308,9 +313,15 @@ export default function PaginasPage() {
                   </div>
                 </div>
 
-                <p className="text-xs text-[var(--text-muted)] font-mono mb-3">
+                <p className="text-xs text-[var(--text-muted)] font-mono mb-1">
                   {pagina.github_owner}/{pagina.github_repo}
                 </p>
+                {pagina.lovable_project_id && (
+                  <p className="text-[10px] text-[var(--text-muted)] font-mono mb-3">
+                    Lovable: {pagina.lovable_project_id.slice(0, 12)}...
+                  </p>
+                )}
+                {!pagina.lovable_project_id && <div className="mb-3" />}
 
                 {pagina.text && (
                   <p className="text-xs text-[var(--text-secondary)] mb-3 truncate" title={pagina.text}>
@@ -357,6 +368,7 @@ export default function PaginasPage() {
           <Input label="Nome da Página" value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Ex: F14-25 Pilhado" />
           <Input label="GitHub Owner" value={novoOwner} onChange={e => setNovoOwner(e.target.value)} placeholder="3c-Gaming" />
           <Input label="GitHub Repo" value={novoRepo} onChange={e => setNovoRepo(e.target.value)} placeholder="f14_25" />
+          <Input label="Lovable Project ID (opcional)" value={novoLovableId} onChange={e => setNovoLovableId(e.target.value)} placeholder="Ex: abc123-def456" />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" size="sm" onClick={() => setModalCadastro(false)}>Cancelar</Button>
             <Button size="sm" onClick={cadastrar} loading={saving} disabled={!novoNome || !novoRepo}>Cadastrar</Button>
