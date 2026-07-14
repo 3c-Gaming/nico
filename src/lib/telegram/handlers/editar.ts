@@ -97,7 +97,7 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
     // Buscar nome do fluxo
     const numeros = await listarNumeros()
     const numero = numeros.find(n => n.numero === estado.novoPhone)
-    let flowNome = flowId.slice(0, 8) + '...'
+    let flowNome = '...' + flowId.slice(-8)
     if (numero) {
       const fluxos = await listarFluxos(numero.id)
       const fluxo = fluxos.find(f => f.id === flowId)
@@ -111,7 +111,7 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
 
     const pagina = paginas[paginaIdx]
     const destAtual = pagina.destinations[destIndex]
-    const flowAtualShort = destAtual.flowId ? destAtual.flowId.slice(0, 8) + '...' : 'nenhum'
+    const flowAtualShort = destAtual.flowId ? '...' + destAtual.flowId.slice(-8) : 'nenhum'
 
     let texto = `⚠️ *Confirmar alteração?*\n\n`
     texto += `📄 Página: *${pagina.nome}*\n`
@@ -119,7 +119,7 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
     texto += `*Antes:*\n`
     texto += `📞 \`${destAtual.phone}\`\n#  \`${flowAtualShort}\`\n\n`
     texto += `*Depois:*\n`
-    texto += `📞 \`${estado.novoPhone}\`\n🔀 ${flowNome}\n#  \`${flowId.slice(0, 8)}...\`\n`
+    texto += `📞 \`${estado.novoPhone}\`\n🔀 ${flowNome}\n#  \`...${flowId.slice(-8)}\`\n`
 
     await ctx.editMessageText(texto, {
       reply_markup: confirmacao(paginaIdx),
@@ -185,7 +185,7 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
     pagina.destinations = newDests
     estadosEdicao.delete(chatId)
 
-    const flowShort = estado.novoFlowId.slice(0, 8) + '...'
+    const flowShort = '...' + estado.novoFlowId.slice(-8)
 
     await ctx.editMessageText(
       `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\``,
