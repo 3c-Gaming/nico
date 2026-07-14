@@ -39,9 +39,9 @@ export async function PUT(request: NextRequest) {
     const filePath = 'src/components/tracking-whatsapp.tsx'
 
     // 1. Buscar conteúdo atual + sha
-    const { content: currentContent, sha } = await fetchFileWithSha(token, owner, repo, filePath)
+    const { content: currentContent, sha, error: fetchError } = await fetchFileWithSha(token, owner, repo, filePath)
     if (!currentContent || !sha) {
-      return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: fetchError || 'Arquivo não encontrado' }, { status: 404 })
     }
 
     // 2. Substituir DESTINATIONS e TEXT no conteúdo
@@ -82,11 +82,14 @@ async function fetchFileFromGitHub(token: string, owner: string, repo: string, p
   return Buffer.from(json.content, 'base64').toString('utf8')
 }
 
-async function fetchFileWithSha(token: string, owner: string, repo: string, path: string): Promise<{ content: string | null; sha: string | null }> {
+async function fetchFileWithSha(token: string, owner: string, repo: string, path: string): Promise<{ content: string | null; sha: string | null; error?: string }> {
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
   })
-  if (!res.ok) return { content: null, sha: null }
+  if (!res.ok) {
+    const text = await res.text()
+    return { content: null, sha: null, error: `GitHub ${res.status}: ${text}` }
+  }
   const json = await res.json()
   return {
     content: Buffer.from(json.content, 'base64').toString('utf8'),
