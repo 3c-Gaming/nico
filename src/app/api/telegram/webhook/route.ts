@@ -35,6 +35,7 @@ async function getBot(): Promise<Bot> {
     const { handleStart, handleMenu } = await import('@/lib/telegram/handlers/start')
     const { handleListarPaginas, handleVerPagina } = await import('@/lib/telegram/handlers/paginas')
     const { handleEditarNumero, handleSelecionarNumero, handleSelecionarFluxo, handleConfirmar, handleCancelar } = await import('@/lib/telegram/handlers/editar')
+    const { handleEditarCampo, handleTextoRecebido, handleConfirmarConfig, handleCancelarConfig } = await import('@/lib/telegram/handlers/editar-config')
 
     bot.command('start', handleStart)
 
@@ -53,10 +54,18 @@ async function getBot(): Promise<Bot> {
           case 'f': return handleSelecionarFluxo(ctx, parseInt(parts[2]), parseInt(parts[3]), parts[4])
           case 'ok': return handleConfirmar(ctx, parseInt(parts[2]))
           case 'c': return handleCancelar(ctx, parseInt(parts[2]))
+          case 'ec': return handleEditarCampo(ctx, parseInt(parts[2]), parts[3])
+          case 'okc': return handleConfirmarConfig(ctx, parseInt(parts[2]))
+          case 'cc': return handleCancelarConfig(ctx, parseInt(parts[2]))
         }
       }
 
       await ctx.answerCallbackQuery('Ação desconhecida')
+    })
+
+    bot.on('message:text', async (ctx) => {
+      if (ctx.message.text.startsWith('/')) return
+      await handleTextoRecebido(ctx)
     })
   }
 
