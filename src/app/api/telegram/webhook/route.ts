@@ -16,6 +16,9 @@ export async function POST(req: Request) {
     const { bot } = await import('@/lib/telegram/bot')
     await import('@/lib/telegram/handlers')
 
+    // Inicializar bot (necessário em ambiente serverless antes de handleUpdate)
+    if (!bot.isInited()) await bot.init()
+
     const update = await req.json()
     await bot.handleUpdate(update)
 
