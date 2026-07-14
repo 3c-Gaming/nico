@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 // PUT - Atualiza o tracking-whatsapp.tsx no GitHub com novos DESTINATIONS e TEXT
 export async function PUT(request: NextRequest) {
   try {
-    const { owner, repo, destinations, text } = await request.json()
+    const { owner, repo, destinations, text, lovable_project_id } = await request.json()
     if (!owner || !repo || !destinations) {
       return NextResponse.json({ error: 'owner, repo e destinations são obrigatórios' }, { status: 400 })
     }
@@ -50,7 +50,19 @@ export async function PUT(request: NextRequest) {
 
     await commitFile(token, owner, repo, filePath, newContent, sha, `chore: atualizar DESTINATIONS via Nico`)
 
-    return NextResponse.json({ success: true })
+    // Deploy no Lovable se tiver project_id
+    let deploy = null
+    if (lovable_project_id) {
+      try {
+        const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
+        deploy = await deployLovable(lovable_project_id)
+      } catch (e) {
+        console.error('[sync] Lovable deploy falhou:', e)
+        deploy = { error: (e as Error).message }
+      }
+    }
+
+    return NextResponse.json({ success: true, deploy })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Erro ao atualizar' }, { status: 500 })
   }
