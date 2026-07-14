@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento, POLL_INTERVAL } from '@/hooks/useMonitoramento'
-import { useDisparos } from '@/hooks/useDisparos'
 import { getState, togglePinNumero } from '@/lib/store'
 import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse } from '@/types'
 
@@ -69,32 +68,6 @@ function UltimaResposta({ ultimoAumentoMs }: { ultimoAumentoMs?: number }) {
   if (diff < 3600000) return <span className="text-xs text-green-500 font-medium">há {Math.floor(diff / 60000)}min</span>
   if (diff < 86400000) return <span className="text-xs text-amber-400 font-medium">há {Math.floor(diff / 3600000)}h</span>
   return <span className="text-xs text-[var(--text-muted)]">{new Date(ultimoAumentoMs).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-}
-
-function DisparosCell({ numeroId }: { numeroId: string }) {
-  const { list } = useDisparos()
-  const disparos = list.filter((d) => d.numerosSendpulse?.some((n) => n.id === numeroId))
-
-  if (disparos.length === 0) {
-    return <span className="text-xs text-[var(--text-muted)]">—</span>
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {disparos.map((d) => (
-        <span
-          key={d.id}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium"
-          style={{
-            backgroundColor: d.tipo === 'D1' ? 'var(--d1)18' : d.tipo === 'D3' ? 'var(--d3)18' : d.tipo === 'D5' ? 'var(--d5)18' : d.tipo === 'D7' ? 'var(--d7)18' : 'var(--pontual)18',
-            color: d.tipo === 'D1' ? 'var(--d1)' : d.tipo === 'D3' ? 'var(--d3)' : d.tipo === 'D5' ? 'var(--d5)' : d.tipo === 'D7' ? 'var(--d7)' : 'var(--pontual)',
-          }}
-        >
-          {d.tipo}
-        </span>
-      ))}
-    </div>
-  )
 }
 
 function UltimaAtualizacao({ iso }: { iso: string }) {
@@ -399,7 +372,6 @@ export default function NumerosPage() {
                 <thead>
                     <tr className="border-b border-[var(--glass-border)]">
                       <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome / Número</th>
-                      <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Disparos</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Última resposta</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status Teste</th>
@@ -420,9 +392,6 @@ export default function NumerosPage() {
                             <div className="text-xs text-[var(--text-muted)] font-mono">{item.numero.numero} <span className="text-[10px] text-[var(--text-muted)]/60">{item.numero.id}</span></div>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <DisparosCell numeroId={item.numero.id} />
                       </td>
                       <td className="py-3 px-3 text-right">
                         <span className="text-[var(--text-primary)] font-semibold">{item.totalFluxos}</span>
