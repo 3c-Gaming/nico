@@ -130,12 +130,20 @@ export async function start() {
     if (connection === 'close') {
       const err = lastDisconnect?.error as { output?: { statusCode?: number } } | undefined
       const statusCode = err?.output?.statusCode
+      const errMsg = (err as Error)?.message || ''
       const disconnected = statusCode === DisconnectReason.loggedOut
+      const qrRefsExhausted = errMsg.includes('QR refs attempts ended')
+
       lastDisconnectReason = disconnected ? 'logged_out' : 'connection_closed'
       connectedNumber = undefined
       isConnecting = false
 
-      if (!disconnected && startAttempts < 10) {
+      if (qrRefsExhausted) {
+        console.log('[bridge] QR refs attempts ended — auth obsoleto, resetando automaticamente...')
+        await resetAuth()
+        startAttempts = 0
+        setTimeout(start, 3000)
+      } else if (!disconnected && startAttempts < 10) {
         setTimeout(start, 5000)
       }
     }

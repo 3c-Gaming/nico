@@ -57,6 +57,7 @@ export default function TestesPage() {
   const [manualEnviando, setManualEnviando] = useState(false)
   const [manualResultado, setManualResultado] = useState('')
   const [botTestResults, setBotTestResults] = useState<{ botId: string; nome: string; status: string; ultimoTeste: string; duracaoMs: number }[]>([])
+  const [resetando, setResetando] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const fetchStatus = useCallback(async () => {
@@ -189,6 +190,17 @@ export default function TestesPage() {
     }
   }
 
+  const handleResetAuth = async () => {
+    setResetando(true)
+    try {
+      await fetch('/api/testes/reset-auth', { method: 'POST', signal: AbortSignal.timeout(10000) })
+      setQrSrc(null)
+      setStatus(null)
+      await fetchStatus()
+    } catch {}
+    setResetando(false)
+  }
+
   function formatTempo(ms: number) {
     if (ms < 1000) return ms + 'ms'
     return (ms / 1000).toFixed(1) + 's'
@@ -243,9 +255,19 @@ export default function TestesPage() {
               Bridge offline
             </div>
           ) : status.connected ? (
-            <div className="flex items-center gap-2 text-xs text-green-500">
-              <CheckCircle size={12} />
-              Conectado como {status.number}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-green-500">
+                <CheckCircle size={12} />
+                Conectado como {status.number}
+              </div>
+              <button
+                onClick={handleResetAuth}
+                disabled={resetando}
+                className="flex items-center gap-1.5 px-3 h-7 rounded-md text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={resetando ? 'animate-spin' : ''} />
+                Reconectar
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -258,9 +280,21 @@ export default function TestesPage() {
                   <img src={qrSrc} style={{ width: 256, height: 256, imageRendering: 'pixelated' }} alt="QR Code" />
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <RefreshCw size={12} className={qrPolling ? 'animate-spin' : ''} />
-                  {qrPolling ? 'Aguardando QR code...' : 'Bridge offline'}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <RefreshCw size={12} className={qrPolling ? 'animate-spin' : ''} />
+                    {qrPolling ? 'Aguardando QR code...' : 'Bridge offline'}
+                  </div>
+                  {!qrPolling && (
+                    <button
+                      onClick={handleResetAuth}
+                      disabled={resetando}
+                      className="flex items-center gap-1.5 px-3 h-7 rounded-md text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={resetando ? 'animate-spin' : ''} />
+                      Reset Auth
+                    </button>
+                  )}
                 </div>
               )}
             </div>
