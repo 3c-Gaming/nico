@@ -52,33 +52,6 @@ export function confirmacao(paginaIdx: number): InlineKeyboard {
     .text('❌ Cancelar', `pg:c:${paginaIdx}`)
 }
 
-// Keyboards para tipos de página que não são whatsapp
-
-export function detalhesRedirectUrl(paginaIdx: number): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('✏️ Editar URL', `pg:ec:${paginaIdx}:redirectUrl`)
-    .row()
-    .text('⬅️ Voltar', 'pg:list')
-}
-
-export function detalhesLeadFlow(paginaIdx: number, campos: string[]): InlineKeyboard {
-  const kb = new InlineKeyboard()
-  for (const campo of campos) {
-    kb.text(`✏️ ${campo}`, `pg:ec:${paginaIdx}:${campo}`).row()
-  }
-  kb.text('⬅️ Voltar', 'pg:list')
-  return kb
-}
-
-export function detalhesRedirectConfig(paginaIdx: number, campos: string[]): InlineKeyboard {
-  const kb = new InlineKeyboard()
-  for (const campo of campos) {
-    kb.text(`✏️ ${campo}`, `pg:ec:${paginaIdx}:${campo}`).row()
-  }
-  kb.text('⬅️ Voltar', 'pg:list')
-  return kb
-}
-
 export function confirmacaoConfig(paginaIdx: number): InlineKeyboard {
   return new InlineKeyboard()
     .text('✅ Confirmar e Commitar', `pg:okc:${paginaIdx}`)

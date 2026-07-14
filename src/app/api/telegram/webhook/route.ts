@@ -54,7 +54,7 @@ async function getBot(): Promise<Bot> {
           case 'f': return handleSelecionarFluxo(ctx, parseInt(parts[2]), parseInt(parts[3]), parts[4])
           case 'ok': return handleConfirmar(ctx, parseInt(parts[2]))
           case 'c': return handleCancelar(ctx, parseInt(parts[2]))
-          case 'ec': return handleEditarCampo(ctx, parseInt(parts[2]), parts[3])
+          case 'ec': return handleEditarCampo(ctx, parseInt(parts[2]), parts.slice(3).join(':'))
           case 'okc': return handleConfirmarConfig(ctx, parseInt(parts[2]))
           case 'cc': return handleCancelarConfig(ctx, parseInt(parts[2]))
         }

@@ -8,6 +8,50 @@ import {
   extractRedirectConfig, replaceRedirectConfig,
 } from '@/lib/paginas/github-sync'
 
+/** Atualizar um query param individual numa URL */
+function updateUrlParam(urlStr: string, paramName: string, newValue: string): string {
+  try {
+    // Detectar se params estão no hash (#/home?...) ou na query string normal
+    const hashIdx = urlStr.indexOf('#')
+    const qIdx = urlStr.indexOf('?')
+
+    if (qIdx === -1) return urlStr // sem params
+
+    const base = urlStr.slice(0, qIdx)
+    const hashAndQuery = urlStr.slice(qIdx)
+
+    // Separar hash part se existir entre base e query
+    let prefix = ''
+    let queryStr = hashAndQuery
+    if (hashIdx !== -1 && hashIdx < qIdx) {
+      prefix = urlStr.slice(hashIdx, qIdx)
+      queryStr = urlStr.slice(qIdx)
+    }
+
+    const params = new URLSearchParams(queryStr.slice(1))
+    params.set(paramName, newValue)
+
+    if (prefix) {
+      return urlStr.slice(0, hashIdx) + prefix + '?' + params.toString()
+    }
+    return base + '?' + params.toString()
+  } catch {
+    return urlStr
+  }
+}
+
+/** Extrair valor de um param de uma URL */
+function getUrlParam(urlStr: string, paramName: string): string {
+  try {
+    const qIdx = urlStr.indexOf('?')
+    if (qIdx === -1) return ''
+    const params = new URLSearchParams(urlStr.slice(qIdx + 1))
+    return params.get(paramName) || ''
+  } catch {
+    return ''
+  }
+}
+
 export async function handleEditarCampo(ctx: Context, paginaIdx: number, campo: string) {
   try {
     const chatId = ctx.chat!.id
@@ -32,8 +76,21 @@ export async function handleEditarCampo(ctx: Context, paginaIdx: number, campo: 
     }
 
     let valorAtual = ''
+    let displayCampo = campo
 
-    if (campo === 'redirectUrl' && pagina.tracking_file.includes('leadFlow')) {
+    // Campo url:paramName = editar parâmetro individual da URL
+    if (campo.startsWith('url:')) {
+      const paramName = campo.slice(4)
+      displayCampo = paramName
+      // Determinar qual URL contém o param
+      if (pagina.tracking_file.includes('leadFlow')) {
+        const config = extractLeadFlowConfig(content)
+        valorAtual = config ? getUrlParam(config.redirectUrl, paramName) : ''
+      } else {
+        const url = extractRedirectUrl(content)
+        valorAtual = getUrlParam(url, paramName)
+      }
+    } else if (campo === 'redirectUrl' && pagina.tracking_file.includes('leadFlow')) {
       const config = extractLeadFlowConfig(content)
       valorAtual = config?.redirectUrl || ''
     } else if (campo === 'redirectUrl') {
@@ -55,7 +112,7 @@ export async function handleEditarCampo(ctx: Context, paginaIdx: number, campo: 
     })
 
     await ctx.editMessageText(
-      `✏️ *Editar ${campo}*\n\n📄 Página: *${pagina.nome}*\n\n` +
+      `✏️ *Editar ${displayCampo}*\n\n📄 Página: *${pagina.nome}*\n\n` +
       `*Valor atual:*\n\`${valorAtual || '(vazio)'}\`\n\n` +
       `📝 *Digite o novo valor:*`,
       { parse_mode: 'Markdown' }
@@ -89,9 +146,11 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
   estado.valorAtual = novoValor
   estadosEdicaoConfig.set(chatId, estado)
 
+  const displayCampo = estado.campo.startsWith('url:') ? estado.campo.slice(4) : estado.campo
+
   let texto = `⚠️ *Confirmar alteração?*\n\n`
   texto += `📄 Página: *${pagina.nome}*\n`
-  texto += `📝 Campo: *${estado.campo}*\n\n`
+  texto += `📝 Campo: *${displayCampo}*\n\n`
   texto += `*Antes:*\n\`${valorAntigo || '(vazio)'}\`\n\n`
   texto += `*Depois:*\n\`${novoValor}\`\n`
 
@@ -128,8 +187,20 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
 
     let newContent = content
 
-    // Aplicar a mudança conforme o tipo de arquivo
-    if (pagina.tracking_file!.includes('leadFlow')) {
+    if (estado.campo.startsWith('url:')) {
+      // Edição de parâmetro individual da URL
+      const paramName = estado.campo.slice(4)
+      if (pagina.tracking_file!.includes('leadFlow')) {
+        const config = extractLeadFlowConfig(content)
+        if (!config) throw new Error('LEAD_FLOW_CONFIG não encontrado')
+        config.redirectUrl = updateUrlParam(config.redirectUrl, paramName, estado.valorAtual)
+        newContent = replaceLeadFlowConfig(content, config)
+      } else {
+        const oldUrl = extractRedirectUrl(content)
+        const newUrl = updateUrlParam(oldUrl, paramName, estado.valorAtual)
+        newContent = replaceRedirectUrl(content, newUrl)
+      }
+    } else if (pagina.tracking_file!.includes('leadFlow')) {
       const config = extractLeadFlowConfig(content)
       if (!config) throw new Error('LEAD_FLOW_CONFIG não encontrado')
       ;(config as any)[estado.campo] = estado.valorAtual
@@ -140,15 +211,13 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
       ;(config as any)[estado.campo] = estado.valorAtual
       newContent = replaceRedirectConfig(content, config)
     } else {
-      // redirectUrl (useRedirectUrl.ts ou TrackingRedirect.tsx)
+      // redirectUrl inteira (useRedirectUrl.ts ou TrackingRedirect.tsx)
       newContent = replaceRedirectUrl(content, estado.valorAtual)
     }
 
+    const displayCampo = estado.campo.startsWith('url:') ? estado.campo.slice(4) : estado.campo
     await commitFile(token, pagina.github_owner, pagina.github_repo, pagina.tracking_file!, newContent, sha,
-      `chore: atualizar ${estado.campo} via Telegram`)
-
-    // Atualizar Supabase se for redirectUrl em destinations
-    // (não aplicável para esses tipos, mas manter consistência)
+      `chore: atualizar ${displayCampo} via Telegram`)
 
     estadosEdicaoConfig.delete(chatId)
 
@@ -168,7 +237,7 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
     await ctx.editMessageText(
       `✅ *Alteração commitada com sucesso!*\n\n` +
       `📄 ${pagina.nome}\n` +
-      `📝 ${estado.campo}: \`${estado.valorAtual}\`${deployMsg}`,
+      `📝 ${displayCampo}: \`${estado.valorAtual}\`${deployMsg}`,
       { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
     )
   } catch (err) {

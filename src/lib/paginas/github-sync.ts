@@ -49,7 +49,7 @@ export async function commitFile(token: string, owner: string, repo: string, pat
 }
 
 export function extractDestinations(content: string): Array<{ phone: string; flowId: string; weight: number }> {
-  const match = content.match(/const DESTINATIONS\s*=\s*\[([\s\S]*?)\];/)
+  const match = content.match(/const DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[([\s\S]*?)\];/)
   if (!match) return []
   try {
     const arrayStr = '[' + match[1]
@@ -73,8 +73,13 @@ export function replaceDestinations(content: string, destinations: Array<{ phone
     .map(d => `{ phone: "${d.phone}", flowId: "${d.flowId}", weight: ${d.weight} }`)
     .join(', ')
   return content.replace(
-    /const DESTINATIONS\s*=\s*\[[\s\S]*?\];/,
-    `const DESTINATIONS = [${newDest}];`
+    /const DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[[\s\S]*?\];/,
+    (m) => {
+      // Preservar type annotation se existir
+      const typeMatch = m.match(/const DESTINATIONS(:\s*[^=]*)?\s*=/)
+      const typeAnnotation = typeMatch?.[1] || ''
+      return `const DESTINATIONS${typeAnnotation} = [${newDest}];`
+    }
   )
 }
 

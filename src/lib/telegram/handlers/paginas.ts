@@ -1,5 +1,6 @@
 import { Context } from 'grammy'
-import { listaPaginas, detalhesPagina, detalhesRedirectUrl, detalhesLeadFlow, detalhesRedirectConfig } from '../keyboards'
+import { InlineKeyboard } from 'grammy'
+import { listaPaginas, detalhesPagina, menuPrincipal } from '../keyboards'
 import { paginasCache } from '../types'
 import {
   getGhToken, fetchFileFromGitHub,
@@ -113,6 +114,45 @@ export async function handleVerPagina(ctx: Context, paginaIdx: number) {
   }
 }
 
+// --- Helpers ---
+
+/** Parsear query params de uma URL (inclui hash params tipo #/home?...) */
+function parseUrlParams(urlStr: string): Array<{ key: string; value: string }> {
+  try {
+    // Tratar URLs com params no hash (ex: betmgm.bet.br/...#/home?eventIds=...)
+    let search = ''
+    if (urlStr.includes('?')) {
+      search = urlStr.split('?').slice(1).join('?')
+    }
+    if (!search) return []
+    const params = new URLSearchParams(search)
+    const result: Array<{ key: string; value: string }> = []
+    for (const [k, v] of params) {
+      result.push({ key: k, value: v })
+    }
+    return result
+  } catch {
+    return []
+  }
+}
+
+/** Gerar keyboard com botões pra editar cada param da URL + URL base */
+function urlParamsKeyboard(paginaIdx: number, params: Array<{ key: string }>, extraCampos: string[] = []): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  // Botão pra editar URL inteira
+  kb.text('✏️ redirectUrl (inteira)', `pg:ec:${paginaIdx}:redirectUrl`).row()
+  // Botões por parâmetro
+  for (const p of params) {
+    kb.text(`✏️ ${p.key}`, `pg:ec:${paginaIdx}:url:${p.key}`).row()
+  }
+  // Campos extras (spreadsheetId, sheetTab, etc)
+  for (const c of extraCampos) {
+    kb.text(`✏️ ${c}`, `pg:ec:${paginaIdx}:${c}`).row()
+  }
+  kb.text('⬅️ Voltar', 'pg:list')
+  return kb
+}
+
 // --- Views por tipo ---
 
 function showWhatsappView(ctx: Context, pagina: any, paginaIdx: number) {
@@ -142,15 +182,24 @@ function showWhatsappView(ctx: Context, pagina: any, paginaIdx: number) {
 
 function showRedirectUrlView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
   const url = extractRedirectUrl(content)
+  const params = parseUrlParams(url)
+
   let texto = `📄 *${pagina.nome}* (direto)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
-  texto += `📝 \`${pagina.tracking_file}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
   texto += `🔗 *Redirect URL:*\n\`${url || 'não encontrada'}\`\n\n`
+
+  if (params.length > 0) {
+    texto += '*Parâmetros:*\n'
+    for (const p of params) {
+      texto += `• *${p.key}:* \`${p.value}\`\n`
+    }
+    texto += '\n'
+  }
   texto += '_Clique para editar:_'
 
   return Promise.all([
     ctx.editMessageText(texto, {
-      reply_markup: detalhesRedirectUrl(paginaIdx),
+      reply_markup: urlParamsKeyboard(paginaIdx, params),
       parse_mode: 'Markdown',
     }),
     ctx.answerCallbackQuery(),
@@ -160,8 +209,7 @@ function showRedirectUrlView(ctx: Context, pagina: any, paginaIdx: number, conte
 function showLeadFlowView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
   const config = extractLeadFlowConfig(content)
   let texto = `📄 *${pagina.nome}* (formulário)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
-  texto += `📝 \`${pagina.tracking_file}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
 
   if (!config) {
     texto += '_LEAD\\_FLOW\\_CONFIG não encontrado_'
@@ -171,18 +219,27 @@ function showLeadFlowView(ctx: Context, pagina: any, paginaIdx: number, content:
     ])
   }
 
+  // Mostrar redirectUrl e seus parâmetros
+  texto += `🔗 *redirectUrl:*\n\`${config.redirectUrl}\`\n\n`
+  const params = parseUrlParams(config.redirectUrl)
+  if (params.length > 0) {
+    texto += '*Parâmetros da URL:*\n'
+    for (const p of params) {
+      texto += `• *${p.key}:* \`${p.value}\`\n`
+    }
+    texto += '\n'
+  }
   texto += `📊 *spreadsheetId:* \`${config.spreadsheetId}\`\n`
   texto += `📋 *sheetTab:* \`${config.sheetTab}\`\n`
-  texto += `🔗 *redirectUrl:* \`${config.redirectUrl}\`\n`
   texto += `🔘 *ctaLabel:* \`${config.ctaLabel}\`\n`
   texto += `⏳ *ctaLoadingLabel:* \`${config.ctaLoadingLabel}\`\n\n`
-  texto += '_Clique num campo para editar:_'
+  texto += '_Clique para editar:_'
 
-  const campos = ['redirectUrl', 'spreadsheetId', 'sheetTab', 'ctaLabel', 'ctaLoadingLabel']
+  const extraCampos = ['spreadsheetId', 'sheetTab', 'ctaLabel', 'ctaLoadingLabel']
 
   return Promise.all([
     ctx.editMessageText(texto, {
-      reply_markup: detalhesLeadFlow(paginaIdx, campos),
+      reply_markup: urlParamsKeyboard(paginaIdx, params, extraCampos),
       parse_mode: 'Markdown',
     }),
     ctx.answerCallbackQuery(),
@@ -192,8 +249,7 @@ function showLeadFlowView(ctx: Context, pagina: any, paginaIdx: number, content:
 function showRedirectConfigView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
   const config = extractRedirectConfig(content)
   let texto = `📄 *${pagina.nome}* (formulário/redirect)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
-  texto += `📝 \`${pagina.tracking_file}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
 
   if (!config) {
     texto += '_REDIRECT\\_CONFIG não encontrado_'
@@ -207,13 +263,17 @@ function showRedirectConfigView(ctx: Context, pagina: any, paginaIdx: number, co
   texto += `📄 *lpage:* \`${config.lpage}\`\n`
   texto += `🆔 *siteId:* \`${config.siteId}\`\n`
   texto += `🏷️ *s1:* \`${config.s1}\`\n\n`
-  texto += '_Clique num campo para editar:_'
+  texto += '_Clique para editar:_'
 
-  const campos = ['baseUrl', 'lpage', 'siteId', 's1']
+  const kb = new InlineKeyboard()
+  for (const campo of ['baseUrl', 'lpage', 'siteId', 's1']) {
+    kb.text(`✏️ ${campo}`, `pg:ec:${paginaIdx}:${campo}`).row()
+  }
+  kb.text('⬅️ Voltar', 'pg:list')
 
   return Promise.all([
     ctx.editMessageText(texto, {
-      reply_markup: detalhesRedirectConfig(paginaIdx, campos),
+      reply_markup: kb,
       parse_mode: 'Markdown',
     }),
     ctx.answerCallbackQuery(),
