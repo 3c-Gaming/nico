@@ -36,7 +36,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { id, ...updates } = body
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
-    const { data, error } = await sb.from('paginas').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single()
+    const { data, error } = await (sb.from('paginas') as any).update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single()
     if (error) throw new Error(error.message)
     return NextResponse.json({ pagina: data })
   } catch (e: any) {

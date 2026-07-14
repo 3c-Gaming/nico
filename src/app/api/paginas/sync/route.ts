@@ -62,10 +62,15 @@ export async function PUT(request: NextRequest) {
 // --- Helpers ---
 
 async function getGhToken(): Promise<string> {
-  const { execSync } = await import('child_process')
-  const token = execSync('gh auth token', { encoding: 'utf8' }).trim()
-  if (!token) throw new Error('Token GitHub não disponível. Execute `gh auth login`.')
-  return token
+  // 1. Tentar env var (funciona no Vercel)
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN
+  // 2. Fallback: gh CLI (funciona local)
+  try {
+    const { execSync } = await import('child_process')
+    const token = execSync('gh auth token', { encoding: 'utf8' }).trim()
+    if (token) return token
+  } catch { /* gh CLI não disponível */ }
+  throw new Error('GITHUB_TOKEN não configurado. Adicione ao .env ou execute `gh auth login`.')
 }
 
 async function fetchFileFromGitHub(token: string, owner: string, repo: string, path: string): Promise<string | null> {
