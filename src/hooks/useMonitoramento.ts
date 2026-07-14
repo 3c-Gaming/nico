@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { DadosMonitoramento, StatusInteracao } from '@/types'
 
 export const POLL_INTERVAL = 30_000
@@ -12,6 +12,10 @@ interface BotTestApiResult {
   pendente?: boolean
   ultimoTesteOkMs?: number
   ultimoTriggerOkMs?: number
+  ultimoTeste?: string
+  erro?: string
+  nome?: string
+  duracaoMs?: number
 }
 
 function dentroDosUltimos30Min(ms: number | undefined): boolean {
@@ -133,5 +137,7 @@ export function useMonitoramento() {
     return () => clearInterval(interval)
   }, [])
 
-  return { data, loading: data === null, refreshing, error, atualizar: fetchData, proximaAtualizacao }
+  const botTestMap = useMemo(() => new Map(botTestCacheRef.current.map(r => [r.botId, r])), [botTestCacheRef.current])
+
+  return { data, loading: data === null, refreshing, error, atualizar: fetchData, proximaAtualizacao, botTestResults: botTestCacheRef.current, botTestMap }
 }

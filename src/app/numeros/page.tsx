@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Activity, XCircle, Layers, Pin, CheckCircle2 } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
@@ -10,23 +10,54 @@ import { useDisparos } from '@/hooks/useDisparos'
 import { getState, togglePinNumero } from '@/lib/store'
 import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse } from '@/types'
 
-function InteracaoBadge({ status }: { status: NumeroMonitorado['statusInteracao'] }) {
-  const config = {
-    respondendo: { cor: 'text-green-500', icone: Activity, texto: 'Respondendo' },
-    ocioso: { cor: 'text-amber-400', icone: Pause, texto: 'Ocioso' },
-    parado: { cor: 'text-red-400', icone: XCircle, texto: 'Parado' },
-    em_pico: { cor: 'text-orange-500 animate-pulse', icone: AlertTriangle, texto: 'Em Pico' },
-    numero_caido: { cor: 'text-red-600', icone: XCircle, texto: 'Número Caído' },
+interface BotTestApiResult {
+  botId: string
+  nome?: string
+  status: string
+  ultimoTeste?: string
+  erro?: string
+  duracaoMs?: number
+  pendente?: boolean
+  ultimoTesteOkMs?: number
+  ultimoTriggerOkMs?: number
+}
+
+const TESTE_STATUS: Record<string, { label: string; cor: string; dot: string }> = {
+  ok: { label: 'Online', cor: 'text-green-500', dot: 'bg-green-500' },
+  erro: { label: 'Erro', cor: 'text-red-500', dot: 'bg-red-500' },
+  sem_resposta: { label: 'Sem resposta', cor: 'text-amber-400', dot: 'bg-amber-400' },
+  pendente: { label: 'Testando...', cor: 'text-blue-400', dot: 'bg-blue-400' },
+}
+
+function formatTempoRelativo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 0) return 'agora'
+  if (diff < 60_000) return 'agora'
+  if (diff < 3_600_000) return `há ${Math.floor(diff / 60_000)}min`
+  if (diff < 86_400_000) return `há ${Math.floor(diff / 3_600_000)}h`
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function TesteStatusBadge({ resultado }: { resultado?: BotTestApiResult }) {
+  if (!resultado) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)]">
+        <span className="inline-block w-2 h-2 rounded-full bg-[var(--text-muted)]/30" />
+        Sem teste
+      </span>
+    )
   }
-
-  const resolved = status ?? 'ocioso'
-
-  const { cor, icone: Icon, texto } = config[resolved]
-
+  const cfg = TESTE_STATUS[resultado.status] ?? TESTE_STATUS.pendente
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium ${cor}`}>
-      <Icon size={12} />
-      {texto}
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${cfg.cor}`}>
+      <span className={`inline-block w-2 h-2 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+      {resultado.ultimoTeste && (
+        <span className="text-[10px] text-[var(--text-muted)] ml-1">{formatTempoRelativo(resultado.ultimoTeste)}</span>
+      )}
+      {resultado.erro && (
+        <span className="text-[10px] text-[var(--error)] ml-1 truncate max-w-[120px]" title={resultado.erro}>{resultado.erro}</span>
+      )}
     </span>
   )
 }
@@ -267,15 +298,13 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
 }
 
 export default function NumerosPage() {
-  const { data, loading, refreshing, error, atualizar, proximaAtualizacao } = useMonitoramento()
+  const { data, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
-  const [testeFeedback, setTesteFeedback] = useState<Record<string, 'ok' | 'erro' | 'sem_resposta' | null>>({})
 
   const handleTestarBot = useCallback(async (botId: string) => {
     if (testandoBotId) return
     setTestandoBotId(botId)
-    setTesteFeedback(prev => ({ ...prev, [botId]: null }))
     try {
       const res = await fetch('/api/bot-test/run', {
         method: 'POST',
@@ -283,14 +312,12 @@ export default function NumerosPage() {
         body: JSON.stringify({ botId }),
       })
       if (!res.ok) throw new Error()
-      const data = await res.json()
-      if (data.status) setTesteFeedback(prev => ({ ...prev, [botId]: data.status }))
+      await atualizar()
     } catch {
-      setTesteFeedback(prev => ({ ...prev, [botId]: 'erro' }))
     } finally {
       setTestandoBotId(null)
     }
-  }, [testandoBotId])
+  }, [testandoBotId, atualizar])
 
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
@@ -375,7 +402,7 @@ export default function NumerosPage() {
                       <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Disparos</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Última resposta</th>
-                      <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Interação</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status Teste</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -405,18 +432,14 @@ export default function NumerosPage() {
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <InteracaoBadge status={item.statusInteracao} />
+                          <TesteStatusBadge resultado={botTestMap.get(item.numero.id)} />
                           <button
                             onClick={(e) => { e.stopPropagation(); handleTestarBot(item.numero.id) }}
                             disabled={testandoBotId === item.numero.id}
                             className="shrink-0 flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
                             title="Testar bot"
                           >
-                            {testeFeedback[item.numero.id] === 'ok' ? (
-                              <CheckCircle2 size={13} className="text-green-500" />
-                            ) : testeFeedback[item.numero.id] === 'erro' || testeFeedback[item.numero.id] === 'sem_resposta' ? (
-                              <XCircle size={13} className="text-red-500" />
-                            ) : testandoBotId === item.numero.id ? (
+                            {testandoBotId === item.numero.id ? (
                               <Spinner size={12} />
                             ) : (
                               <Play size={13} />
