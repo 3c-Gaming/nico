@@ -22,8 +22,8 @@ function toRow(r: BotTestResult): Record<string, unknown> {
     triggered_at: r.triggeredAt ?? null,
     pendente: r.pendente ?? false,
     ultimo_trigger_ok_ms: r.ultimoTriggerOkMs ?? null,
-    request_body: r.requestBody ? JSON.stringify(r.requestBody) : null,
-    response_body: r.responseBody ? JSON.stringify(r.responseBody) : null,
+    request_body: r.requestBody ?? null,
+    response_body: r.responseBody ?? null,
     updated_at: new Date().toISOString(),
   }
 }
@@ -62,7 +62,15 @@ export async function listarResultados(): Promise<BotTestResult[]> {
 
 export async function salvarResultado(resultado: BotTestResult) {
   try {
-    await supabase().from('bot_test_results').upsert(toRow(resultado) as any)
+    const row = toRow(resultado)
+    const { count, error } = await supabase()
+      .from('bot_test_results')
+      .update(row, { count: 'exact' })
+      .eq('bot_id', row.bot_id)
+    if (error) throw error
+    if (!count || count === 0) {
+      await supabase().from('bot_test_results').insert(row as any)
+    }
   } catch (err) {
     console.error('[bot-test.store] salvarResultado error:', err)
   }
