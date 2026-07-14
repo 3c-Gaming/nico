@@ -22,6 +22,16 @@ interface Pagina {
   text: string
   updated_at: string
   lovable_project_id?: string
+  tipo?: string
+}
+
+const tipoBadge: Record<string, { label: string; color: string }> = {
+  whatsapp: { label: 'WhatsApp', color: 'var(--d7)' },
+  html_whatsapp: { label: 'HTML/WA', color: 'var(--d3)' },
+  formulario: { label: 'Formulário', color: 'var(--d1)' },
+  direto: { label: 'Direto', color: 'var(--d5)' },
+  telegram: { label: 'Telegram', color: 'var(--d4)' },
+  sem_arquivo: { label: 'Sem arquivo', color: 'var(--text-muted)' },
 }
 
 interface Numero {
@@ -278,6 +288,14 @@ export default function PaginasPage() {
                   <div className="flex items-center gap-2">
                     <FileText size={16} className="text-[var(--d1)]" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">{pagina.nome}</h3>
+                    {pagina.tipo && tipoBadge[pagina.tipo] && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
+                        style={{ color: tipoBadge[pagina.tipo].color, borderColor: tipoBadge[pagina.tipo].color }}
+                      >
+                        {tipoBadge[pagina.tipo].label}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
