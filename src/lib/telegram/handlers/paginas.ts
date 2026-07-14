@@ -57,7 +57,7 @@ export async function handleVerPagina(ctx: Context, paginaIdx: number) {
     } else {
       texto += '*Destinos:*\n'
       dests.forEach((d, i) => {
-        const flowShort = d.flowId ? d.flowId.slice(0, 8) + '...' : 'sem flow'
+        const flowShort = d.flowId ? '...' + d.flowId.slice(-8) : 'sem flow'
         texto += `${i + 1}. 📞 \`${d.phone}\` · # \`${flowShort}\` · ${d.weight}%\n`
       })
       texto += '\n_Clique num destino para editar:_'

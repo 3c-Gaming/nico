@@ -18,7 +18,7 @@ export function detalhesPagina(paginaIdx: number, destinations: Array<{ phone: s
   const kb = new InlineKeyboard()
   for (let i = 0; i < destinations.length; i++) {
     const d = destinations[i]
-    const flowShort = d.flowId ? d.flowId.slice(0, 8) + '...' : 'sem flow'
+    const flowShort = d.flowId ? '...' + d.flowId.slice(-8) : 'sem flow'
     kb.text(`📞 ${d.phone} · #${flowShort} · ${d.weight}%`, `pg:e:${paginaIdx}:${i}`).row()
   }
   kb.text('⬅️ Voltar', 'pg:list')
