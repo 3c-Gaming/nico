@@ -1,5 +1,5 @@
 import { Context } from 'grammy'
-import { listaNumeros, confirmacao, menuPrincipal } from '../keyboards'
+import { listaNumeros, listaFluxos, confirmacao, menuPrincipal } from '../keyboards'
 import { estadosEdicao, paginasCache } from '../types'
 import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
 import { getGhToken, fetchFileWithSha, replaceDestinations, commitFile } from '@/lib/paginas/github-sync'
@@ -15,7 +15,7 @@ export async function handleEditarNumero(ctx: Context, paginaIdx: number, destIn
     }
 
     await ctx.editMessageText(
-      `📞 *Selecione o novo número* para o destination ${destIndex + 1}:`,
+      `📞 *Selecione o novo número* para o destino ${destIndex + 1}:`,
       { reply_markup: listaNumeros(ativos, paginaIdx, destIndex), parse_mode: 'Markdown' }
     )
     await ctx.answerCallbackQuery()
@@ -42,29 +42,84 @@ export async function handleSelecionarNumero(ctx: Context, paginaIdx: number, de
       return
     }
 
-    // Auto-buscar flowId
-    const fluxos = await listarFluxos(botId)
-    const fluxoAtivo = fluxos.find(f => f.status === 'ativo')
-    const flowId = fluxoAtivo?.id ?? ''
-
-    // Salvar estado
+    // Salvar phone no estado (flowId será escolhido no próximo passo)
     estadosEdicao.set(chatId, {
       paginaId: paginas[paginaIdx].id,
       destIndex,
       novoPhone: numero.numero,
-      novoFlowId: flowId,
+      novoFlowId: '',
+      novoFlowNome: '',
     })
+
+    // Buscar fluxos disponíveis para esse número
+    const fluxos = await listarFluxos(botId)
+    const ativos = fluxos.filter(f => f.status === 'ativo')
+    const inativos = fluxos.filter(f => f.status !== 'ativo')
+
+    if (fluxos.length === 0) {
+      await ctx.editMessageText(
+        `❌ Nenhum fluxo encontrado para *${numero.nome}* (${numero.numero})`,
+        { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
+      )
+      await ctx.answerCallbackQuery()
+      return
+    }
+
+    // Mostrar lista de fluxos (ativos primeiro, depois inativos)
+    const todosFluxos = [...ativos, ...inativos]
+
+    await ctx.editMessageText(
+      `🔀 *Selecione o fluxo* para *${numero.nome}*:\n📞 \`${numero.numero}\``,
+      { reply_markup: listaFluxos(todosFluxos, paginaIdx, destIndex), parse_mode: 'Markdown' }
+    )
+    await ctx.answerCallbackQuery()
+  } catch (err) {
+    console.error('[telegram] handleSelecionarNumero:', err)
+    await ctx.answerCallbackQuery('Erro ao carregar fluxos')
+  }
+}
+
+export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, destIndex: number, flowId: string) {
+  try {
+    const chatId = ctx.chat!.id
+    const estado = estadosEdicao.get(chatId)
+    if (!estado) {
+      await ctx.answerCallbackQuery('Erro: selecione um número primeiro')
+      return
+    }
+
+    const paginas = paginasCache.get(chatId)
+    if (!paginas || !paginas[paginaIdx]) {
+      await ctx.answerCallbackQuery('Erro: página não encontrada')
+      return
+    }
+
+    // Buscar nome do fluxo
+    const numeros = await listarNumeros()
+    const numero = numeros.find(n => n.numero === estado.novoPhone)
+    let flowNome = flowId.slice(0, 8) + '...'
+    if (numero) {
+      const fluxos = await listarFluxos(numero.id)
+      const fluxo = fluxos.find(f => f.id === flowId)
+      if (fluxo) flowNome = fluxo.nome
+    }
+
+    // Atualizar estado com flowId e nome
+    estado.novoFlowId = flowId
+    estado.novoFlowNome = flowNome
+    estadosEdicao.set(chatId, estado)
 
     const pagina = paginas[paginaIdx]
     const destAtual = pagina.destinations[destIndex]
+    const flowAtualShort = destAtual.flowId ? destAtual.flowId.slice(0, 8) + '...' : 'nenhum'
 
     let texto = `⚠️ *Confirmar alteração?*\n\n`
     texto += `📄 Página: *${pagina.nome}*\n`
-    texto += `📍 Destination ${destIndex + 1}\n\n`
+    texto += `📍 Destino ${destIndex + 1}\n\n`
     texto += `*Antes:*\n`
-    texto += `📞 \`${destAtual.phone}\`\nFlow: \`${destAtual.flowId}\`\n\n`
+    texto += `📞 \`${destAtual.phone}\`\n#  \`${flowAtualShort}\`\n\n`
     texto += `*Depois:*\n`
-    texto += `📞 \`${numero.numero}\`\nFlow: \`${flowId || '(nenhum fluxo ativo)'}\`\n`
+    texto += `📞 \`${estado.novoPhone}\`\n🔀 ${flowNome}\n#  \`${flowId.slice(0, 8)}...\`\n`
 
     await ctx.editMessageText(texto, {
       reply_markup: confirmacao(paginaIdx),
@@ -72,8 +127,8 @@ export async function handleSelecionarNumero(ctx: Context, paginaIdx: number, de
     })
     await ctx.answerCallbackQuery()
   } catch (err) {
-    console.error('[telegram] handleSelecionarNumero:', err)
-    await ctx.answerCallbackQuery('Erro ao selecionar número')
+    console.error('[telegram] handleSelecionarFluxo:', err)
+    await ctx.answerCallbackQuery('Erro ao selecionar fluxo')
   }
 }
 
@@ -112,7 +167,7 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const newContent = replaceDestinations(content, newDests)
     await commitFile(token, pagina.github_owner, pagina.github_repo, filePath, newContent, sha,
-      `chore: trocar número dest ${estado.destIndex + 1} via Telegram`)
+      `chore: trocar dest ${estado.destIndex + 1} via Telegram`)
 
     // Atualizar Supabase
     try {
@@ -130,8 +185,10 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
     pagina.destinations = newDests
     estadosEdicao.delete(chatId)
 
+    const flowShort = estado.novoFlowId.slice(0, 8) + '...'
+
     await ctx.editMessageText(
-      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 Novo número: \`${estado.novoPhone}\`\nFlow: \`${estado.novoFlowId}\``,
+      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\``,
       { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
     )
   } catch (err) {

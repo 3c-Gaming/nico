@@ -55,11 +55,12 @@ export async function handleVerPagina(ctx: Context, paginaIdx: number) {
     if (dests.length === 0) {
       texto += '_Nenhum destination configurado_'
     } else {
-      texto += '*DESTINATIONS:*\n'
+      texto += '*Destinos:*\n'
       dests.forEach((d, i) => {
-        texto += `${i + 1}. 📞 \`${d.phone}\`\n   Flow: \`${d.flowId}\`\n   Peso: ${d.weight}\n\n`
+        const flowShort = d.flowId ? d.flowId.slice(0, 8) + '...' : 'sem flow'
+        texto += `${i + 1}. 📞 \`${d.phone}\` · # \`${flowShort}\` · ${d.weight}%\n`
       })
-      texto += '_Clique num número para editar:_'
+      texto += '\n_Clique num destino para editar:_'
     }
 
     await ctx.editMessageText(texto, {
