@@ -84,3 +84,97 @@ export function replaceText(content: string, text: string): string {
     `const TEXT = "${text}"`
   )
 }
+
+// --- Redirect URL (useRedirectUrl.ts, TrackingRedirect.tsx) ---
+
+export function extractRedirectUrl(content: string): string {
+  const match = content.match(/(?:export )?const REDIRECT_URL\s*=\s*\n?\s*["'`](.*?)["'`]/)
+  return match ? match[1] : ''
+}
+
+export function replaceRedirectUrl(content: string, url: string): string {
+  return content.replace(
+    /(?:export )?const REDIRECT_URL\s*=\s*\n?\s*["'`].*?["'`]/,
+    (m) => {
+      const hasExport = m.startsWith('export')
+      const hasNewline = m.includes('\n')
+      if (hasNewline) {
+        return `${hasExport ? 'export ' : ''}const REDIRECT_URL =\n  "${url}"`
+      }
+      return `${hasExport ? 'export ' : ''}const REDIRECT_URL = "${url}"`
+    }
+  )
+}
+
+// --- LeadFlow Config (leadFlow.ts) ---
+
+export interface LeadFlowConfig {
+  spreadsheetId: string
+  sheetTab: string
+  redirectUrl: string
+  ctaLabel: string
+  ctaLoadingLabel: string
+}
+
+export function extractLeadFlowConfig(content: string): LeadFlowConfig | null {
+  const match = content.match(/export const LEAD_FLOW_CONFIG\s*=\s*\{([\s\S]*?)\};/)
+  if (!match) return null
+  const block = match[1]
+  const get = (key: string) => {
+    const m = block.match(new RegExp(`${key}:\\s*["'\`](.*?)["'\`]`))
+    return m ? m[1] : ''
+  }
+  return {
+    spreadsheetId: get('spreadsheetId'),
+    sheetTab: get('sheetTab'),
+    redirectUrl: get('redirectUrl'),
+    ctaLabel: get('ctaLabel'),
+    ctaLoadingLabel: get('ctaLoadingLabel'),
+  }
+}
+
+export function replaceLeadFlowConfig(content: string, config: LeadFlowConfig): string {
+  const newBlock = `export const LEAD_FLOW_CONFIG = {
+  spreadsheetId: "${config.spreadsheetId}",
+  sheetTab: "${config.sheetTab}",
+  redirectUrl: "${config.redirectUrl}",
+  ctaLabel: "${config.ctaLabel}",
+  ctaLoadingLabel: "${config.ctaLoadingLabel}",
+};`
+  return content.replace(/export const LEAD_FLOW_CONFIG\s*=\s*\{[\s\S]*?\};/, newBlock)
+}
+
+// --- Redirect Config (redirect.ts) ---
+
+export interface RedirectConfig {
+  baseUrl: string
+  lpage: string
+  siteId: string
+  s1: string
+}
+
+export function extractRedirectConfig(content: string): RedirectConfig | null {
+  const match = content.match(/export const REDIRECT_CONFIG\s*=\s*\{([\s\S]*?)\};/)
+  if (!match) return null
+  const block = match[1]
+  const get = (key: string) => {
+    const m = block.match(new RegExp(`${key}:\\s*["'\`](.*?)["'\`]`))
+    return m ? m[1] : ''
+  }
+  return {
+    baseUrl: get('baseUrl'),
+    lpage: get('lpage'),
+    siteId: get('siteId'),
+    s1: get('s1'),
+  }
+}
+
+export function replaceRedirectConfig(content: string, config: RedirectConfig): string {
+  const newBlock = `export const REDIRECT_CONFIG = {
+  baseUrl: "${config.baseUrl}",
+  lpage: "${config.lpage}",
+  siteId: "${config.siteId}",
+  s1: "${config.s1}",
+};`
+  return content.replace(/export const REDIRECT_CONFIG\s*=\s*\{[\s\S]*?\};/, newBlock)
+}

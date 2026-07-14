@@ -159,9 +159,9 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
       flowId: estado.novoFlowId,
     }
 
-    // Commit no GitHub
+    // Commit no GitHub (usar tracking_file dinâmico)
     const token = await getGhToken()
-    const filePath = 'src/components/tracking-whatsapp.tsx'
+    const filePath = pagina.tracking_file || 'src/components/tracking-whatsapp.tsx'
     const { content, sha } = await fetchFileWithSha(token, pagina.github_owner, pagina.github_repo, filePath)
     if (!content || !sha) throw new Error('Arquivo não encontrado no GitHub')
 
