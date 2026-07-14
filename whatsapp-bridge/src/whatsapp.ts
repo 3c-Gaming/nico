@@ -10,6 +10,20 @@ import { fileURLToPath } from 'node:url'
 import pino from 'pino'
 import type { WebhookPayload } from './types.js'
 
+function extractText(message: any): string | null {
+  if (!message) return null
+  if (message.conversation) return message.conversation
+  if (message.extendedTextMessage?.text) return message.extendedTextMessage.text
+  if (message.imageMessage?.caption) return message.imageMessage.caption
+  if (message.videoMessage?.caption) return message.videoMessage.caption
+  if (message.documentMessage?.caption) return message.documentMessage.caption
+  if (message.buttonsMessage?.contentText) return message.buttonsMessage.contentText
+  if (message.listMessage?.description) return message.listMessage.description
+  if (message.templateMessage?.hydratedTemplate?.hydratedContentText)
+    return message.templateMessage.hydratedTemplate.hydratedContentText
+  return null
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AUTH_DIR = process.env.AUTH_DIR || path.resolve(__dirname, '..', 'data', 'auth')
 const WEBHOOK_FILE = path.resolve(__dirname, '..', 'data', 'webhook-config.json')
@@ -131,17 +145,26 @@ export async function start() {
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const msg of messages) {
-      if (!msg.key.fromMe && msg.message?.conversation) {
+      if (!msg.key.fromMe) {
         const from = msg.key.remoteJid?.replace('@s.whatsapp.net', '') || ''
-        const text = msg.message.conversation
-        const payload: WebhookPayload = {
-          from,
-          text,
-          timestamp: (msg.messageTimestamp as number) || Date.now(),
-          messageId: msg.key.id || '',
+        const msgTypes = Object.keys(msg.message || {}).join(',')
+        const text = extractText(msg.message)
+
+        if (from.includes('@g.us')) continue
+
+        if (text) {
+          console.log(`[bridge] incoming from=${from} types=${msgTypes} text=${JSON.stringify(text.slice(0, 80))}`)
+          const payload: WebhookPayload = {
+            from,
+            text,
+            timestamp: (msg.messageTimestamp as number) || Date.now(),
+            messageId: msg.key.id || '',
+          }
+          messageHandlers.forEach((h) => h(payload))
+          sendWebhook(payload)
+        } else if (msgTypes) {
+          console.log(`[bridge] incoming from=${from} types=${msgTypes} (no text extracted, ignored)`)
         }
-        messageHandlers.forEach((h) => h(payload))
-        sendWebhook(payload)
       }
     }
   })

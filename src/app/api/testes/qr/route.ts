@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const BRIDGE_URL = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:3001'
+const BRIDGE_URL = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:3333'
 
 export async function GET() {
   try {
