@@ -5,13 +5,14 @@ const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
 let bot: Bot | null = null
+let handlersRegistered = false
 
-function getBot(): Bot {
+async function getBot(): Promise<Bot> {
   if (!bot && TOKEN) {
     bot = new Bot(TOKEN, {
       botInfo: {
         id: 8868340783,
-        is_bot: true,
+        is_bot: true as const,
         first_name: 'Nico',
         username: 'nico_3c_bot',
         can_join_groups: true,
@@ -19,11 +20,14 @@ function getBot(): Bot {
         supports_inline_queries: false,
       },
     })
+  }
 
-    // Registrar handlers inline
-    const { handleStart, handleMenu } = require('@/lib/telegram/handlers/start')
-    const { handleListarPaginas, handleVerPagina } = require('@/lib/telegram/handlers/paginas')
-    const { handleEditarNumero, handleSelecionarNumero, handleConfirmar, handleCancelar } = require('@/lib/telegram/handlers/editar')
+  if (bot && !handlersRegistered) {
+    handlersRegistered = true
+
+    const { handleStart, handleMenu } = await import('@/lib/telegram/handlers/start')
+    const { handleListarPaginas, handleVerPagina } = await import('@/lib/telegram/handlers/paginas')
+    const { handleEditarNumero, handleSelecionarNumero, handleConfirmar, handleCancelar } = await import('@/lib/telegram/handlers/editar')
 
     bot.command('start', handleStart)
 
@@ -47,6 +51,7 @@ function getBot(): Bot {
       await ctx.answerCallbackQuery('Ação desconhecida')
     })
   }
+
   return bot!
 }
 
@@ -60,7 +65,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const b = getBot()
+    const b = await getBot()
     if (!b) {
       console.error('[telegram.webhook] TELEGRAM_BOT_TOKEN não configurado')
       return NextResponse.json({ ok: true })
@@ -72,7 +77,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[telegram.webhook] erro:', err)
-    // Sempre 200 para evitar que o Telegram reenvie
     return NextResponse.json({ ok: true })
   }
 }
