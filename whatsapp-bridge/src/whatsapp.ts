@@ -79,6 +79,11 @@ export async function start() {
   isConnecting = true
   startAttempts++
 
+  if (sock) {
+    try { await sock.end(undefined) } catch {}
+    sock = null
+  }
+
   if (!existsSync(AUTH_DIR)) {
     await mkdir(AUTH_DIR, { recursive: true })
   }
@@ -143,6 +148,10 @@ export async function start() {
         await resetAuth()
         startAttempts = 0
         setTimeout(start, 3000)
+      } else if (errMsg.includes('conflict') || errMsg.includes('Connection Replaced')) {
+        console.log('[bridge] CONFLITO detectado — outro dispositivo conectado ao mesmo numero. Aguardando 30s...')
+        lastDisconnectReason = 'conflict'
+        setTimeout(start, 30_000)
       } else if (!disconnected && startAttempts < 10) {
         setTimeout(start, 5000)
       }
