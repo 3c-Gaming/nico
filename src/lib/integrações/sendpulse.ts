@@ -132,6 +132,27 @@ function extrairTexto(msg: Record<string, unknown> | undefined): string | undefi
   return undefined
 }
 
+export async function enviarMensagemDireta(params: {
+  contactId: string
+  botId: string
+  texto: string
+}): Promise<{ ok: boolean; statusCode: number; body: unknown }> {
+  const res = await fetch(`${BASE_URL}/contacts/send`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      contact_id: params.contactId,
+      bot_id: params.botId,
+      message: {
+        type: 'text',
+        text: { body: params.texto },
+      },
+    }),
+  })
+  const body = await res.json().catch(() => null)
+  return { ok: res.ok, statusCode: res.status, body }
+}
+
 export async function listarChatsAtivos(
   botId: string,
   signal?: AbortSignal

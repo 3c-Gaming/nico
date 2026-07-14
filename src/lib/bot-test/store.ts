@@ -22,6 +22,8 @@ function toRow(r: BotTestResult): Record<string, unknown> {
     triggered_at: r.triggeredAt ?? null,
     pendente: r.pendente ?? false,
     ultimo_trigger_ok_ms: r.ultimoTriggerOkMs ?? null,
+    request_body: r.requestBody ? JSON.stringify(r.requestBody) : null,
+    response_body: r.responseBody ? JSON.stringify(r.responseBody) : null,
     updated_at: new Date().toISOString(),
   }
 }
@@ -40,7 +42,13 @@ function fromRow(row: Record<string, unknown>): BotTestResult {
     triggeredAt: (row.triggered_at as string) ?? undefined,
     pendente: (row.pendente as boolean) ?? false,
     ultimoTriggerOkMs: (row.ultimo_trigger_ok_ms as number) ?? undefined,
+    requestBody: row.request_body ? safeParse(row.request_body as string) : undefined,
+    responseBody: row.response_body ? safeParse(row.response_body as string) : undefined,
   }
+}
+
+function safeParse(s: string): unknown {
+  try { return JSON.parse(s) } catch { return s }
 }
 
 export async function listarResultados(): Promise<BotTestResult[]> {
