@@ -8,10 +8,9 @@ export async function GET() {
     return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN não configurado' }, { status: 500 })
   }
 
-  // Determinar URL base
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_URL ?? 'http://localhost:3000'
+  // Determinar URL base (preferir domínio de produção estável)
+  const baseUrl = process.env.NEXT_PUBLIC_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
   const webhookUrl = `${baseUrl}/api/telegram/webhook`
 
