@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const preMs = anterior.preTriggerTimestamp ? new Date(anterior.preTriggerTimestamp).getTime() : 0
     const duracaoMs = preMs > 0 ? Date.now() - preMs : 0
 
-    console.log(`[bot-test.webhook] ${botId} (${config.nome}): resposta em ${duracaoMs}ms -> ok`)
+    console.log(`[bot-test.webhook] ${botId} (${config.nome}): resposta em ${duracaoMs}ms -> ok | texto=${JSON.stringify(payload.text.slice(0, 80))}`)
 
     await salvarResultado({
       ...anterior,

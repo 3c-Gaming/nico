@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight, Play, CheckCircle2 } from 'lucide-react'
+import { Pin, Activity, Pause, XCircle, RefreshCw, AlertTriangle, Layers, ChevronDown, ChevronRight, Play, CheckCircle2, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
@@ -67,6 +67,7 @@ interface FunilBotDetail {
   botNome: string
   flowNomes: string[]
   flowIds: string[]
+  lpUrls: string[]
   tags: string[]
   leadsHoje: number
   baseCusto: number
@@ -84,6 +85,7 @@ interface FunilRow {
   tags: string[]
   casas: string[]
   corBadge?: string
+  lpUrls: string[]
   leadsHoje: number
   baseCusto: number
   baseLinhas: number
@@ -325,8 +327,7 @@ export default function HomePage() {
 
       const disparos = Object.values(getState().disparos)
       const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
-      const hoje = getLocalDate()
-      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm) && d.dataDisparo === hoje)
+      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm))
 
       const baseCustoPorBot = new Map<string, number>()
       const baseLinhasPorBot = new Map<string, number>()
@@ -395,6 +396,7 @@ export default function HomePage() {
 
       // collect unique casas and first casa color for badge
       const casas = [...new Set(flows.flatMap(([fid]) => configs[fid]?.casas ?? []))]
+      const allLpUrls = [...new Set(flows.map(([fid]) => configs[fid]?.lpUrl).filter(Boolean) as string[])]
       const primeiraCasaId = casas[0]
       const corBadge = primeiraCasaId ? (getState().casasAposta as Record<string, CasaAposta>)[primeiraCasaId]?.cor : undefined
       const fluxosPorBot = fluxosMap
@@ -402,6 +404,7 @@ export default function HomePage() {
       const bots: FunilBotDetail[] = [...porBot.entries()].map(([botId, data]) => {
         const botTags = [...data.tagsSet]
         const botFluxos = fluxosPorBot[botId]?.filter((f) => data.flowIds.includes(f.id)) ?? []
+        const botLpUrls = data.flowIds.map((fid) => configs[fid]?.lpUrl).filter(Boolean) as string[]
         const found = monitoramentoNum.find((n) => n.numero.id === botId)
         const botNome = found?.numero.numero ?? botId
         return {
@@ -409,6 +412,7 @@ export default function HomePage() {
           botNome,
           flowNomes: botFluxos.map((f) => f.nome).filter(Boolean),
           flowIds: data.flowIds,
+          lpUrls: botLpUrls,
           tags: botTags,
           leadsHoje: liveLeadsLoaded
             ? botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
@@ -432,7 +436,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
   }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas])
 
