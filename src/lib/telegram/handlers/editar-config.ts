@@ -1,5 +1,5 @@
 import { Context } from 'grammy'
-import { confirmacaoConfig, menuPrincipal } from '../keyboards'
+import { confirmacaoConfig, menuPrincipal, sucessoComDeploy } from '../keyboards'
 import { estadosEdicaoConfig, paginasCache, ensurePaginasCache } from '../types'
 import {
   getGhToken, fetchFileFromGitHub, fetchFileWithSha, commitFile,
@@ -160,18 +160,6 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
   texto += `*Antes:*\n\`${valorAntigo || '(vazio)'}\`\n\n`
   texto += `*Depois:*\n\`${novoValor}\`\n`
 
-  const webAppState = {
-    type: 'config',
-    chatId: ctx.chat!.id,
-    github_owner: pagina.github_owner,
-    github_repo: pagina.github_repo,
-    tracking_file: pagina.tracking_file,
-    lovable_project_id: pagina.lovable_project_id,
-    nome: pagina.nome,
-    campo: estado.campo,
-    valorAtual: novoValor,
-  }
-
   // Delete user's text message
   try { await ctx.deleteMessage() } catch {}
 
@@ -180,7 +168,7 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
     chatId,
     estado.originalMessageId!,
     texto,
-    { reply_markup: confirmacaoConfig(estado.paginaIdx, webAppState), parse_mode: 'Markdown' }
+    { reply_markup: confirmacaoConfig(estado.paginaIdx), parse_mode: 'Markdown' }
   )
 
   return true
@@ -245,19 +233,12 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
 
     estadosEdicaoConfig.delete(chatId)
 
-    // Link de deploy no Lovable
-    let deployMsg = ''
-    if (pagina.lovable_project_id) {
-      const { getDeployMessage } = await import('@/lib/paginas/lovable-deploy')
-      deployMsg = getDeployMessage(pagina.lovable_project_id)
-    }
+    const successText = `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📝 ${displayCampo}: \`${estado.valorAtual}\``
+    const kb = pagina.lovable_project_id
+      ? sucessoComDeploy(pagina.lovable_project_id)
+      : menuPrincipal()
 
-    await ctx.editMessageText(
-      `✅ *Alteração commitada com sucesso!*\n\n` +
-      `📄 ${pagina.nome}\n` +
-      `📝 ${displayCampo}: \`${estado.valorAtual}\`${deployMsg}`,
-      { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
-    )
+    await ctx.editMessageText(successText, { reply_markup: kb, parse_mode: 'Markdown' })
   } catch (err) {
     console.error('[telegram] handleConfirmarConfig:', err)
     await ctx.editMessageText(

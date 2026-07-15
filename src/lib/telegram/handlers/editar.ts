@@ -1,5 +1,5 @@
 import { Context } from 'grammy'
-import { listaNumeros, listaFluxos, confirmacao, menuPrincipal } from '../keyboards'
+import { listaNumeros, listaFluxos, confirmacao, menuPrincipal, sucessoComDeploy } from '../keyboards'
 import { estadosEdicao, paginasCache, ensurePaginasCache } from '../types'
 import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
 import { getGhToken, fetchFileWithSha, replaceDestinations, commitFile } from '@/lib/paginas/github-sync'
@@ -121,23 +121,8 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
     texto += `*Depois:*\n`
     texto += `📞 \`${estado.novoPhone}\`\n🔀 ${flowNome}\n#  \`...${flowId.slice(-8)}\`\n`
 
-    const webAppState = {
-      type: 'whatsapp',
-      chatId: ctx.chat!.id,
-      github_owner: pagina.github_owner,
-      github_repo: pagina.github_repo,
-      tracking_file: pagina.tracking_file || 'src/components/tracking-whatsapp.tsx',
-      lovable_project_id: pagina.lovable_project_id,
-      nome: pagina.nome,
-      destIndex: estado.destIndex,
-      novoPhone: estado.novoPhone,
-      novoFlowId: flowId,
-      destinations: pagina.destinations,
-      paginaId: pagina.id,
-    }
-
     await ctx.editMessageText(texto, {
-      reply_markup: confirmacao(paginaIdx, webAppState),
+      reply_markup: confirmacao(paginaIdx),
       parse_mode: 'Markdown',
     })
     await ctx.answerCallbackQuery()
@@ -202,17 +187,12 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const flowShort = '...' + estado.novoFlowId.slice(-8)
 
-    // Link de deploy no Lovable
-    let deployMsg = ''
-    if (pagina.lovable_project_id) {
-      const { getDeployMessage } = await import('@/lib/paginas/lovable-deploy')
-      deployMsg = getDeployMessage(pagina.lovable_project_id)
-    }
+    const successText = `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\``
+    const kb = pagina.lovable_project_id
+      ? sucessoComDeploy(pagina.lovable_project_id)
+      : menuPrincipal()
 
-    await ctx.editMessageText(
-      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\`${deployMsg}`,
-      { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
-    )
+    await ctx.editMessageText(successText, { reply_markup: kb, parse_mode: 'Markdown' })
   } catch (err) {
     console.error('[telegram] handleConfirmar:', err)
     await ctx.editMessageText(
