@@ -111,12 +111,18 @@ export async function handleEditarCampo(ctx: Context, paginaIdx: number, campo: 
       valorAtual,
     })
 
-    await ctx.editMessageText(
+    const sent = await ctx.editMessageText(
       `✏️ *Editar ${displayCampo}*\n\n📄 Página: *${pagina.nome}*\n\n` +
       `*Valor atual:*\n\`${valorAtual || '(vazio)'}\`\n\n` +
       `📝 *Digite o novo valor:*`,
       { parse_mode: 'Markdown' }
     )
+    estadosEdicaoConfig.set(chatId, {
+      ...estadosEdicaoConfig.get(chatId)!,
+      originalMessageId: typeof sent === 'object' && 'message_id' in sent
+        ? (sent as any).message_id
+        : ctx.callbackQuery?.message?.message_id ?? 0,
+    })
     await ctx.answerCallbackQuery()
   } catch (err) {
     console.error('[telegram] handleEditarCampo:', err)
@@ -166,10 +172,16 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
     valorAtual: novoValor,
   }
 
-  await ctx.reply(texto, {
-    reply_markup: confirmacaoConfig(estado.paginaIdx, webAppState),
-    parse_mode: 'Markdown',
-  })
+  // Delete user's text message
+  try { await ctx.deleteMessage() } catch {}
+
+  // Edit the original bot message
+  await ctx.api.editMessageText(
+    chatId,
+    estado.originalMessageId!,
+    texto,
+    { reply_markup: confirmacaoConfig(estado.paginaIdx, webAppState), parse_mode: 'Markdown' }
+  )
 
   return true
 }

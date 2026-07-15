@@ -1,7 +1,7 @@
 import { Context } from 'grammy'
 import { InlineKeyboard } from 'grammy'
-import { listaPaginas, detalhesPagina, menuPrincipal } from '../keyboards'
-import { paginasCache } from '../types'
+import { listaPaginas, detalhesPagina, menuPrincipal, listaCasasFiltro } from '../keyboards'
+import { paginasCache, casasCache } from '../types'
 import {
   getGhToken, fetchFileFromGitHub,
   extractDestinations, extractText,
@@ -40,6 +40,83 @@ export async function handleListarPaginas(ctx: Context) {
   } catch (err) {
     console.error('[telegram] handleListarPaginas:', err)
     await ctx.answerCallbackQuery('Erro ao listar páginas')
+  }
+}
+
+export async function handleListarCasas(ctx: Context) {
+  try {
+    const { getSupabase } = await import('@/lib/db/supabase')
+    const sb = getSupabase()
+    if (!sb) {
+      await ctx.answerCallbackQuery('Erro: Supabase indisponível')
+      return
+    }
+
+    const [{ data: paginasData }, { data: casasData }] = await Promise.all([
+      sb.from('paginas').select('*').order('nome'),
+      sb.from('casas_aposta').select('id, nome, cor').order('nome'),
+    ])
+
+    const paginas = (paginasData ?? []) as any[]
+    const casas = (casasData ?? []) as any[]
+
+    const chatId = ctx.chat!.id
+    paginasCache.set(chatId, paginas)
+    casasCache.set(chatId, casas)
+
+    // Contar páginas por casa
+    const contagens = new Map<string, number>()
+    for (const p of paginas) {
+      if (p.casa_id) {
+        contagens.set(p.casa_id, (contagens.get(p.casa_id) ?? 0) + 1)
+      }
+    }
+
+    await ctx.editMessageText(
+      `🏠 *Casas de Aposta*\nSelecione uma casa para filtrar:`,
+      { reply_markup: listaCasasFiltro(casas, contagens), parse_mode: 'Markdown' }
+    )
+    await ctx.answerCallbackQuery()
+  } catch (err) {
+    console.error('[telegram] handleListarCasas:', err)
+    await ctx.answerCallbackQuery('Erro ao listar casas')
+  }
+}
+
+export async function handleListarPorCasa(ctx: Context, casaId: string) {
+  try {
+    const chatId = ctx.chat!.id
+    const paginas = paginasCache.get(chatId)
+    if (!paginas) {
+      await ctx.answerCallbackQuery('Erro: cache expirado. Tente novamente.')
+      return
+    }
+
+    const casas = casasCache.get(chatId)
+    const casa = casas?.find(c => c.id === casaId)
+    const casaNome = casa?.nome ?? casaId
+
+    const filtradas = paginas.filter(p => p.casa_id === casaId)
+    const indices = new Map<string, number>()
+    paginas.forEach((p, i) => indices.set(p.id, i))
+
+    if (filtradas.length === 0) {
+      await ctx.editMessageText(
+        `🏠 *${casaNome}*\n\n_Nenhuma página encontrada para esta casa._`,
+        { parse_mode: 'Markdown' }
+      )
+      await ctx.answerCallbackQuery()
+      return
+    }
+
+    await ctx.editMessageText(
+      `🏠 *${casaNome}* (${filtradas.length} páginas)\nSelecione uma página:`,
+      { reply_markup: listaPaginas(filtradas, indices), parse_mode: 'Markdown' }
+    )
+    await ctx.answerCallbackQuery()
+  } catch (err) {
+    console.error('[telegram] handleListarPorCasa:', err)
+    await ctx.answerCallbackQuery('Erro ao filtrar por casa')
   }
 }
 
@@ -155,10 +232,27 @@ function urlParamsKeyboard(paginaIdx: number, params: Array<{ key: string }>, ex
 
 // --- Views por tipo ---
 
+/** Obter nome da casa a partir do cache */
+function getCasaNome(ctx: Context, casaId?: string): string | undefined {
+  if (!casaId) return undefined
+  const casas = casasCache.get(ctx.chat!.id)
+  return casas?.find(c => c.id === casaId)?.nome
+}
+
+/** Adicionar linhas de casa/funil ao texto da view */
+function appendCasaFunilInfo(texto: string, pagina: any, ctx: Context): string {
+  const casaNome = getCasaNome(ctx, pagina.casa_id)
+  if (casaNome) texto += `🏠 Casa: *${casaNome}*\n`
+  if (pagina.funil) texto += `📊 Funil: *${pagina.funil}*\n`
+  if (casaNome || pagina.funil) texto += '\n'
+  return texto
+}
+
 function showWhatsappView(ctx: Context, pagina: any, paginaIdx: number) {
   const dests = pagina.destinations ?? []
   let texto = `📄 *${pagina.nome}*\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
+  texto = appendCasaFunilInfo(texto, pagina, ctx)
 
   if (dests.length === 0) {
     texto += '_Nenhum destination configurado_'
@@ -185,7 +279,8 @@ function showRedirectUrlView(ctx: Context, pagina: any, paginaIdx: number, conte
   const params = parseUrlParams(url)
 
   let texto = `📄 *${pagina.nome}* (direto)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
+  texto = appendCasaFunilInfo(texto, pagina, ctx)
   texto += `🔗 *Redirect URL:*\n\`${url || 'não encontrada'}\`\n\n`
 
   if (params.length > 0) {
@@ -209,7 +304,8 @@ function showRedirectUrlView(ctx: Context, pagina: any, paginaIdx: number, conte
 function showLeadFlowView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
   const config = extractLeadFlowConfig(content)
   let texto = `📄 *${pagina.nome}* (formulário)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
+  texto = appendCasaFunilInfo(texto, pagina, ctx)
 
   if (!config) {
     texto += '_LEAD\\_FLOW\\_CONFIG não encontrado_'
@@ -249,7 +345,8 @@ function showLeadFlowView(ctx: Context, pagina: any, paginaIdx: number, content:
 function showRedirectConfigView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
   const config = extractRedirectConfig(content)
   let texto = `📄 *${pagina.nome}* (formulário/redirect)\n`
-  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
+  texto = appendCasaFunilInfo(texto, pagina, ctx)
 
   if (!config) {
     texto += '_REDIRECT\\_CONFIG não encontrado_'

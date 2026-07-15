@@ -3,7 +3,9 @@ import { InlineKeyboard } from 'grammy'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://controlenumeros.vercel.app'
 
 export function menuPrincipal(): InlineKeyboard {
-  return new InlineKeyboard().text('📄 Páginas', 'pg:list')
+  return new InlineKeyboard()
+    .text('🏠 Por Casa', 'pg:casas')
+    .text('📄 Todas', 'pg:list')
 }
 
 export function listaPaginas(paginas: Array<{ id: string; nome: string }>, indices: Map<string, number>): InlineKeyboard {
@@ -57,6 +59,19 @@ export function confirmacao(paginaIdx: number, state: Record<string, unknown>): 
     .webApp('✅ Confirmar, Commitar e Deployar', buildWebAppUrl(state))
     .row()
     .text('❌ Cancelar', `pg:c:${paginaIdx}`)
+}
+
+export function listaCasasFiltro(casas: Array<{ id: string; nome: string }>, contagens: Map<string, number>): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  for (const casa of casas) {
+    const count = contagens.get(casa.id) ?? 0
+    if (count > 0) {
+      kb.text(`🏠 ${casa.nome} (${count})`, `pg:lc:${casa.id}`).row()
+    }
+  }
+  kb.text('📋 Todas', 'pg:list').row()
+  kb.text('⬅️ Voltar', 'pg:menu')
+  return kb
 }
 
 export function confirmacaoConfig(paginaIdx: number, state: Record<string, unknown>): InlineKeyboard {

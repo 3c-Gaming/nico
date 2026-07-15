@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { FileText, Plus, RefreshCw, Trash2, Pencil, ExternalLink, Phone, Hash } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { FileText, Plus, RefreshCw, Trash2, Pencil, ExternalLink, Phone, Hash, Search } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
@@ -23,6 +23,10 @@ interface Pagina {
   updated_at: string
   lovable_project_id?: string
   tipo?: string
+  funil?: string
+  casa_id?: string
+  tags?: string[]
+  lovable_name?: string
 }
 
 const tipoBadge: Record<string, { label: string; color: string }> = {
@@ -32,6 +36,17 @@ const tipoBadge: Record<string, { label: string; color: string }> = {
   direto: { label: 'Direto', color: 'var(--d5)' },
   telegram: { label: 'Telegram', color: 'var(--d4)' },
   sem_arquivo: { label: 'Sem arquivo', color: 'var(--text-muted)' },
+}
+
+interface Casa {
+  id: string
+  nome: string
+  slug: string
+  cor: string
+  logo: string
+  variaveis: any
+  paineis_cpa: any
+  funil_ids: string[]
 }
 
 interface Numero {
@@ -57,6 +72,15 @@ export default function PaginasPage() {
   const [syncing, setSyncing] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Casas
+  const [casas, setCasas] = useState<Casa[]>([])
+
+  // Filtros
+  const [filtroNome, setFiltroNome] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroCasa, setFiltroCasa] = useState('')
+  const [filtroTag, setFiltroTag] = useState('')
+
   // Form cadastro
   const [novoNome, setNovoNome] = useState('')
   const [novoOwner, setNovoOwner] = useState('3c-Gaming')
@@ -66,6 +90,10 @@ export default function PaginasPage() {
   // Form edição
   const [editDestinations, setEditDestinations] = useState<Destination[]>([])
   const [editText, setEditText] = useState('')
+  const [editCasaId, setEditCasaId] = useState('')
+  const [editFunil, setEditFunil] = useState('')
+  const [editTags, setEditTags] = useState('')
+  const [editLovableName, setEditLovableName] = useState('')
 
   // Sendpulse data
   const [numeros, setNumeros] = useState<Numero[]>([])
@@ -83,6 +111,39 @@ export default function PaginasPage() {
   }, [])
 
   useEffect(() => { carregarPaginas() }, [carregarPaginas])
+
+  // Carregar casas
+  useEffect(() => {
+    fetch('/api/casas')
+      .then(r => r.json())
+      .then(j => setCasas(j.casas ?? []))
+      .catch(() => {})
+  }, [])
+
+  // Tags únicas extraídas das páginas
+  const tagsUnicas = useMemo(() => {
+    const set = new Set<string>()
+    paginas.forEach(p => p.tags?.forEach(t => set.add(t)))
+    return Array.from(set).sort()
+  }, [paginas])
+
+  // Mapa de casas por id
+  const casasMap = useMemo(() => {
+    const map: Record<string, Casa> = {}
+    casas.forEach(c => { map[c.id] = c })
+    return map
+  }, [casas])
+
+  // Páginas filtradas
+  const paginasFiltradas = useMemo(() => {
+    return paginas.filter(p => {
+      if (filtroNome && !p.nome.toLowerCase().includes(filtroNome.toLowerCase())) return false
+      if (filtroTipo && p.tipo !== filtroTipo) return false
+      if (filtroCasa && p.casa_id !== filtroCasa) return false
+      if (filtroTag && (!p.tags || !p.tags.includes(filtroTag))) return false
+      return true
+    })
+  }, [paginas, filtroNome, filtroTipo, filtroCasa, filtroTag])
 
   // Carregar números do Sendpulse
   async function carregarNumeros() {
@@ -166,6 +227,10 @@ export default function PaginasPage() {
     setPaginaSelecionada(pagina)
     setEditDestinations(pagina.destinations?.length ? [...pagina.destinations] : [{ phone: '', flowId: '', weight: 100 }])
     setEditText(pagina.text ?? '')
+    setEditCasaId(pagina.casa_id ?? '')
+    setEditFunil(pagina.funil ?? '')
+    setEditTags(pagina.tags?.join(', ') ?? '')
+    setEditLovableName(pagina.lovable_name ?? '')
     setModalEdicao(true)
     carregarNumeros()
   }
@@ -208,6 +273,11 @@ export default function PaginasPage() {
       })
 
       if (res.ok) {
+        const parsedTags = editTags
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean)
+
         await fetch('/api/paginas', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -215,6 +285,10 @@ export default function PaginasPage() {
             id: paginaSelecionada.id,
             destinations: editDestinations,
             text: editText,
+            casa_id: editCasaId || null,
+            funil: editFunil || null,
+            tags: parsedTags.length > 0 ? parsedTags : null,
+            lovable_name: editLovableName || null,
           }),
         })
         setModalEdicao(false)
@@ -265,6 +339,40 @@ export default function PaginasPage() {
       />
 
       <div className="p-6">
+        {/* Barra de filtros */}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              className={`${selectClass} pl-8`}
+              placeholder="Buscar por nome..."
+              value={filtroNome}
+              onChange={e => setFiltroNome(e.target.value)}
+            />
+          </div>
+          <select className={`${selectClass} w-auto min-w-[140px]`} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+            <option value="">Todos os tipos</option>
+            {Object.entries(tipoBadge).map(([key, { label }]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select className={`${selectClass} w-auto min-w-[140px]`} value={filtroCasa} onChange={e => setFiltroCasa(e.target.value)}>
+            <option value="">Todas as casas</option>
+            {casas.map(c => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+          <select className={`${selectClass} w-auto min-w-[130px]`} value={filtroTag} onChange={e => setFiltroTag(e.target.value)}>
+            <option value="">Todas as tags</option>
+            {tagsUnicas.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <span className="text-xs text-[var(--text-muted)]">
+            {paginasFiltradas.length}/{paginas.length}
+          </span>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20 text-[var(--text-muted)] text-sm">
             Carregando...
@@ -277,9 +385,14 @@ export default function PaginasPage() {
               Cadastrar Primeira Página
             </Button>
           </div>
+        ) : paginasFiltradas.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Search size={48} className="text-[var(--text-muted)]" />
+            <p className="text-sm text-[var(--text-secondary)]">Nenhuma página encontrada com os filtros atuais</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginas.map(pagina => (
+            {paginasFiltradas.map(pagina => (
               <div
                 key={pagina.id}
                 className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 hover:border-[var(--border-strong)] transition-colors"
@@ -294,6 +407,19 @@ export default function PaginasPage() {
                         style={{ color: tipoBadge[pagina.tipo].color, borderColor: tipoBadge[pagina.tipo].color }}
                       >
                         {tipoBadge[pagina.tipo].label}
+                      </span>
+                    )}
+                    {pagina.casa_id && casasMap[pagina.casa_id] && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: casasMap[pagina.casa_id].cor + '22', color: casasMap[pagina.casa_id].cor }}
+                      >
+                        {casasMap[pagina.casa_id].nome}
+                      </span>
+                    )}
+                    {pagina.funil && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-secondary)]">
+                        {pagina.funil}
                       </span>
                     )}
                   </div>
@@ -331,6 +457,16 @@ export default function PaginasPage() {
                   </div>
                 </div>
 
+                {pagina.tags && pagina.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {pagina.tags.map(tag => (
+                      <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <p className="text-xs text-[var(--text-muted)] font-mono mb-1">
                   {pagina.github_owner}/{pagina.github_repo}
                 </p>
@@ -339,7 +475,30 @@ export default function PaginasPage() {
                     Lovable: {pagina.lovable_project_id.slice(0, 12)}...
                   </p>
                 )}
-                {!pagina.lovable_project_id && <div className="mb-3" />}
+                {!pagina.lovable_project_id && !pagina.lovable_name && <div className="mb-3" />}
+
+                {pagina.lovable_name && (
+                  <div className="relative h-32 overflow-hidden rounded border border-[var(--border)] mb-3 group">
+                    <iframe
+                      src={`https://${pagina.lovable_name}.lovable.app`}
+                      className="w-[1280px] h-[800px] origin-top-left pointer-events-none"
+                      style={{ transform: 'scale(0.25)' }}
+                      loading="lazy"
+                      sandbox=""
+                      tabIndex={-1}
+                    />
+                    <a
+                      href={`https://${pagina.lovable_name}.lovable.app`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <span className="text-white text-xs font-medium bg-black/60 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                        <ExternalLink size={12} /> Abrir preview
+                      </span>
+                    </a>
+                  </div>
+                )}
 
                 {pagina.text && (
                   <p className="text-xs text-[var(--text-secondary)] mb-3 truncate" title={pagina.text}>
@@ -403,6 +562,36 @@ export default function PaginasPage() {
             onChange={e => setEditText(e.target.value)}
             placeholder="Ex: Quero entrar no grupo..."
           />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] font-medium block mb-1">Casa</label>
+              <select className={selectClass} value={editCasaId} onChange={e => setEditCasaId(e.target.value)}>
+                <option value="">Nenhuma</option>
+                {casas.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
+            <Input
+              label="Funil"
+              value={editFunil}
+              onChange={e => setEditFunil(e.target.value)}
+              placeholder="Ex: F21"
+            />
+            <Input
+              label="Tags (separadas por vírgula)"
+              value={editTags}
+              onChange={e => setEditTags(e.target.value)}
+              placeholder="Ex: pilhado, urgente"
+            />
+            <Input
+              label="Lovable Name (slug)"
+              value={editLovableName}
+              onChange={e => setEditLovableName(e.target.value)}
+              placeholder="Ex: odd-release-button"
+            />
+          </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">

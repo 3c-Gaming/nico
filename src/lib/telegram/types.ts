@@ -15,6 +15,7 @@ export interface EstadoEdicaoConfig {
   paginaIdx: number
   campo: string       // ex: 'redirectUrl', 'baseUrl', 'spreadsheetId'
   valorAtual: string
+  originalMessageId?: number
 }
 export const estadosEdicaoConfig = new Map<number, EstadoEdicaoConfig>()
 
@@ -28,7 +29,20 @@ export interface PaginaCache {
   lovable_project_id?: string
   tipo?: string
   tracking_file?: string
+  funil?: string
+  casa_id?: string
+  tags?: string[]
+  lovable_name?: string
 }
 
 // Cache de páginas por chatId
 export const paginasCache = new Map<number, PaginaCache[]>()
+
+// Cache de casas de aposta por chatId
+export interface CasaCache {
+  id: string
+  nome: string
+  cor: string
+  slug: string
+}
+export const casasCache = new Map<number, CasaCache[]>()

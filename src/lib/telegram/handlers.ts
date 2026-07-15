@@ -1,6 +1,6 @@
 import { bot } from './bot'
 import { handleStart, handleMenu } from './handlers/start'
-import { handleListarPaginas, handleVerPagina } from './handlers/paginas'
+import { handleListarPaginas, handleListarCasas, handleListarPorCasa, handleVerPagina } from './handlers/paginas'
 import { handleEditarNumero, handleSelecionarNumero, handleSelecionarFluxo, handleConfirmar, handleCancelar } from './handlers/editar'
 import { handleEditarCampo, handleTextoRecebido, handleConfirmarConfig, handleCancelarConfig } from './handlers/editar-config'
 
@@ -14,6 +14,7 @@ bot.on('callback_query:data', async (ctx) => {
 
   if (data === 'pg:menu') return handleMenu(ctx)
   if (data === 'pg:list') return handleListarPaginas(ctx)
+  if (data === 'pg:casas') return handleListarCasas(ctx)
 
   if (parts[0] === 'pg') {
     switch (parts[1]) {
@@ -29,6 +30,8 @@ bot.on('callback_query:data', async (ctx) => {
         return handleConfirmar(ctx, parseInt(parts[2]))
       case 'c': // cancel (whatsapp edit)
         return handleCancelar(ctx, parseInt(parts[2]))
+      case 'lc': // list pages by casa
+        return handleListarPorCasa(ctx, parts[2])
       case 'ec': // edit config field
         return handleEditarCampo(ctx, parseInt(parts[2]), parts[3])
       case 'okc': // confirm config edit
