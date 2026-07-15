@@ -121,8 +121,22 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
     texto += `*Depois:*\n`
     texto += `📞 \`${estado.novoPhone}\`\n🔀 ${flowNome}\n#  \`...${flowId.slice(-8)}\`\n`
 
+    const webAppState = {
+      type: 'whatsapp',
+      github_owner: pagina.github_owner,
+      github_repo: pagina.github_repo,
+      tracking_file: pagina.tracking_file || 'src/components/tracking-whatsapp.tsx',
+      lovable_project_id: pagina.lovable_project_id,
+      nome: pagina.nome,
+      destIndex: estado.destIndex,
+      novoPhone: estado.novoPhone,
+      novoFlowId: flowId,
+      destinations: pagina.destinations,
+      paginaId: pagina.id,
+    }
+
     await ctx.editMessageText(texto, {
-      reply_markup: confirmacao(paginaIdx),
+      reply_markup: confirmacao(paginaIdx, webAppState),
       parse_mode: 'Markdown',
     })
     await ctx.answerCallbackQuery()

@@ -1,5 +1,7 @@
 import { InlineKeyboard } from 'grammy'
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://controlenumeros.vercel.app'
+
 export function menuPrincipal(): InlineKeyboard {
   return new InlineKeyboard().text('📄 Páginas', 'pg:list')
 }
@@ -45,16 +47,21 @@ export function listaFluxos(fluxos: Array<{ id: string; nome: string; status: st
   return kb
 }
 
-export function confirmacao(paginaIdx: number): InlineKeyboard {
+function buildWebAppUrl(state: Record<string, unknown>): string {
+  const stateB64 = Buffer.from(JSON.stringify(state)).toString('base64')
+  return `${APP_URL}/commit-deploy?s=${encodeURIComponent(stateB64)}`
+}
+
+export function confirmacao(paginaIdx: number, state: Record<string, unknown>): InlineKeyboard {
   return new InlineKeyboard()
-    .text('✅ Confirmar e Commitar', `pg:ok:${paginaIdx}`)
+    .webApp('✅ Confirmar, Commitar e Deployar', buildWebAppUrl(state))
     .row()
     .text('❌ Cancelar', `pg:c:${paginaIdx}`)
 }
 
-export function confirmacaoConfig(paginaIdx: number): InlineKeyboard {
+export function confirmacaoConfig(paginaIdx: number, state: Record<string, unknown>): InlineKeyboard {
   return new InlineKeyboard()
-    .text('✅ Confirmar e Commitar', `pg:okc:${paginaIdx}`)
+    .webApp('✅ Confirmar, Commitar e Deployar', buildWebAppUrl(state))
     .row()
     .text('❌ Cancelar', `pg:cc:${paginaIdx}`)
 }

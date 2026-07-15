@@ -154,8 +154,19 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
   texto += `*Antes:*\n\`${valorAntigo || '(vazio)'}\`\n\n`
   texto += `*Depois:*\n\`${novoValor}\`\n`
 
+  const webAppState = {
+    type: 'config',
+    github_owner: pagina.github_owner,
+    github_repo: pagina.github_repo,
+    tracking_file: pagina.tracking_file,
+    lovable_project_id: pagina.lovable_project_id,
+    nome: pagina.nome,
+    campo: estado.campo,
+    valorAtual: novoValor,
+  }
+
   await ctx.reply(texto, {
-    reply_markup: confirmacaoConfig(estado.paginaIdx),
+    reply_markup: confirmacaoConfig(estado.paginaIdx, webAppState),
     parse_mode: 'Markdown',
   })
 
