@@ -123,6 +123,7 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
 
     const webAppState = {
       type: 'whatsapp',
+      chatId: ctx.chat!.id,
       github_owner: pagina.github_owner,
       github_repo: pagina.github_repo,
       tracking_file: pagina.tracking_file || 'src/components/tracking-whatsapp.tsx',

@@ -8,6 +8,7 @@ import {
 
 const FIREBASE_API_KEY = process.env.LOVABLE_FIREBASE_API_KEY
 const REFRESH_TOKEN = process.env.LOVABLE_REFRESH_TOKEN
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
 let cachedFirebaseToken: { accessToken: string; expiresAt: number } | null = null
 
@@ -30,6 +31,15 @@ async function getFirebaseToken(): Promise<string> {
   return cachedFirebaseToken.accessToken
 }
 
+async function sendTelegram(chatId: number, text: string) {
+  if (!TELEGRAM_BOT_TOKEN) return
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+  }).catch(() => {})
+}
+
 function updateUrlParam(urlStr: string, paramName: string, newValue: string): string {
   try {
     const qIdx = urlStr.indexOf('?')
@@ -42,6 +52,9 @@ function updateUrlParam(urlStr: string, paramName: string, newValue: string): st
 }
 
 export async function POST(req: Request) {
+  let chatId: number | null = null
+  let nome = ''
+
   try {
     const body = await req.json()
     const { state, castleToken } = body
@@ -49,9 +62,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'state e castleToken obrigatórios' }, { status: 400 })
     }
 
-    const { type, github_owner, github_repo, tracking_file, lovable_project_id, nome } = state
+    chatId = state.chatId || null
+    nome = state.nome || ''
+
+    const { type, github_owner, github_repo, tracking_file, lovable_project_id } = state
 
     if (!github_owner || !github_repo || !tracking_file) {
+      if (chatId) await sendTelegram(chatId, `❌ Dados da página incompletos`)
       return NextResponse.json({ error: 'Dados da página incompletos' }, { status: 400 })
     }
 
@@ -99,6 +116,7 @@ export async function POST(req: Request) {
       newContent = replaceDestinations(content, newDests)
       commitMsg = `chore: trocar dest ${destIndex + 1} via Telegram`
     } else {
+      if (chatId) await sendTelegram(chatId, `❌ Tipo de edição desconhecido`)
       return NextResponse.json({ error: 'Tipo de edição desconhecido' }, { status: 400 })
     }
 
@@ -145,13 +163,27 @@ export async function POST(req: Request) {
       } catch { /* não crítico */ }
     }
 
-    return NextResponse.json({
-      ok: true,
-      nome,
-      commitMsg,
-      deploy: deployResult,
-    })
+    // 4. Enviar mensagem de sucesso no Telegram
+    if (chatId) {
+      let msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
+      if (deployResult?.url) {
+        msg += `\n🚀 Deploy: ${deployResult.url}`
+      } else if (deployResult?.deployment_id) {
+        msg += `\n🚀 Deploy iniciado`
+      } else if (deployResult?.error) {
+        msg += `\n⚠️ Deploy: erro`
+      } else if (!lovable_project_id) {
+        msg += `\n📌 Sem deploy (sem projeto Lovable)`
+      }
+      await sendTelegram(chatId, msg)
+    }
+
+    return NextResponse.json({ ok: true, nome, commitMsg, deploy: deployResult })
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    const errorMsg = (err as Error).message
+    if (chatId) {
+      await sendTelegram(chatId, `❌ *Erro ao commitar/deployar*\n\n📄 ${nome}\n💥 ${errorMsg}`)
+    }
+    return NextResponse.json({ error: errorMsg }, { status: 500 })
   }
 }

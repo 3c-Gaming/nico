@@ -156,6 +156,7 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
 
   const webAppState = {
     type: 'config',
+    chatId: ctx.chat!.id,
     github_owner: pagina.github_owner,
     github_repo: pagina.github_repo,
     tracking_file: pagina.tracking_file,
