@@ -1,5 +1,26 @@
 import { NextResponse } from 'next/server'
 
+/** Gera variantes de um funil para lidar com zero-padding: F01.07 → [F01.07, F01.7, F1.07, F1.7] */
+function normalizeFunil(funil: string): string[] {
+  const variantes = new Set<string>()
+  variantes.add(funil)
+  // F01.07 → match groups: "01", "07"
+  const m = funil.match(/^(F)(\d+)(?:\.(\d+))?$/i)
+  if (m) {
+    const prefix = m[1]
+    const major = m[2]
+    const minor = m[3]
+    const majors = [major, String(parseInt(major))] // "01" → ["01", "1"]
+    const minors = minor ? [minor, String(parseInt(minor))] : [undefined]
+    for (const maj of majors) {
+      for (const min of minors) {
+        variantes.add(min ? `${prefix}${maj}.${min}` : `${prefix}${maj}`)
+      }
+    }
+  }
+  return [...variantes]
+}
+
 export async function POST() {
   try {
     const { getSupabase } = await import('@/lib/db/supabase')
@@ -51,9 +72,13 @@ export async function POST() {
         const match = pagina.nome.match(/F\d+(?:[._-]\d+)?/i)
         if (match) {
           const candidato = match[0].toUpperCase().replace('_', '.').replace('-', '.')
-          // Verificar se existe no mapa
-          if (funilToCasa.has(candidato)) {
-            funil = candidato
+          // Tentar match direto, sem zero-pad e com zero-pad
+          const variantes = normalizeFunil(candidato)
+          for (const v of variantes) {
+            if (funilToCasa.has(v)) {
+              funil = candidato // manter o nome original da página
+              break
+            }
           }
         }
       }
@@ -64,9 +89,12 @@ export async function POST() {
         if (f) funil = f
       }
 
-      // Inferir casa pelo funil
+      // Inferir casa pelo funil (tentar variantes de zero-padding)
       if (funil && !casaId) {
-        casaId = funilToCasa.get(funil) ?? null
+        for (const v of normalizeFunil(funil)) {
+          const id = funilToCasa.get(v)
+          if (id) { casaId = id; break }
+        }
       }
 
       // Se mudou algo, atualizar
