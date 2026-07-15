@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
@@ -134,7 +134,7 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
 
   return (
     <tr>
-      <td colSpan={5} className="p-0">
+      <td colSpan={6} className="p-0">
         <div className="py-3 px-6 glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
           {carregando && <Spinner size={16} />}
           {erro && <span className="text-xs text-[var(--error)]">{erro}</span>}
@@ -274,6 +274,47 @@ export default function NumerosPage() {
   const { data, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
+  const [leadsHojeMap, setLeadsHojeMap] = useState<Record<string, number>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const buscarLeadsHoje = useCallback(async () => {
+    if (!data?.numeros) return
+    const configs = getState().flowTagConfigs
+    const results = await Promise.all(
+      data.numeros.map(async (n) => {
+        const tags = [...new Set(
+          Object.values(configs)
+            .filter(c => c.botId === n.numero.id && c.tags?.length)
+            .flatMap(c => c.tags)
+        )]
+        if (tags.length === 0) return [n.numero.id, 0] as const
+        try {
+          const res = await fetch('/api/leadhub/contagem-por-tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags }),
+          })
+          if (!res.ok) return [n.numero.id, 0] as const
+          const { leads } = await res.json()
+          const total = Object.values(leads as Record<string, number>).reduce((s, n) => s + n, 0)
+          return [n.numero.id, total] as const
+        } catch {
+          return [n.numero.id, 0] as const
+        }
+      })
+    )
+    setLeadsHojeMap(Object.fromEntries(results))
+  }, [data?.numeros])
+
+  useEffect(() => {
+    buscarLeadsHoje()
+  }, [buscarLeadsHoje])
+
+  const handleCopiarId = useCallback((id: string) => {
+    navigator.clipboard.writeText(id)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 1500)
+  }, [])
 
   const handleTestarBot = useCallback(async (botId: string) => {
     if (testandoBotId) return
@@ -286,11 +327,12 @@ export default function NumerosPage() {
       })
       if (!res.ok) throw new Error()
       await atualizar()
+      buscarLeadsHoje()
     } catch {
     } finally {
       setTestandoBotId(null)
     }
-  }, [testandoBotId, atualizar])
+  }, [testandoBotId, atualizar, buscarLeadsHoje])
 
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
@@ -372,7 +414,9 @@ export default function NumerosPage() {
                 <thead>
                     <tr className="border-b border-[var(--glass-border)]">
                       <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome / Número</th>
-                      <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis</th>
+                      <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot ID</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis Ativos</th>
+                      <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads Hoje</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Última resposta</th>
                       <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status Teste</th>
                     </tr>
@@ -389,12 +433,36 @@ export default function NumerosPage() {
                           <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${item.numero.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`} />
                           <div>
                             <div className="font-medium text-[var(--text-primary)]">{item.numero.nome}</div>
-                            <div className="text-xs text-[var(--text-muted)] font-mono">{item.numero.numero} <span className="text-[10px] text-[var(--text-muted)]/60">{item.numero.id}</span></div>
+                            <div className="text-xs text-[var(--text-muted)] font-mono">{item.numero.numero}</div>
                           </div>
                         </div>
                       </td>
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleCopiarId(item.numero.id) }}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                          title="Copiar Bot ID"
+                        >
+                          {copiedId === item.numero.id ? (
+                            <><Check size={10} className="text-green-500" /> <span className="text-green-500">Copiado</span></>
+                          ) : (
+                            <><Copy size={10} /> {item.numero.id}</>
+                          )}
+                        </button>
+                      </td>
                       <td className="py-3 px-3 text-right">
-                        <span className="text-[var(--text-primary)] font-semibold">{item.totalFluxos}</span>
+                        {(() => {
+                          const configs = getState().flowTagConfigs
+                          const ativos = Object.values(configs).filter(
+                            (c) => c.botId === item.numero.id && c.tags?.length
+                          ).length
+                          return <span className="text-[var(--text-primary)] font-semibold">{ativos}</span>
+                        })()}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-semibold ${leadsHojeMap[item.numero.id] > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                          {leadsHojeMap[item.numero.id] ?? <Spinner size={12} />}
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <UltimaResposta ultimoAumentoMs={item.ultimoAumentoMs} />
