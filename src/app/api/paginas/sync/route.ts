@@ -50,19 +50,14 @@ export async function PUT(request: NextRequest) {
 
     await commitFile(token, owner, repo, filePath, newContent, sha, `chore: atualizar DESTINATIONS via Nico`)
 
-    // Deploy no Lovable se tiver project_id
-    let deploy = null
+    // Link de deploy (deploy real acontece via browser)
+    let deployUrl = null
     if (lovable_project_id) {
-      try {
-        const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
-        deploy = await deployLovable(lovable_project_id)
-      } catch (e) {
-        console.error('[sync] Lovable deploy falhou:', e)
-        deploy = { error: (e as Error).message }
-      }
+      const { getDeployUrl } = await import('@/lib/paginas/lovable-deploy')
+      deployUrl = getDeployUrl(lovable_project_id)
     }
 
-    return NextResponse.json({ success: true, deploy })
+    return NextResponse.json({ success: true, deployUrl })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Erro ao atualizar' }, { status: 500 })
   }
