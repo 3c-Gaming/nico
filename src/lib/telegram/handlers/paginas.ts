@@ -1,7 +1,7 @@
 import { Context } from 'grammy'
 import { InlineKeyboard } from 'grammy'
 import { listaPaginas, detalhesPagina, menuPrincipal, listaCasasFiltro } from '../keyboards'
-import { paginasCache, casasCache } from '../types'
+import { paginasCache, casasCache, ensurePaginasCache, ensureCasasCache } from '../types'
 import {
   getGhToken, fetchFileFromGitHub,
   extractDestinations, extractText,
@@ -86,13 +86,13 @@ export async function handleListarCasas(ctx: Context) {
 export async function handleListarPorCasa(ctx: Context, casaId: string) {
   try {
     const chatId = ctx.chat!.id
-    const paginas = paginasCache.get(chatId)
-    if (!paginas) {
-      await ctx.answerCallbackQuery('Erro: cache expirado. Tente novamente.')
+    const paginas = await ensurePaginasCache(chatId)
+    if (!paginas.length) {
+      await ctx.answerCallbackQuery('Nenhuma página encontrada.')
       return
     }
 
-    const casas = casasCache.get(chatId)
+    const casas = await ensureCasasCache(chatId)
     const casa = casas?.find(c => c.id === casaId)
     const casaNome = casa?.nome ?? casaId
 
@@ -123,8 +123,9 @@ export async function handleListarPorCasa(ctx: Context, casaId: string) {
 export async function handleVerPagina(ctx: Context, paginaIdx: number) {
   try {
     const chatId = ctx.chat!.id
-    const paginas = paginasCache.get(chatId)
-    if (!paginas || !paginas[paginaIdx]) {
+    const paginas = await ensurePaginasCache(chatId)
+    await ensureCasasCache(chatId) // para info de casa nas views
+    if (!paginas[paginaIdx]) {
       await ctx.answerCallbackQuery('Página não encontrada. Tente listar novamente.')
       return
     }

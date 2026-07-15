@@ -1,6 +1,6 @@
 import { Context } from 'grammy'
 import { listaNumeros, listaFluxos, confirmacao, menuPrincipal } from '../keyboards'
-import { estadosEdicao, paginasCache } from '../types'
+import { estadosEdicao, paginasCache, ensurePaginasCache } from '../types'
 import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
 import { getGhToken, fetchFileWithSha, replaceDestinations, commitFile } from '@/lib/paginas/github-sync'
 
@@ -28,8 +28,8 @@ export async function handleEditarNumero(ctx: Context, paginaIdx: number, destIn
 export async function handleSelecionarNumero(ctx: Context, paginaIdx: number, destIndex: number, botId: string) {
   try {
     const chatId = ctx.chat!.id
-    const paginas = paginasCache.get(chatId)
-    if (!paginas || !paginas[paginaIdx]) {
+    const paginas = await ensurePaginasCache(chatId)
+    if (!paginas[paginaIdx]) {
       await ctx.answerCallbackQuery('Erro: página não encontrada')
       return
     }
@@ -88,8 +88,8 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
       return
     }
 
-    const paginas = paginasCache.get(chatId)
-    if (!paginas || !paginas[paginaIdx]) {
+    const paginas = await ensurePaginasCache(chatId)
+    if (!paginas[paginaIdx]) {
       await ctx.answerCallbackQuery('Erro: página não encontrada')
       return
     }
@@ -155,8 +155,8 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
     return
   }
 
-  const paginas = paginasCache.get(chatId)
-  if (!paginas || !paginas[paginaIdx]) {
+  const paginas = await ensurePaginasCache(chatId)
+  if (!paginas[paginaIdx]) {
     await ctx.answerCallbackQuery('Erro: página não encontrada')
     return
   }
@@ -229,8 +229,8 @@ export async function handleCancelar(ctx: Context, paginaIdx: number) {
   estadosEdicao.delete(chatId)
 
   // Voltar para view da página
-  const paginas = paginasCache.get(chatId)
-  if (paginas && paginas[paginaIdx]) {
+  const paginas = await ensurePaginasCache(chatId)
+  if (paginas[paginaIdx]) {
     const { handleVerPagina } = await import('./paginas')
     return handleVerPagina(ctx, paginaIdx)
   }

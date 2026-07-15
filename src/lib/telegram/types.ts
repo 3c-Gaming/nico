@@ -46,3 +46,33 @@ export interface CasaCache {
   slug: string
 }
 export const casasCache = new Map<number, CasaCache[]>()
+
+/** Garantir que cache de páginas está populado (recarrega do Supabase se vazio) */
+export async function ensurePaginasCache(chatId: number): Promise<PaginaCache[]> {
+  const cached = paginasCache.get(chatId)
+  if (cached && cached.length > 0) return cached
+
+  const { getSupabase } = await import('@/lib/db/supabase')
+  const sb = getSupabase()
+  if (!sb) return []
+
+  const { data } = await sb.from('paginas').select('*').order('nome')
+  const paginas = (data ?? []) as PaginaCache[]
+  paginasCache.set(chatId, paginas)
+  return paginas
+}
+
+/** Garantir que cache de casas está populado */
+export async function ensureCasasCache(chatId: number): Promise<CasaCache[]> {
+  const cached = casasCache.get(chatId)
+  if (cached && cached.length > 0) return cached
+
+  const { getSupabase } = await import('@/lib/db/supabase')
+  const sb = getSupabase()
+  if (!sb) return []
+
+  const { data } = await sb.from('casas_aposta').select('id, nome, cor, slug').order('nome')
+  const casas = (data ?? []) as CasaCache[]
+  casasCache.set(chatId, casas)
+  return casas
+}

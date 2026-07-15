@@ -31,17 +31,21 @@ bot.on('callback_query:data', async (ctx) => {
       case 'c': // cancel (whatsapp edit)
         return handleCancelar(ctx, parseInt(parts[2]))
       case 'lc': // list pages by casa
-        return handleListarPorCasa(ctx, parts[2])
-      case 'ec': // edit config field
-        return handleEditarCampo(ctx, parseInt(parts[2]), parts[3])
+        return handleListarPorCasa(ctx, parts.slice(2).join(':'))
+      case 'ec': // edit config field — campo pode conter ":" (ex: url:paramName)
+        return handleEditarCampo(ctx, parseInt(parts[2]), parts.slice(3).join(':'))
       case 'okc': // confirm config edit
         return handleConfirmarConfig(ctx, parseInt(parts[2]))
       case 'cc': // cancel config edit
         return handleCancelarConfig(ctx, parseInt(parts[2]))
+      default:
+        // Sub-ação desconhecida dentro de pg: — silenciar
+        return ctx.answerCallbackQuery()
     }
   }
 
-  await ctx.answerCallbackQuery('Ação desconhecida')
+  // Callback não reconhecido — responder silenciosamente para parar o spinner
+  await ctx.answerCallbackQuery()
 })
 
 // Handler de mensagem de texto (para capturar novo valor de config)

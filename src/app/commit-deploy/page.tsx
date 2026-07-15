@@ -26,6 +26,10 @@ function CommitDeployInner() {
   const stateB64 = searchParams.get('s')
   const startedRef = useRef(false)
 
+  function closeWebApp() {
+    try { window.Telegram?.WebApp?.close() } catch {}
+  }
+
   function onCastleLoad() {
     if (window.Castle) {
       window.Castle.configure({ pk: CASTLE_PK })
@@ -35,6 +39,9 @@ function CommitDeployInner() {
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready()
+    // Timeout de segurança: fechar em 8s mesmo se algo travar
+    const safetyTimer = setTimeout(closeWebApp, 8000)
+    return () => clearTimeout(safetyTimer)
   }, [])
 
   async function run() {
@@ -52,11 +59,11 @@ function CommitDeployInner() {
         body: JSON.stringify({ state, castleToken }),
       }).catch(() => {})
 
-      // Fechar WebApp imediatamente - a API vai mandar mensagem no Telegram
-      setTimeout(() => window.Telegram?.WebApp?.close(), 300)
+      // Fechar WebApp após enviar
+      setTimeout(closeWebApp, 500)
     } catch {
       // Em caso de erro, fechar mesmo assim
-      setTimeout(() => window.Telegram?.WebApp?.close(), 500)
+      setTimeout(closeWebApp, 500)
     }
   }
 
