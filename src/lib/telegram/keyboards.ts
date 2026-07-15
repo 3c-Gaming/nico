@@ -56,14 +56,6 @@ export function confirmacao(paginaIdx: number): InlineKeyboard {
     .text('❌ Cancelar', `pg:c:${paginaIdx}`)
 }
 
-export function sucessoComDeploy(lovableProjectId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .url('🚀 Deployar no Lovable', `${APP_URL}/deploy/${lovableProjectId}`)
-    .row()
-    .text('🏠 Por Casa', 'pg:casas')
-    .text('📄 Todas', 'pg:list')
-}
-
 export function listaCasasFiltro(casas: Array<{ id: string; nome: string }>, contagens: Map<string, number>): InlineKeyboard {
   const kb = new InlineKeyboard()
   for (const casa of casas) {

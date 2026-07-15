@@ -1,5 +1,5 @@
 import { Context } from 'grammy'
-import { confirmacaoConfig, menuPrincipal, sucessoComDeploy } from '../keyboards'
+import { confirmacaoConfig, menuPrincipal } from '../keyboards'
 import { estadosEdicaoConfig, paginasCache, ensurePaginasCache } from '../types'
 import {
   getGhToken, fetchFileFromGitHub, fetchFileWithSha, commitFile,
@@ -233,12 +233,19 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
 
     estadosEdicaoConfig.delete(chatId)
 
-    const successText = `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📝 ${displayCampo}: \`${estado.valorAtual}\``
-    const kb = pagina.lovable_project_id
-      ? sucessoComDeploy(pagina.lovable_project_id)
-      : menuPrincipal()
+    // Deploy no Lovable (server-side)
+    let deployMsg = ''
+    if (pagina.lovable_project_id) {
+      await ctx.editMessageText('⏳ Deployando no Lovable...')
+      const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
+      const deploy = await deployLovable(pagina.lovable_project_id)
+      deployMsg = `\n${deploy.message}`
+    }
 
-    await ctx.editMessageText(successText, { reply_markup: kb, parse_mode: 'Markdown' })
+    await ctx.editMessageText(
+      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📝 ${displayCampo}: \`${estado.valorAtual}\`${deployMsg}`,
+      { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
+    )
   } catch (err) {
     console.error('[telegram] handleConfirmarConfig:', err)
     await ctx.editMessageText(

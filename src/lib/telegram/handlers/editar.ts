@@ -1,5 +1,5 @@
 import { Context } from 'grammy'
-import { listaNumeros, listaFluxos, confirmacao, menuPrincipal, sucessoComDeploy } from '../keyboards'
+import { listaNumeros, listaFluxos, confirmacao, menuPrincipal } from '../keyboards'
 import { estadosEdicao, paginasCache, ensurePaginasCache } from '../types'
 import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
 import { getGhToken, fetchFileWithSha, replaceDestinations, commitFile } from '@/lib/paginas/github-sync'
@@ -187,12 +187,19 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const flowShort = '...' + estado.novoFlowId.slice(-8)
 
-    const successText = `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\``
-    const kb = pagina.lovable_project_id
-      ? sucessoComDeploy(pagina.lovable_project_id)
-      : menuPrincipal()
+    // Deploy no Lovable (server-side)
+    let deployMsg = ''
+    if (pagina.lovable_project_id) {
+      await ctx.editMessageText('⏳ Deployando no Lovable...')
+      const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
+      const deploy = await deployLovable(pagina.lovable_project_id)
+      deployMsg = `\n${deploy.message}`
+    }
 
-    await ctx.editMessageText(successText, { reply_markup: kb, parse_mode: 'Markdown' })
+    await ctx.editMessageText(
+      `✅ *Alteração commitada com sucesso!*\n\n📄 ${pagina.nome}\n📞 \`${estado.novoPhone}\`\n🔀 ${estado.novoFlowNome}\n#  \`${flowShort}\`${deployMsg}`,
+      { reply_markup: menuPrincipal(), parse_mode: 'Markdown' }
+    )
   } catch (err) {
     console.error('[telegram] handleConfirmar:', err)
     await ctx.editMessageText(
