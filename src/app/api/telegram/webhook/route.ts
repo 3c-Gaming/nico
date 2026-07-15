@@ -33,7 +33,7 @@ async function getBot(): Promise<Bot> {
     handlersRegistered = true
 
     const { handleStart, handleMenu } = await import('@/lib/telegram/handlers/start')
-    const { handleListarPaginas, handleVerPagina } = await import('@/lib/telegram/handlers/paginas')
+    const { handleListarPaginas, handleListarCasas, handleListarPorCasa, handleVerPagina } = await import('@/lib/telegram/handlers/paginas')
     const { handleEditarNumero, handleSelecionarNumero, handleSelecionarFluxo, handleConfirmar, handleCancelar } = await import('@/lib/telegram/handlers/editar')
     const { handleEditarCampo, handleTextoRecebido, handleConfirmarConfig, handleCancelarConfig } = await import('@/lib/telegram/handlers/editar-config')
 
@@ -45,6 +45,7 @@ async function getBot(): Promise<Bot> {
 
       if (data === 'pg:menu') return handleMenu(ctx)
       if (data === 'pg:list') return handleListarPaginas(ctx)
+      if (data === 'pg:casas') return handleListarCasas(ctx)
 
       if (parts[0] === 'pg') {
         switch (parts[1]) {
@@ -54,13 +55,16 @@ async function getBot(): Promise<Bot> {
           case 'f': return handleSelecionarFluxo(ctx, parseInt(parts[2]), parseInt(parts[3]), parts[4])
           case 'ok': return handleConfirmar(ctx, parseInt(parts[2]))
           case 'c': return handleCancelar(ctx, parseInt(parts[2]))
+          case 'lc': return handleListarPorCasa(ctx, parts.slice(2).join(':'))
           case 'ec': return handleEditarCampo(ctx, parseInt(parts[2]), parts.slice(3).join(':'))
           case 'okc': return handleConfirmarConfig(ctx, parseInt(parts[2]))
           case 'cc': return handleCancelarConfig(ctx, parseInt(parts[2]))
+          default:
+            return ctx.answerCallbackQuery()
         }
       }
 
-      await ctx.answerCallbackQuery('Ação desconhecida')
+      await ctx.answerCallbackQuery()
     })
 
     bot.on('message:text', async (ctx) => {
