@@ -46,6 +46,8 @@ export function getSnapshot(): AppState {
   if (typeof window === 'undefined') return { ...ESTADO_INICIAL }
   if (!cachedState) {
     cachedState = { ...ESTADO_INICIAL }
+  }
+  if (!snapshotCache) {
     snapshotCache = { ...cachedState, demandas: { ...cachedState.demandas }, usuariosResponsaveis: { ...cachedState.usuariosResponsaveis } }
   }
   return snapshotCache!
