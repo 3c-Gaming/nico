@@ -26,7 +26,7 @@ type ReplyFn = (payload: { embeds?: DiscordEmbed[]; content?: string }) => Promi
 export async function handleStatus(reply: ReplyFn) {
   try {
     const { listarNumeros } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
     await reply({ embeds: [embedStatusBots(numeros)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao buscar status: ${(err as Error).message}`)] })
@@ -42,7 +42,7 @@ export async function handleFluxos(reply: ReplyFn, options: { name: string; valu
 
   try {
     const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
     const bot = findBot(numeros, botInput)
 
     if (!bot) {
@@ -50,7 +50,7 @@ export async function handleFluxos(reply: ReplyFn, options: { name: string; valu
       return
     }
 
-    const fluxos = await listarFluxos(bot.id, AbortSignal.timeout(15_000))
+    const fluxos = await listarFluxos(bot.id, AbortSignal.timeout(30_000))
     await reply({ embeds: [embedFluxosBot(bot.nome || bot.numero || bot.id, fluxos)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao buscar fluxos: ${(err as Error).message}`)] })
@@ -67,7 +67,7 @@ export async function handleTestar(reply: ReplyFn, options: { name: string; valu
   try {
     const { listarNumeros } = await import('@/lib/integrações/sendpulse')
     const { executarTeste } = await import('@/lib/testes/runner')
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
     const bot = findBot(numeros, botInput)
 
     if (!bot) {
@@ -96,7 +96,7 @@ export async function handleTestar(reply: ReplyFn, options: { name: string; valu
 export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
     const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
 
     await Promise.all(numeros.map(async num => {
@@ -122,8 +122,8 @@ export function dispatchCommand(
   name: string,
   options: { name: string; value: string }[] | undefined,
   reply: ReplyFn
-) {
-  const wrapped = async () => {
+): Promise<void> {
+  return (async () => {
     try {
       switch (name) {
         case 'status':
@@ -143,8 +143,5 @@ export function dispatchCommand(
       console.error(`[discord] dispatchCommand "${name}" failed:`, (err as Error).message)
       try { await reply({ embeds: [embedErro(`Erro interno ao executar \`${name}\`. ${(err as Error).message}`)] }) } catch {}
     }
-  }
-  wrapped().catch((err) => {
-    console.error(`[discord] unhandled in dispatchCommand "${name}":`, (err as Error).message)
-  })
+  })()
 }

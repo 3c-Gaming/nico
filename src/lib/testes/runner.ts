@@ -28,7 +28,8 @@ export async function executarTeste(request: TestRequest): Promise<TestResult> {
 
   try {
     const numerosRes = await fetch(
-      (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') + '/api/sendpulse/numeros'
+      (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') + '/api/sendpulse/numeros',
+      { signal: AbortSignal.timeout(15_000) }
     )
     const numerosData = await numerosRes.json()
     const numeros = numerosData.numeros || []

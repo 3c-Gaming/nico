@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { verifyInteractionSignature, replyToInteraction, ResponseType } from '@/lib/discord/verify'
 import { dispatchCommand } from '@/lib/discord/handlers'
+
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   const timestamp = request.headers.get('X-Signature-Timestamp') ?? ''
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
       await replyToInteraction(applicationId, interaction.token, payload)
     }
 
-    dispatchCommand(name, options, reply)
+    waitUntil(dispatchCommand(name, options, reply))
 
     return NextResponse.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE })
   }

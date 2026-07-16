@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
     const fluxosPorBot = new Map()
 
     await Promise.all(numeros.map(async num => {
