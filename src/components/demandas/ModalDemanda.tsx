@@ -77,6 +77,7 @@ export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuario
   }, [])
 
   useEffect(() => {
+    if (!open) return
     if (demanda) {
       setTitulo(demanda.titulo)
       setDescricao(demanda.descricao ?? '')
@@ -93,7 +94,7 @@ export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuario
     } else {
       resetForm()
     }
-  }, [demanda, resetForm])
+  }, [open, demanda, resetForm])
 
   function handleSave() {
     if (!titulo.trim()) return

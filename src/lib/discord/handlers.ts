@@ -65,23 +65,25 @@ export async function handleTestar(reply: ReplyFn, options: { name: string; valu
   }
 
   try {
-    const { listarNumeros } = await import('@/lib/integrações/sendpulse')
-    const { executarTeste } = await import('@/lib/testes/runner')
-    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
-    const bot = findBot(numeros, botInput)
+    const { executarTesteManual } = await import('@/lib/bot-test/runner')
+    const { obterBots } = await import('@/lib/bot-test/bot-list')
 
-    if (!bot) {
+    const bots = await obterBots()
+    const botInputLower = botInput.toLowerCase()
+    const config = bots.find(b => b.botId.toLowerCase().includes(botInputLower) || b.nome.toLowerCase().includes(botInputLower) || b.numero.includes(botInput))
+
+    if (!config) {
       await reply({ embeds: [embedErro(`Bot \`${botInput}\` não encontrado. Use /status para ver os bots disponíveis.`)] })
       return
     }
 
-    const resultado = await executarTeste({ botId: bot.id })
+    const resultado = await executarTesteManual(config.botId)
     const statusIcon = resultado.status === 'ok' ? '✅' : resultado.status === 'erro' ? '❌' : '⏳'
 
     await reply({
       embeds: [embedSucesso(
         [
-          `${statusIcon} **Teste executado em ${bot.nome || bot.numero}**`,
+          `${statusIcon} **Teste executado em ${config.nome}**`,
           `Status: \`${resultado.status}\``,
           `Duração: ${resultado.duracaoMs}ms`,
           resultado.erro ? `Erro: ${resultado.erro}` : '',
