@@ -28,12 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, options } = interaction.data
+    const channelId = interaction.channel_id as string | undefined
 
     const reply = async (payload: { embeds?: unknown[]; content?: string }) => {
       await replyToInteraction(applicationId, interaction.token, payload)
     }
 
-    waitUntil(dispatchCommand(name, options, reply))
+    waitUntil(dispatchCommand(name, options, reply, channelId))
 
     return NextResponse.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE })
   }

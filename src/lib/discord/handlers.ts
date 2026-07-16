@@ -9,6 +9,7 @@ import {
   embedResultadoTeste,
   embedResumoTestes,
 } from './embeds'
+import { sendChannelMessage } from './verify'
 
 function getOption(options: { name: string; value: string }[] | undefined, name: string): string | null {
   if (!options) return null
@@ -86,12 +87,39 @@ export async function handleTestar(reply: ReplyFn, options: { name: string; valu
   }
 }
 
-export async function handleTestarTodos(reply: ReplyFn) {
+export async function handleTestarTodos(reply: ReplyFn, channelId?: string) {
   const inicio = Date.now()
+
+  if (!channelId) {
+    await reply({ embeds: [embedErro('channel_id não disponível para enviar resultados individuais.')] })
+    return
+  }
+
   try {
-    const { executarTesteParalelo } = await import('@/lib/bot-test/runner')
-    const resultados = await executarTesteParalelo()
-    await reply({ embeds: [embedResumoTestes(resultados, Date.now() - inicio)] })
+    const { obterBots } = await import('@/lib/bot-test/bot-list')
+    const { executarCicloTeste } = await import('@/lib/bot-test/runner')
+
+    const bots = await obterBots()
+    if (bots.length === 0) {
+      await reply({ embeds: [embedErro('Nenhum bot ativo encontrado.')] })
+      return
+    }
+
+    await reply({ content: `🔍 Iniciando teste de ${bots.length} bot(s)...` })
+
+    const resultados: Awaited<ReturnType<typeof executarCicloTeste>>[] = []
+
+    for (const config of bots) {
+      try {
+        const resultado = await executarCicloTeste(config.botId)
+        resultados.push(resultado)
+        await sendChannelMessage(channelId, { embeds: [embedResultadoTeste(resultado)] })
+      } catch (err) {
+        console.error(`[discord] handleTestarTodos erro em ${config.botId}:`, (err as Error).message)
+      }
+    }
+
+    await sendChannelMessage(channelId, { embeds: [embedResumoTestes(resultados, Date.now() - inicio)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao testar todos os bots: ${(err as Error).message}`)] })
   }
@@ -125,7 +153,8 @@ export async function handleAjuda(reply: ReplyFn) {
 export function dispatchCommand(
   name: string,
   options: { name: string; value: string }[] | undefined,
-  reply: ReplyFn
+  reply: ReplyFn,
+  channelId?: string
 ): Promise<void> {
   return (async () => {
     try {
@@ -137,7 +166,7 @@ export function dispatchCommand(
         case 'testar':
           return await handleTestar(reply, options)
         case 'testartodos':
-          return await handleTestarTodos(reply)
+          return await handleTestarTodos(reply, channelId)
         case 'relatorio':
           return await handleRelatorio(reply)
         case 'ajuda':
