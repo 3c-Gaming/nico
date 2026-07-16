@@ -63,12 +63,54 @@ export function getSupabase() {
   return globalForSupabase.supabase
 }
 
+const SNAKE_TO_CAMEL: Record<string, string> = {
+  responsavel_id: 'responsavelId',
+  data_criacao: 'dataCriacao',
+  data_conclusao: 'dataConclusao',
+  user_stories: 'userStories',
+  funil_ids: 'funilIds',
+  numeros_sendpulse: 'numerosSendpulse',
+  usuario_responsavel_id: 'usuarioResponsavelId',
+  criado_em: 'criadoEm',
+  atualizado_em: 'atualizadoEm',
+  casa_id: 'casaId',
+  url_template: 'urlTemplate',
+  flow_id: 'flowId',
+  bot_id: 'botId',
+  pinned_numeros: 'pinnedNumeros',
+  pinned_funis: 'pinnedFunis',
+  updated_at: 'updatedAt',
+  esteira_pai_id: 'esteiraPaiId',
+  template_daxx: 'templateDaxx',
+  data_disparo: 'dataDisparo',
+  horario_disparo: 'horarioDisparo',
+  casas_aposta: 'casasAposta',
+  link_templates_selecionados: 'linkTemplatesSelecionados',
+  cpa_painel_id: 'cpaPainelId',
+  betmgm_pid: 'betmgmPid',
+  valor_total_base: 'valorTotalBase',
+  paineis_cpa: 'paineisCPA',
+  leads_hoje: 'leadsHoje',
+  total_leads: 'totalLeads',
+}
+
+function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const key = SNAKE_TO_CAMEL[k] ?? k
+    result[key] = v
+  }
+  return result
+}
+
 function rows<T>(data: unknown): T[] {
-  return (data ?? []) as T[]
+  const arr = (data ?? []) as Record<string, unknown>[]
+  return arr.map((item) => fromSnakeCase(item)) as T[]
 }
 
 function row<T>(data: unknown): T | null {
-  return data as T | null
+  if (!data) return null
+  return fromSnakeCase(data as Record<string, unknown>) as T
 }
 
 function tb(name: string) {

@@ -60,41 +60,48 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
 
       const overId = over.id as string
       const isOverColumn = COLUNAS.includes(overId as ColunaDemanda)
-
-      let novaColuna: ColunaDemanda = activeDemanda.coluna
-      let novaOrdem = activeDemanda.ordem
+      const sourceColuna = activeDemanda.coluna
 
       if (isOverColumn) {
-        novaColuna = overId as ColunaDemanda
-        const colunaDemandas = demandasPorColuna[novaColuna]
-        novaOrdem = colunaDemandas.length > 0
-          ? Math.max(...colunaDemandas.map((d) => d.ordem)) + 1
+        const targetColuna = overId as ColunaDemanda
+        const targetDemandas = demandasPorColuna[targetColuna]
+        const novaOrdem = targetDemandas.length > 0
+          ? Math.max(...targetDemandas.map((d) => d.ordem)) + 1
           : 0
-      } else {
-        const overDemanda = demandas.find((d) => d.id === overId)
-        if (!overDemanda) return
 
-        novaColuna = overDemanda.coluna
-        const colunaDemandas = demandasPorColuna[novaColuna]
-        const oldIdx = colunaDemandas.findIndex((d) => d.id === active.id)
-        const newIdx = colunaDemandas.findIndex((d) => d.id === over.id)
-        if (oldIdx === -1 && newIdx === -1) return
-
-        const reordered = arrayMove(
-          colunaDemandas,
-          oldIdx >= 0 ? oldIdx : colunaDemandas.length,
-          newIdx
-        )
-        reordered.forEach((d, i) => {
-          d.ordem = i
-          if (d.id === activeDemanda.id) d.coluna = novaColuna
-        })
-        onReorder(reordered)
+        const updated = { ...activeDemanda, coluna: targetColuna, ordem: novaOrdem }
+        onDemandaUpdate(updated)
         return
       }
 
-      const updated = { ...activeDemanda, coluna: novaColuna, ordem: novaOrdem }
-      onDemandaUpdate(updated)
+      const overDemanda = demandas.find((d) => d.id === overId)
+      if (!overDemanda) return
+
+      const targetColuna = overDemanda.coluna
+      const colunaDemandas = demandasPorColuna[targetColuna]
+      const oldIdx = colunaDemandas.findIndex((d) => d.id === active.id)
+      const newIdx = colunaDemandas.findIndex((d) => d.id === over.id)
+      if (oldIdx === -1 && newIdx === -1) return
+
+      const reordered = arrayMove(
+        colunaDemandas,
+        oldIdx >= 0 ? oldIdx : colunaDemandas.length,
+        newIdx
+      )
+      reordered.forEach((d, i) => { d.ordem = i })
+      if (activeDemanda.coluna !== targetColuna) {
+        reordered.forEach((d) => { if (d.id === activeDemanda.id) d.coluna = targetColuna })
+      }
+
+      // se o card mudou de coluna, reindexar a coluna de origem
+      const allAffected = [...reordered]
+      if (sourceColuna !== targetColuna) {
+        const sourceDemandas = demandasPorColuna[sourceColuna].filter((d) => d.id !== active.id)
+        sourceDemandas.forEach((d, i) => { d.ordem = i })
+        allAffected.push(...sourceDemandas)
+      }
+
+      onReorder(allAffected)
     },
     [demandas, demandasPorColuna, onDemandaUpdate, onReorder]
   )

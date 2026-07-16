@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
 import { ClipboardList, Plus } from 'lucide-react'
-import { getState, getSnapshot, addDemanda, patchDemandas, deletarDemanda } from '@/lib/store'
+import { getState, getSnapshot, setState, addDemanda, patchDemandas, deletarDemanda } from '@/lib/store'
 import type { AppState, Demanda, UsuarioResponsavel } from '@/types'
 
 function subscribe(cb: () => void) {
@@ -45,7 +45,6 @@ export default function DemandasPage() {
         }
         const state = getState()
         state.demandas = demMap
-        window.dispatchEvent(new CustomEvent('nico:state-changed'))
       }
 
       if (usrRes.ok) {
@@ -56,8 +55,9 @@ export default function DemandasPage() {
         }
         const state = getState()
         state.usuariosResponsaveis = usrMap
-        window.dispatchEvent(new CustomEvent('nico:state-changed'))
       }
+
+      setState(getState())
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -102,7 +102,7 @@ export default function DemandasPage() {
         state.demandas[d.id].ordem = d.ordem
       }
     }
-    window.dispatchEvent(new CustomEvent('nico:state-changed'))
+    setState(getState())
     for (const { id, coluna, ordem } of updates) {
       fetch(`/api/demandas/${id}`, {
         method: 'PUT',
