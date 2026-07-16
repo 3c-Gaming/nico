@@ -12,9 +12,9 @@ function gerarId() {
 
 const COLUNAS: { value: ColunaDemanda; label: string }[] = [
   { value: 'ideias', label: 'Ideias' },
-  { value: 'a_fazer', label: 'A Fazer' },
-  { value: 'em_foco', label: 'Em Foco' },
-  { value: 'entregue_garantido', label: 'Entregue - Garantido' },
+  { value: 'fazendo', label: 'Fazendo' },
+  { value: 'revisao', label: 'Revisão' },
+  { value: 'concluido', label: 'Concluído' },
 ]
 
 const PRIORIDADES: { value: PrioridadeDemanda; label: string; cor: string }[] = [
