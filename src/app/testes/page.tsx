@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Send, CheckCircle, XCircle, Clock, Timer, Settings, ChevronDown, ChevronUp, Play, Pause, Zap } from 'lucide-react'
+import { RefreshCw, Send, CheckCircle, XCircle, Clock, Timer, Settings, ChevronDown, ChevronUp, Play, Pause, Zap, Save } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 
 interface CronConfig {
   pollIntervalMs: number
   cronPaused: boolean
   lastRunAt: string | null
+  botContactIds: Record<string, string>
+  bots: { botId: string; nome: string; numero: string }[]
 }
 
 interface BotTestResult {
@@ -69,6 +71,8 @@ export default function TestesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editIntervalo, setEditIntervalo] = useState('')
   const [erro, setErro] = useState('')
+  const [editBotContactIds, setEditBotContactIds] = useState<Record<string, string>>({})
+  const [salvandoContactIds, setSalvandoContactIds] = useState(false)
 
   const fetchResultados = useCallback(async () => {
     try {
@@ -87,6 +91,7 @@ export default function TestesPage() {
         const data = await res.json()
         setConfig(data)
         setEditIntervalo(String(Math.round(data.pollIntervalMs / 60_000)))
+        setEditBotContactIds(data.botContactIds ?? {})
       }
     } catch {}
   }, [])
@@ -158,6 +163,26 @@ export default function TestesPage() {
       }
     } catch (err) {
       setErro((err as Error).message)
+    }
+  }
+
+  const handleSalvarContactIds = async () => {
+    setSalvandoContactIds(true)
+    setErro('')
+    try {
+      const res = await fetch('/api/testes/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botContactIds: editBotContactIds }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setConfig(data)
+      }
+    } catch (err) {
+      setErro((err as Error).message)
+    } finally {
+      setSalvandoContactIds(false)
     }
   }
 
@@ -249,6 +274,46 @@ export default function TestesPage() {
                 <span className="text-[var(--text-muted)]">· Último: {formatTempoRelativo(config.lastRunAt)}</span>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* Contact IDs dos Bots */}
+        <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Settings size={16} className="text-[var(--d1)]" />
+            Contact IDs dos Bots
+          </h2>
+          <p className="text-[10px] text-[var(--text-muted)] mb-3">
+            Configure o SendPulse contact_id de cada bot. Se definido, o teste será enviado para o telefone resolvido via SendPulse.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {(config?.bots ?? []).map((bot) => (
+              <div key={bot.botId} className="flex flex-col gap-1 rounded-md p-2 bg-[var(--bg-surface)] border border-[var(--border)]">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-medium text-[var(--text-primary)]">{bot.nome}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] truncate" title={bot.numero}>{bot.numero}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]/50 truncate" title={bot.botId}>{bot.botId}</span>
+                </div>
+                <input
+                  type="text"
+                  value={editBotContactIds[bot.botId] ?? ''}
+                  onChange={(e) => setEditBotContactIds((prev) => ({ ...prev, [bot.botId]: e.target.value }))}
+                  placeholder="contact_id"
+                  className="h-7 rounded-md px-2 text-[10px] font-mono bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={handleSalvarContactIds}
+              disabled={salvandoContactIds}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--d1)' }}
+            >
+              {salvandoContactIds ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+              Salvar Contact IDs
+            </button>
           </div>
         </section>
 

@@ -153,6 +153,38 @@ export async function enviarMensagemDireta(params: {
   return { ok: res.ok, statusCode: res.status, body }
 }
 
+export async function obterMensagensChat(params: {
+  botId: string
+  contactId: string
+  limit?: number
+}): Promise<{ messages: { id: string; type: string; timestamp: number; text?: string }[] }> {
+  const res = await fetch(
+    `${BASE_URL}/chats/messages?bot_id=${encodeURIComponent(params.botId)}&contact_id=${encodeURIComponent(params.contactId)}&limit=${params.limit ?? 50}`,
+    { headers: getHeaders() }
+  )
+  if (!res.ok) return { messages: [] }
+  const json = await res.json()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const messages = (json.data ?? []).map((m: any) => ({
+    id: m.id ?? '',
+    type: m.type ?? '',
+    timestamp: m.timestamp ?? 0,
+    text: m.text ?? m.data?.text?.body ?? undefined,
+  }))
+  return { messages }
+}
+
+export async function obterTelefonePorContactId(contactId: string): Promise<string | null> {
+  const res = await fetch(`${BASE_URL}/contacts/get?id=${encodeURIComponent(contactId)}`, {
+    headers: getHeaders(),
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  if (!json.success) return null
+  const username = json.data?.channel_data?.username
+  return username ? String(username) : null
+}
+
 export async function listarChatsAtivos(
   botId: string,
   signal?: AbortSignal

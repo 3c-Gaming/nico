@@ -1,12 +1,13 @@
-import { BOT_IDS } from './contact-map'
+import { obterBots } from './bot-list'
 import { executarCicloTeste } from './runner'
 
 export async function executarCicloCompleto() {
-  for (const botId of BOT_IDS) {
+  const bots = await obterBots()
+  for (const bot of bots) {
     try {
-      await executarCicloTeste(botId)
+      await executarCicloTeste(bot.botId)
     } catch (err) {
-      console.error(`[bot-test] Erro no bot ${botId}:`, err)
+      console.error(`[bot-test] Erro no bot ${bot.botId}:`, err)
     }
   }
 }

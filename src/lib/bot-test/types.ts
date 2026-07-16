@@ -1,9 +1,9 @@
 export type BotTestStatus = 'pendente' | 'ok' | 'sem_resposta' | 'erro'
 
 export interface BotConfig {
+  botId: string
   numero: string
-  contactId: string
-  flowId: string
+  botNumero: string
   nome: string
 }
 

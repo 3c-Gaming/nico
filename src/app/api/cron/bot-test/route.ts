@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { BOT_IDS } from '@/lib/bot-test/contact-map'
-import { executarCicloTeste } from '@/lib/bot-test/runner'
+import { executarTesteParalelo } from '@/lib/bot-test/runner'
 import { getSupabase } from '@/lib/db/supabase'
+import { enviarMensagemGrupo } from '@/lib/integrações/whapi'
+import { formatarRelatorio } from '@/lib/bot-test/report'
 
 export const maxDuration = 120
 
@@ -37,26 +38,9 @@ export async function GET(request: Request) {
     }
   }
 
-  const total = BOT_IDS.length
-  console.log(`[cron] Testando ${total} bots...`)
+  console.log('[cron] Testando bots em paralelo...')
 
-  const resultados: { botId: string; status: string; erro: string | null }[] = []
-
-  for (const botId of BOT_IDS) {
-    try {
-      const resultado = await executarCicloTeste(botId)
-      resultados.push({
-        botId,
-        status: resultado.status,
-        erro: resultado.erro ?? null,
-      })
-      console.log(`[cron] ${botId}: ${resultado.status}`)
-    } catch (err) {
-      const msg = (err as Error).message
-      console.error(`[cron] ${botId}: erro —`, msg)
-      resultados.push({ botId, status: 'erro', erro: msg })
-    }
-  }
+  const resultados = await executarTesteParalelo()
 
   await supabase
     .from('bot_test_config')
@@ -67,9 +51,24 @@ export async function GET(request: Request) {
   const semResposta = resultados.filter((r) => r.status === 'sem_resposta').length
   const erros = resultados.filter((r) => r.status === 'erro').length
 
+  const groupId = process.env.WHAPI_GROUP_ID
+  if (groupId) {
+    try {
+      const relatorio = formatarRelatorio(resultados)
+      const envio = await enviarMensagemGrupo({ groupId, texto: relatorio })
+      if (!envio.ok) {
+        console.error('[cron] Falha ao enviar relatório:', envio.error)
+      } else {
+        console.log('[cron] Relatório enviado ao grupo')
+      }
+    } catch (err) {
+      console.error('[cron] Erro ao enviar relatório:', (err as Error).message)
+    }
+  }
+
   return NextResponse.json({
     ok: true,
-    total,
+    total: resultados.length,
     ok_count: ok,
     sem_resposta: semResposta,
     erros,

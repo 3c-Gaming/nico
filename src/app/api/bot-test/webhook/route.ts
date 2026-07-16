@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { CONTACT_MAP } from '@/lib/bot-test/contact-map'
+import { obterBots } from '@/lib/bot-test/bot-list'
 import { salvarResultado, obterResultado } from '@/lib/bot-test/store'
 
 const BRIDGE_SECRET = process.env.BRIDGE_SECRET
@@ -9,13 +9,6 @@ interface BridgeWebhookPayload {
   text: string
   timestamp: number
   messageId: string
-}
-
-function botIdByNumero(numero: string): string | null {
-  for (const [id, config] of Object.entries(CONTACT_MAP)) {
-    if (config.numero === numero) return id
-  }
-  return null
 }
 
 export async function POST(req: Request) {
@@ -33,24 +26,24 @@ export async function POST(req: Request) {
     }
 
     const fromClean = payload.from.replace(/@s\.whatsapp\.net$/, '')
-    const botId = botIdByNumero(fromClean)
+    const bots = await obterBots()
+    const bot = bots.find((b) => b.numero === fromClean)
 
-    if (!botId) {
+    if (!bot) {
       return NextResponse.json({ ok: true, matched: false }, { status: 200 })
     }
 
-    const config = CONTACT_MAP[botId]
-    const anterior = await obterResultado(botId)
+    const anterior = await obterResultado(bot.botId)
 
     if (!anterior?.pendente) {
-      console.log(`[bot-test.webhook] ${botId} (${config.nome}): resposta recebida mas nao estava pendente`)
+      console.log(`[bot-test.webhook] ${bot.botId} (${bot.nome}): resposta recebida mas nao estava pendente`)
       return NextResponse.json({ ok: true, matched: true, action: 'ignored' }, { status: 200 })
     }
 
     const preMs = anterior.preTriggerTimestamp ? new Date(anterior.preTriggerTimestamp).getTime() : 0
     const duracaoMs = preMs > 0 ? Date.now() - preMs : 0
 
-    console.log(`[bot-test.webhook] ${botId} (${config.nome}): resposta em ${duracaoMs}ms -> ok | texto=${JSON.stringify(payload.text.slice(0, 80))}`)
+    console.log(`[bot-test.webhook] ${bot.botId} (${bot.nome}): resposta em ${duracaoMs}ms -> ok | texto=${JSON.stringify(payload.text.slice(0, 80))}`)
 
     await salvarResultado({
       ...anterior,
@@ -63,7 +56,7 @@ export async function POST(req: Request) {
       ultimoTriggerOkMs: Date.now(),
     })
 
-    return NextResponse.json({ ok: true, matched: true, action: 'marked_ok', botId }, { status: 200 })
+    return NextResponse.json({ ok: true, matched: true, action: 'marked_ok', botId: bot.botId }, { status: 200 })
   } catch (err) {
     console.error('[bot-test.webhook] erro:', err)
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 200 })
