@@ -16,7 +16,7 @@ import { KanbanCard } from './KanbanCard'
 import { ModalDemanda } from './ModalDemanda'
 import type { Demanda, ColunaDemanda, UsuarioResponsavel } from '@/types'
 
-const COLUNAS: ColunaDemanda[] = ['ideias', 'a_fazer', 'em_foco', 'entregue_garantido']
+const COLUNAS: ColunaDemanda[] = ['ideias', 'fazendo', 'revisao', 'concluido']
 
 interface KanbanBoardProps {
   demandas: Demanda[]

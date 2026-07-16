@@ -335,7 +335,7 @@ export interface ItemLink {
   titulo: string
 }
 
-export type ColunaDemanda = 'ideias' | 'a_fazer' | 'em_foco' | 'entregue_garantido'
+export type ColunaDemanda = 'ideias' | 'fazendo' | 'revisao' | 'concluido'
 
 export type PrioridadeDemanda = 'baixa' | 'media' | 'alta' | 'urgente'
 
