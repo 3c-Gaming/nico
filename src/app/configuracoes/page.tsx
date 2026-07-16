@@ -192,6 +192,7 @@ function ResponsaveisSection() {
   const [email, setEmail] = useState('')
   const [cargo, setCargo] = useState('')
   const [cor, setCor] = useState('#6366f1')
+  const [discordId, setDiscordId] = useState('')
   const [adding, setAdding] = useState(false)
 
   const cores = ['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6']
@@ -219,6 +220,7 @@ function ResponsaveisSection() {
       email: email.trim() || undefined,
       cargo: cargo.trim() || undefined,
       avatar: cor,
+      discordId: discordId.trim() || undefined,
       criadoEm: new Date().toISOString(),
     }
     addUsuarioResponsavel(usuario)
@@ -226,6 +228,7 @@ function ResponsaveisSection() {
     setNome('')
     setEmail('')
     setCargo('')
+    setDiscordId('')
     setAdding(false)
   }
 
@@ -251,6 +254,7 @@ function ResponsaveisSection() {
               <span className="text-sm text-[var(--text-primary)] font-medium">{u.nome}</span>
               {u.cargo && <span className="text-xs text-[var(--text-muted)] ml-2">{u.cargo}</span>}
               {u.email && <p className="text-[10px] text-[var(--text-muted)]">{u.email}</p>}
+              {u.discordId && <p className="text-[10px] text-[var(--text-muted)]">Discord: {u.discordId}</p>}
             </div>
             <button
               onClick={() => handleDelete(u.id)}
@@ -284,6 +288,13 @@ function ResponsaveisSection() {
             value={cargo}
             onChange={(e) => setCargo(e.target.value)}
             placeholder="Cargo (opcional)"
+            className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <input
+            type="text"
+            value={discordId}
+            onChange={(e) => setDiscordId(e.target.value)}
+            placeholder="ID Discord (opcional)"
             className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
           />
           <div className="flex items-center gap-1">

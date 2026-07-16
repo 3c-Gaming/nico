@@ -365,6 +365,7 @@ export interface UsuarioResponsavel {
   email?: string
   avatar?: string
   cargo?: string
+  discordId?: string
   criadoEm: string
 }
 

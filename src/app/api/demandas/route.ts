@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { listarDemandas, criarDemanda } from '@/lib/api-store'
+import { listarDemandas, criarDemanda, listarUsuariosResponsaveis } from '@/lib/api-store'
+import { notificarCriacao } from '@/lib/discord/notify-demandas'
 import type { Demanda } from '@/types'
 
 export async function GET() {
@@ -18,5 +19,10 @@ export async function POST(req: Request) {
     funilIds: body.funilIds ?? [],
     numerosSendpulse: body.numerosSendpulse ?? [],
   })
+
+  const usuarios = await listarUsuariosResponsaveis()
+  const responsavel = demanda.responsavelId ? usuarios.find((u) => u.id === demanda.responsavelId) : undefined
+  notificarCriacao(demanda, responsavel).catch(() => {})
+
   return NextResponse.json({ demanda })
 }
