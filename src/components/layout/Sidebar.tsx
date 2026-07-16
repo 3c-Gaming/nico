@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText } from 'lucide-react'
+import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 
 const LINKS = [
   { href: '/', label: 'Home', icon: Home },
+  { href: '/demandas', label: 'Demandas', icon: ClipboardList },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/disparos', label: 'Disparos', icon: List },
   { href: '/esteiras', label: 'Esteiras', icon: GitBranch },

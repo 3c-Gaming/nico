@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, real, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, text, jsonb, real, boolean, integer } from 'drizzle-orm/pg-core'
 
 export const disparos = pgTable('disparos', {
   id: text('id').primaryKey(),
@@ -65,4 +65,33 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   utm: text('utm'),
   casas: jsonb('casas').default('[]'),
   tipo: text('tipo').notNull().default('disparo'),
+})
+
+export const demandas = pgTable('demandas', {
+  id: text('id').primaryKey(),
+  titulo: text('titulo').notNull(),
+  descricao: text('descricao'),
+  coluna: text('coluna').notNull().default('ideias'),
+  ordem: real('ordem').notNull().default(0),
+  prioridade: text('prioridade').default('media'),
+  tags: jsonb('tags').notNull().default('[]'),
+  responsavelId: text('responsavel_id'),
+  dataCriacao: text('data_criacao'),
+  dataConclusao: text('data_conclusao'),
+  userStories: jsonb('user_stories').notNull().default('[]'),
+  links: jsonb('links').notNull().default('[]'),
+  imagens: jsonb('imagens').notNull().default('[]'),
+  funilIds: jsonb('funil_ids').notNull().default('[]'),
+  numerosSendpulse: jsonb('numeros_sendpulse').notNull().default('[]'),
+  criadoEm: text('criado_em').notNull(),
+  atualizadoEm: text('atualizado_em').notNull(),
+})
+
+export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
+  id: text('id').primaryKey(),
+  nome: text('nome').notNull(),
+  email: text('email'),
+  avatar: text('avatar'),
+  cargo: text('cargo'),
+  criadoEm: text('criado_em').notNull(),
 })

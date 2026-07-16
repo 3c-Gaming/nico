@@ -1,4 +1,4 @@
-import type { Disparo, Esteira } from '@/types'
+import type { Demanda, Disparo, Esteira, UsuarioResponsavel } from '@/types'
 import {
   listarDisparos as dbListarDisparos,
   getDisparo as dbGetDisparo,
@@ -9,11 +9,19 @@ import {
   getEsteira as dbGetEsteira,
   criarEsteira as dbCriarEsteira,
   deletarEsteira as dbDeletarEsteira,
+  listarDemandas as dbListarDemandas,
+  getDemanda as dbGetDemanda,
+  criarDemanda as dbCriarDemanda,
+  atualizarDemanda as dbAtualizarDemanda,
+  deletarDemanda as dbDeletarDemanda,
+  listarUsuariosResponsaveis as dbListarUsuariosResponsaveis,
+  criarUsuarioResponsavel as dbCriarUsuarioResponsavel,
+  deletarUsuarioResponsavel as dbDeletarUsuarioResponsavel,
 } from '@/lib/db/supabase'
 
 declare global {
   var __NICO_STORE__:
-    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira> }
+    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira>; demandas: Record<string, Demanda>; usuariosResponsaveis: Record<string, UsuarioResponsavel> }
     | undefined
 }
 
@@ -25,7 +33,7 @@ export function isDbAvailable(): boolean {
 
 function getMemStore() {
   if (!globalThis.__NICO_STORE__) {
-    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {} }
+    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {}, demandas: {}, usuariosResponsaveis: {} }
   }
   return globalThis.__NICO_STORE__
 }
@@ -96,6 +104,93 @@ export async function deletarDisparo(id: string): Promise<boolean> {
     }
   }
   delete store.disparos[id]
+  return true
+}
+
+// --- Demandas ---
+
+export async function listarDemandas(): Promise<Demanda[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbListarDemandas()
+    } catch { }
+  }
+  return Object.values(getMemStore().demandas)
+}
+
+export async function getDemanda(id: string): Promise<Demanda | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbGetDemanda(id)
+    } catch { }
+  }
+  return getMemStore().demandas[id] ?? null
+}
+
+export async function criarDemanda(demanda: Demanda): Promise<Demanda> {
+  if (isDbAvailable()) {
+    try {
+      return await dbCriarDemanda(demanda)
+    } catch { }
+  }
+  getMemStore().demandas[demanda.id] = demanda
+  return demanda
+}
+
+export async function atualizarDemanda(id: string, updates: Partial<Demanda>): Promise<Demanda | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbAtualizarDemanda(id, updates)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.demandas[id]) return null
+  store.demandas[id] = { ...store.demandas[id], ...updates, atualizadoEm: new Date().toISOString() }
+  return store.demandas[id]
+}
+
+export async function deletarDemanda(id: string): Promise<boolean> {
+  if (isDbAvailable()) {
+    try {
+      return await dbDeletarDemanda(id)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.demandas[id]) return false
+  delete store.demandas[id]
+  return true
+}
+
+// --- Usuarios Responsaveis ---
+
+export async function listarUsuariosResponsaveis(): Promise<UsuarioResponsavel[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbListarUsuariosResponsaveis()
+    } catch { }
+  }
+  return Object.values(getMemStore().usuariosResponsaveis)
+}
+
+export async function criarUsuarioResponsavel(usuario: UsuarioResponsavel): Promise<UsuarioResponsavel> {
+  if (isDbAvailable()) {
+    try {
+      return await dbCriarUsuarioResponsavel(usuario)
+    } catch { }
+  }
+  getMemStore().usuariosResponsaveis[usuario.id] = usuario
+  return usuario
+}
+
+export async function deletarUsuarioResponsavel(id: string): Promise<boolean> {
+  if (isDbAvailable()) {
+    try {
+      return await dbDeletarUsuarioResponsavel(id)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.usuariosResponsaveis[id]) return false
+  delete store.usuariosResponsaveis[id]
   return true
 }
 

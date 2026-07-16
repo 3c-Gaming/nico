@@ -1,6 +1,6 @@
 'use client'
 
-import type { AppState, CacheMetrica, CasaAposta, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA } from '@/types'
+import type { AppState, CacheMetrica, CasaAposta, Demanda, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA, UsuarioResponsavel } from '@/types'
 
 const ESTADO_INICIAL: AppState = {
   disparos: {},
@@ -13,6 +13,8 @@ const ESTADO_INICIAL: AppState = {
   pinnedNumeros: [],
   pinnedFunis: [],
   cacheMetricas: {},
+  demandas: {},
+  usuariosResponsaveis: {},
 }
 
 let cachedState: AppState | null = null
@@ -29,6 +31,9 @@ function syncToApi(path: string, method: string, body?: unknown) {
     .catch((err) => console.warn('[sync]', path, err))
 }
 
+let snapshotCache: AppState | null = null
+let version = 0
+
 export function getState(): AppState {
   if (typeof window === 'undefined') return { ...ESTADO_INICIAL }
   if (!cachedState) {
@@ -37,10 +42,25 @@ export function getState(): AppState {
   return cachedState
 }
 
+export function getSnapshot(): AppState {
+  if (typeof window === 'undefined') return { ...ESTADO_INICIAL }
+  if (!cachedState) {
+    cachedState = { ...ESTADO_INICIAL }
+    snapshotCache = { ...cachedState, demandas: { ...cachedState.demandas }, usuariosResponsaveis: { ...cachedState.usuariosResponsaveis } }
+  }
+  return snapshotCache!
+}
+
+export function bumpVersion(): void {
+  version++
+  snapshotCache = { ...cachedState!, demandas: { ...cachedState!.demandas }, usuariosResponsaveis: { ...cachedState!.usuariosResponsaveis } }
+  window.dispatchEvent(new CustomEvent('nico:state-changed'))
+}
+
 export function setState(state: AppState): void {
   if (typeof window === 'undefined') return
   cachedState = state
-  window.dispatchEvent(new CustomEvent('nico:state-changed'))
+  bumpVersion()
 }
 
 export function patchDisparos(disparos: Partial<Record<string, Disparo>>): void {
@@ -149,6 +169,45 @@ export function deletarDisparo(id: string): void {
   }
   setState(state)
   syncToApi(`/api/disparos/${id}`, 'DELETE')
+}
+
+export function patchDemandas(demandas: Partial<Record<string, Demanda>>): void {
+  const state = getState()
+  for (const [id, data] of Object.entries(demandas)) {
+    if (data) {
+      state.demandas[id] = { ...state.demandas[id], ...data, atualizadoEm: new Date().toISOString() }
+      syncToApi(`/api/demandas/${id}`, 'PUT', data)
+    }
+  }
+  setState(state)
+}
+
+export function addDemanda(demanda: Demanda): void {
+  const state = getState()
+  state.demandas[demanda.id] = demanda
+  setState(state)
+  syncToApi('/api/demandas', 'POST', demanda)
+}
+
+export function deletarDemanda(id: string): void {
+  const state = getState()
+  delete state.demandas[id]
+  setState(state)
+  syncToApi(`/api/demandas/${id}`, 'DELETE')
+}
+
+export function addUsuarioResponsavel(usuario: UsuarioResponsavel): void {
+  const state = getState()
+  state.usuariosResponsaveis[usuario.id] = usuario
+  setState(state)
+  syncToApi('/api/usuarios-responsaveis', 'POST', usuario)
+}
+
+export function deletarUsuarioResponsavel(id: string): void {
+  const state = getState()
+  delete state.usuariosResponsaveis[id]
+  setState(state)
+  syncToApi(`/api/usuarios-responsaveis/${id}`, 'DELETE')
 }
 
 function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[]) {

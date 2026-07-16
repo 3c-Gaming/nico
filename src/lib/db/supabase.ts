@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica } from '@/types'
+import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -13,39 +13,35 @@ const globalForSupabase = globalThis as unknown as {
 }
 
 const CAMEL_TO_SNAKE: Record<string, string> = {
-  // Disparos
-  casasAposta: 'casas_aposta',
-  dataDisparo: 'data_disparo',
-  horarioDisparo: 'horario_disparo',
-  templateDaxx: 'template_daxx',
-  numeroSendpulse: 'numero_sendpulse',
-  esteiraPaiId: 'esteira_pai_id',
-  numerosSendpulse: 'numeros_sendpulse',
-  linkTemplatesSelecionados: 'link_templates_selecionados',
-  criadoEm: 'criado_em',
   atualizadoEm: 'atualizado_em',
-  flowIds: 'flow_ids',
-  cpaPainelId: 'cpa_painel_id',
   betmgmPid: 'betmgm_pid',
-  valorTotalBase: 'valor_total_base',
-  // Esteiras
-  criadaEm: 'criado_em',
-  // Casas
-  paineisCPA: 'paineis_cpa',
-  funilIds: 'funil_ids',
-  // Link Templates
-  casaId: 'casa_id',
-  urlTemplate: 'url_template',
-  // Flow Tag Configs
-  flowId: 'flow_id',
   botId: 'bot_id',
-  // Preferencias
-  pinnedNumeros: 'pinned_numeros',
-  pinnedFunis: 'pinned_funis',
-  updatedAt: 'updated_at',
-  // Cache Metricas
+  casaId: 'casa_id',
+  casasAposta: 'casas_aposta',
+  cpaPainelId: 'cpa_painel_id',
+  criadaEm: 'criado_em',
+  criadoEm: 'criado_em',
+  dataConclusao: 'data_conclusao',
+  dataCriacao: 'data_criacao',
+  dataDisparo: 'data_disparo',
+  esteiraPaiId: 'esteira_pai_id',
+  flowId: 'flow_id',
+  flowIds: 'flow_ids',
+  funilIds: 'funil_ids',
+  horarioDisparo: 'horario_disparo',
   leadsHoje: 'leads_hoje',
+  linkTemplatesSelecionados: 'link_templates_selecionados',
+  numerosSendpulse: 'numeros_sendpulse',
+  paineisCPA: 'paineis_cpa',
+  pinnedFunis: 'pinned_funis',
+  pinnedNumeros: 'pinned_numeros',
+  responsavelId: 'responsavel_id',
+  templateDaxx: 'template_daxx',
   totalLeads: 'total_leads',
+  updatedAt: 'updated_at',
+  urlTemplate: 'url_template',
+  userStories: 'user_stories',
+  valorTotalBase: 'valor_total_base',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -297,6 +293,66 @@ export async function listarCacheMetricas(): Promise<CacheMetrica[]> {
     return []
   }
   return rows<CacheMetrica>(data)
+}
+
+// --- Demandas ---
+
+export async function listarDemandas(): Promise<Demanda[]> {
+  const { data, error } = await tb('demandas').select('*').order('ordem', { ascending: true })
+  if (error) {
+    console.warn('[supabase] listarDemandas error:', error.message)
+    return []
+  }
+  return rows<Demanda>(data)
+}
+
+export async function getDemanda(id: string): Promise<Demanda | null> {
+  const { data, error } = await tb('demandas').select('*').eq('id', id).single()
+  if (error) return null
+  return row<Demanda>(data)
+}
+
+export async function criarDemanda(demanda: Demanda): Promise<Demanda> {
+  const { data, error } = await tb('demandas').insert(toSnakeCase(demanda as any)).select().single()
+  if (error) throw new Error(`Erro ao criar demanda: ${error.message}`)
+  return row<Demanda>(data)!
+}
+
+export async function atualizarDemanda(id: string, updates: Partial<Demanda>): Promise<Demanda | null> {
+  const { data, error } = await tb('demandas')
+    .update(toSnakeCase({ ...updates, atualizadoEm: new Date().toISOString() } as any))
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return null
+  return row<Demanda>(data)
+}
+
+export async function deletarDemanda(id: string): Promise<boolean> {
+  const { error } = await tb('demandas').delete().eq('id', id)
+  return !error
+}
+
+// --- Usuarios Responsaveis ---
+
+export async function listarUsuariosResponsaveis(): Promise<UsuarioResponsavel[]> {
+  const { data, error } = await tb('usuarios_responsaveis').select('*').order('nome')
+  if (error) {
+    console.warn('[supabase] listarUsuariosResponsaveis error:', error.message)
+    return []
+  }
+  return rows<UsuarioResponsavel>(data)
+}
+
+export async function criarUsuarioResponsavel(usuario: UsuarioResponsavel): Promise<UsuarioResponsavel> {
+  const { data, error } = await tb('usuarios_responsaveis').insert(toSnakeCase(usuario as any)).select().single()
+  if (error) throw new Error(`Erro ao criar usuario: ${error.message}`)
+  return row<UsuarioResponsavel>(data)!
+}
+
+export async function deletarUsuarioResponsavel(id: string): Promise<boolean> {
+  const { error } = await tb('usuarios_responsaveis').delete().eq('id', id)
+  return !error
 }
 
 export async function upsertCacheMetricas(metricas: CacheMetrica[]): Promise<CacheMetrica[]> {

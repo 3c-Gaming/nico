@@ -323,6 +323,51 @@ export interface PreferenciaCopa {
   stage: string
 }
 
+export interface UserStory {
+  id: string
+  titulo: string
+  descricao?: string
+  concluido: boolean
+}
+
+export interface ItemLink {
+  url: string
+  titulo: string
+}
+
+export type ColunaDemanda = 'ideias' | 'a_fazer' | 'em_foco' | 'entregue_garantido'
+
+export type PrioridadeDemanda = 'baixa' | 'media' | 'alta' | 'urgente'
+
+export interface Demanda {
+  id: string
+  titulo: string
+  descricao?: string
+  coluna: ColunaDemanda
+  ordem: number
+  prioridade: PrioridadeDemanda
+  tags: string[]
+  responsavelId?: string
+  dataCriacao?: string
+  dataConclusao?: string
+  userStories: UserStory[]
+  links: ItemLink[]
+  imagens: string[]
+  funilIds: string[]
+  numerosSendpulse: string[]
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface UsuarioResponsavel {
+  id: string
+  nome: string
+  email?: string
+  avatar?: string
+  cargo?: string
+  criadoEm: string
+}
+
 export interface CacheMetrica {
   funil: string
   leadsHoje: number
@@ -343,5 +388,7 @@ export interface AppState {
   pinnedNumeros: string[]
   pinnedFunis: string[]
   cacheMetricas: Record<string, CacheMetrica>
+  demandas: Record<string, Demanda>
+  usuariosResponsaveis: Record<string, UsuarioResponsavel>
   ultimaSync?: string
 }

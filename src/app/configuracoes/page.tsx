@@ -4,9 +4,9 @@ import { useState, useEffect, Fragment } from 'react'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, Plus, X, Check, AlertTriangle } from 'lucide-react'
-import { getState, updateFlowTagConfig } from '@/lib/store'
-import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig } from '@/types'
+import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, Plus, X, Check, AlertTriangle, UserPlus, UserX } from 'lucide-react'
+import { getState, updateFlowTagConfig, addUsuarioResponsavel, deletarUsuarioResponsavel } from '@/lib/store'
+import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig, UsuarioResponsavel } from '@/types'
 
 function TagChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -185,6 +185,134 @@ function DaxxTokenSection() {
   )
 }
 
+function ResponsaveisSection() {
+  const [usuarios, setUsuarios] = useState<UsuarioResponsavel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [nome, setNome] = useState('')
+  const [email, setEmail] = useState('')
+  const [cargo, setCargo] = useState('')
+  const [cor, setCor] = useState('#6366f1')
+  const [adding, setAdding] = useState(false)
+
+  const cores = ['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6']
+
+  async function carregar() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/usuarios-responsaveis')
+      if (res.ok) {
+        const data = await res.json()
+        setUsuarios(data.usuarios)
+      }
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  async function handleAdd() {
+    if (!nome.trim()) return
+    const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 11)
+    const usuario: UsuarioResponsavel = {
+      id,
+      nome: nome.trim(),
+      email: email.trim() || undefined,
+      cargo: cargo.trim() || undefined,
+      avatar: cor,
+      criadoEm: new Date().toISOString(),
+    }
+    addUsuarioResponsavel(usuario)
+    setUsuarios([...usuarios, usuario])
+    setNome('')
+    setEmail('')
+    setCargo('')
+    setAdding(false)
+  }
+
+  async function handleDelete(id: string) {
+    deletarUsuarioResponsavel(id)
+    setUsuarios(usuarios.filter((u) => u.id !== id))
+  }
+
+  if (loading) return <Spinner size={16} />
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        {usuarios.map((u) => (
+          <div key={u.id} className="flex items-center gap-3 p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border)]">
+            <span
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold text-white flex-shrink-0"
+              style={{ backgroundColor: u.avatar ?? '#6366f1' }}
+            >
+              {u.nome.charAt(0).toUpperCase()}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-[var(--text-primary)] font-medium">{u.nome}</span>
+              {u.cargo && <span className="text-xs text-[var(--text-muted)] ml-2">{u.cargo}</span>}
+              {u.email && <p className="text-[10px] text-[var(--text-muted)]">{u.email}</p>}
+            </div>
+            <button
+              onClick={() => handleDelete(u.id)}
+              className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+              title="Remover"
+            >
+              <UserX size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {adding ? (
+        <div className="space-y-2 p-3 rounded bg-[var(--bg-elevated)] border border-[var(--border)]">
+          <input
+            type="text"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Nome do responsavel"
+            className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email (opcional)"
+            className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <input
+            type="text"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+            placeholder="Cargo (opcional)"
+            className="w-full h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[var(--text-muted)]">Cor:</span>
+            {cores.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCor(c)}
+                className={`w-5 h-5 rounded-full border-2 transition-all ${cor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Button size="sm" onClick={handleAdd} disabled={!nome.trim()}>
+              <Save size={12} /> Adicionar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancelar</Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+          <UserPlus size={14} /> Adicionar Responsavel
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function BotTestConfigSection() {
   const [intervaloMinutos, setIntervaloMinutos] = useState(15)
   const [carregando, setCarregando] = useState(true)
@@ -297,6 +425,14 @@ export default function ConfiguracoesPage() {
       <div className="flex items-center justify-between max-w-sm p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <span className="text-sm text-[var(--text-primary)]">Tema</span>
         <ThemeToggle />
+      </div>
+
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Responsaveis para Demandas</h2>
+        <p className="text-xs text-[var(--text-muted)] mb-4">
+          Cadastre os responsaveis que poderao ser atribuidos as demandas no Kanban.
+        </p>
+        <ResponsaveisSection />
       </div>
 
       <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
