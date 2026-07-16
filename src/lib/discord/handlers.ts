@@ -123,18 +123,28 @@ export function dispatchCommand(
   options: { name: string; value: string }[] | undefined,
   reply: ReplyFn
 ) {
-  switch (name) {
-    case 'status':
-      return handleStatus(reply)
-    case 'fluxos':
-      return handleFluxos(reply, options)
-    case 'testar':
-      return handleTestar(reply, options)
-    case 'relatorio':
-      return handleRelatorio(reply)
-    case 'ajuda':
-      return handleAjuda(reply)
-    default:
-      return reply({ embeds: [embedErro(`Comando desconhecido: \`${name}\``)] })
+  const wrapped = async () => {
+    try {
+      switch (name) {
+        case 'status':
+          return await handleStatus(reply)
+        case 'fluxos':
+          return await handleFluxos(reply, options)
+        case 'testar':
+          return await handleTestar(reply, options)
+        case 'relatorio':
+          return await handleRelatorio(reply)
+        case 'ajuda':
+          return await handleAjuda(reply)
+        default:
+          return await reply({ embeds: [embedErro(`Comando desconhecido: \`${name}\``)] })
+      }
+    } catch (err) {
+      console.error(`[discord] dispatchCommand "${name}" failed:`, (err as Error).message)
+      try { await reply({ embeds: [embedErro(`Erro interno ao executar \`${name}\`. ${(err as Error).message}`)] }) } catch {}
+    }
   }
+  wrapped().catch((err) => {
+    console.error(`[discord] unhandled in dispatchCommand "${name}":`, (err as Error).message)
+  })
 }

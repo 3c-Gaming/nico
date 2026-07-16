@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     dispatchCommand(name, options, reply)
 
-    return NextResponse.json({ type: ResponseType.DEFERRED_UPDATE_MESSAGE })
+    return NextResponse.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE })
   }
 
   return NextResponse.json({ error: 'Unknown interaction type' }, { status: 400 })

@@ -39,21 +39,30 @@ export async function replyToInteraction(
   payload: { embeds?: unknown[]; content?: string }
 ) {
   const token = process.env.DISCORD_BOT_TOKEN
-  if (!token) throw new Error('DISCORD_BOT_TOKEN não configurado')
+  if (!token) {
+    console.error('[discord] DISCORD_BOT_TOKEN não configurado')
+    return
+  }
 
-  const res = await fetch(
-    `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bot ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+  try {
+    const res = await fetch(
+      `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bot ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    )
+    if (!res.ok) {
+      const body = await res.text()
+      console.error(`[discord] replyToInteraction error ${res.status}: ${body}`)
     }
-  )
-  if (!res.ok) throw new Error(`Discord API ${res.status}: ${await res.text()}`)
-  return res.json()
+  } catch (err) {
+    console.error('[discord] replyToInteraction fetch failed:', (err as Error).message)
+  }
 }
 
 export async function sendChannelMessage(channelId: string, payload: { embeds?: unknown[]; content?: string }) {
