@@ -225,11 +225,11 @@ export interface FlowTagConfig {
   flowId: string
   botId: string
   tags: string[]
-  funil?: string
-  utm?: string
+  funil?: string | null
+  utm?: string | null
   casas?: string[]
   tipo?: 'traffic' | 'disparo'
-  lpUrl?: string
+  lpUrl?: string | null
 }
 
 export interface CopaMatch {

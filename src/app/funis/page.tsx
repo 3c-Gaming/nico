@@ -18,9 +18,9 @@ interface FlowRow {
   botNome: string
   botNumero: string
   flow: FluxoSendpulse
-  funil?: string
-  utm?: string
-  lpUrl?: string
+  funil?: string | null
+  utm?: string | null
+  lpUrl?: string | null
   tags: string[]
   casas: string[]
   leadsHoje: number
@@ -122,7 +122,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || undefined, utm: utm || undefined, lpUrl: lpUrl || undefined, tags, casas, tipo })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || null, utm: utm || null, lpUrl: lpUrl || null, tags, casas, tipo })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
