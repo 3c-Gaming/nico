@@ -1,0 +1,140 @@
+import type { DiscordEmbed } from './embeds'
+import {
+  embedStatusBots,
+  embedFluxosBot,
+  embedRelatorio,
+  embedErro,
+  embedSucesso,
+  embedAjuda,
+} from './embeds'
+
+function getOption(options: { name: string; value: string }[] | undefined, name: string): string | null {
+  if (!options) return null
+  const opt = options.find(o => o.name === name)
+  return opt?.value ?? null
+}
+
+function findBot(numeros: { id: string; nome: string; numero: string }[], input: string) {
+  const lower = input.toLowerCase()
+  return numeros.find(
+    n => n.id === input || n.numero?.includes(input) || n.nome?.toLowerCase().includes(lower)
+  )
+}
+
+type ReplyFn = (payload: { embeds?: DiscordEmbed[]; content?: string }) => Promise<void>
+
+export async function handleStatus(reply: ReplyFn) {
+  try {
+    const { listarNumeros } = await import('@/lib/integrações/sendpulse')
+    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    await reply({ embeds: [embedStatusBots(numeros)] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao buscar status: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleFluxos(reply: ReplyFn, options: { name: string; value: string }[] | undefined) {
+  const botInput = getOption(options, 'bot')
+  if (!botInput) {
+    await reply({ embeds: [embedErro('Parâmetro `bot` é obrigatório.')] })
+    return
+  }
+
+  try {
+    const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
+    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const bot = findBot(numeros, botInput)
+
+    if (!bot) {
+      await reply({ embeds: [embedErro(`Bot \`${botInput}\` não encontrado. Use /status para ver os bots disponíveis.`)] })
+      return
+    }
+
+    const fluxos = await listarFluxos(bot.id, AbortSignal.timeout(15_000))
+    await reply({ embeds: [embedFluxosBot(bot.nome || bot.numero || bot.id, fluxos)] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao buscar fluxos: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleTestar(reply: ReplyFn, options: { name: string; value: string }[] | undefined) {
+  const botInput = getOption(options, 'bot')
+  if (!botInput) {
+    await reply({ embeds: [embedErro('Parâmetro `bot` é obrigatório.')] })
+    return
+  }
+
+  try {
+    const { listarNumeros } = await import('@/lib/integrações/sendpulse')
+    const { executarTeste } = await import('@/lib/testes/runner')
+    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const bot = findBot(numeros, botInput)
+
+    if (!bot) {
+      await reply({ embeds: [embedErro(`Bot \`${botInput}\` não encontrado. Use /status para ver os bots disponíveis.`)] })
+      return
+    }
+
+    const resultado = await executarTeste({ botId: bot.id })
+    const statusIcon = resultado.status === 'ok' ? '✅' : resultado.status === 'erro' ? '❌' : '⏳'
+
+    await reply({
+      embeds: [embedSucesso(
+        [
+          `${statusIcon} **Teste executado em ${bot.nome || bot.numero}**`,
+          `Status: \`${resultado.status}\``,
+          `Duração: ${resultado.duracaoMs}ms`,
+          resultado.erro ? `Erro: ${resultado.erro}` : '',
+        ].filter(Boolean).join('\n')
+      )],
+    })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao executar teste: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleRelatorio(reply: ReplyFn) {
+  try {
+    const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
+    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
+
+    await Promise.all(numeros.map(async num => {
+      try {
+        const fluxos = await listarFluxos(num.id, AbortSignal.timeout(10_000))
+        fluxosPorBot.set(num.id, fluxos)
+      } catch {
+        fluxosPorBot.set(num.id, [])
+      }
+    }))
+
+    await reply({ embeds: [embedRelatorio(numeros, fluxosPorBot)] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao gerar relatório: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleAjuda(reply: ReplyFn) {
+  await reply({ embeds: [embedAjuda()] })
+}
+
+export function dispatchCommand(
+  name: string,
+  options: { name: string; value: string }[] | undefined,
+  reply: ReplyFn
+) {
+  switch (name) {
+    case 'status':
+      return handleStatus(reply)
+    case 'fluxos':
+      return handleFluxos(reply, options)
+    case 'testar':
+      return handleTestar(reply, options)
+    case 'relatorio':
+      return handleRelatorio(reply)
+    case 'ajuda':
+      return handleAjuda(reply)
+    default:
+      return reply({ embeds: [embedErro(`Comando desconhecido: \`${name}\``)] })
+  }
+}
