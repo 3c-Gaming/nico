@@ -3,6 +3,8 @@ import { executarTesteParalelo } from '@/lib/bot-test/runner'
 import { getSupabase } from '@/lib/db/supabase'
 import { enviarMensagemGrupo } from '@/lib/integrações/whapi'
 import { formatarRelatorio } from '@/lib/bot-test/report'
+import { sendChannelMessage } from '@/lib/discord/verify'
+import { embedResumoTestes } from '@/lib/discord/embeds'
 
 export const maxDuration = 120
 
@@ -39,8 +41,10 @@ export async function GET(request: Request) {
   }
 
   console.log('[cron] Testando bots em paralelo...')
+  const inicio = Date.now()
 
   const resultados = await executarTesteParalelo()
+  const duracao = Date.now() - inicio
 
   await supabase
     .from('bot_test_config')
@@ -51,18 +55,31 @@ export async function GET(request: Request) {
   const semResposta = resultados.filter((r) => r.status === 'sem_resposta').length
   const erros = resultados.filter((r) => r.status === 'erro').length
 
+  // Notificar WhatsApp (já existente)
   const groupId = process.env.WHAPI_GROUP_ID
   if (groupId) {
     try {
       const relatorio = formatarRelatorio(resultados)
       const envio = await enviarMensagemGrupo({ groupId, texto: relatorio })
       if (!envio.ok) {
-        console.error('[cron] Falha ao enviar relatório:', envio.error)
+        console.error('[cron] Falha ao enviar relatório (WhatsApp):', envio.error)
       } else {
-        console.log('[cron] Relatório enviado ao grupo')
+        console.log('[cron] Relatório enviado ao grupo (WhatsApp)')
       }
     } catch (err) {
-      console.error('[cron] Erro ao enviar relatório:', (err as Error).message)
+      console.error('[cron] Erro ao enviar relatório (WhatsApp):', (err as Error).message)
+    }
+  }
+
+  // Notificar Discord
+  const discordChannelId = process.env.DISCORD_REPORT_CHANNEL_ID
+  if (discordChannelId) {
+    try {
+      const embed = embedResumoTestes(resultados, duracao)
+      await sendChannelMessage(discordChannelId, { embeds: [embed] })
+      console.log('[cron] Relatório enviado ao Discord')
+    } catch (err) {
+      console.error('[cron] Erro ao enviar relatório (Discord):', (err as Error).message)
     }
   }
 

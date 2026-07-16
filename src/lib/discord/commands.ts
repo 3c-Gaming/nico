@@ -35,4 +35,8 @@ export const DISCORD_COMMANDS = [
     name: 'ajuda',
     description: 'Lista todos os comandos disponíveis',
   },
+  {
+    name: 'testartodos',
+    description: 'Testa todos os bots ativos de uma vez',
+  },
 ]

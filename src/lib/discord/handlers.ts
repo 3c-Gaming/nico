@@ -6,6 +6,8 @@ import {
   embedErro,
   embedSucesso,
   embedAjuda,
+  embedResultadoTeste,
+  embedResumoTestes,
 } from './embeds'
 
 function getOption(options: { name: string; value: string }[] | undefined, name: string): string | null {
@@ -78,20 +80,20 @@ export async function handleTestar(reply: ReplyFn, options: { name: string; valu
     }
 
     const resultado = await executarTesteManual(config.botId)
-    const statusIcon = resultado.status === 'ok' ? '✅' : resultado.status === 'erro' ? '❌' : '⏳'
-
-    await reply({
-      embeds: [embedSucesso(
-        [
-          `${statusIcon} **Teste executado em ${config.nome}**`,
-          `Status: \`${resultado.status}\``,
-          `Duração: ${resultado.duracaoMs}ms`,
-          resultado.erro ? `Erro: ${resultado.erro}` : '',
-        ].filter(Boolean).join('\n')
-      )],
-    })
+    await reply({ embeds: [embedResultadoTeste(resultado)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao executar teste: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleTestarTodos(reply: ReplyFn) {
+  const inicio = Date.now()
+  try {
+    const { executarTesteParalelo } = await import('@/lib/bot-test/runner')
+    const resultados = await executarTesteParalelo()
+    await reply({ embeds: [embedResumoTestes(resultados, Date.now() - inicio)] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao testar todos os bots: ${(err as Error).message}`)] })
   }
 }
 
@@ -134,6 +136,8 @@ export function dispatchCommand(
           return await handleFluxos(reply, options)
         case 'testar':
           return await handleTestar(reply, options)
+        case 'testartodos':
+          return await handleTestarTodos(reply)
         case 'relatorio':
           return await handleRelatorio(reply)
         case 'ajuda':
