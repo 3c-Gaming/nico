@@ -7,9 +7,9 @@ import type { Demanda, UsuarioResponsavel, ColunaDemanda } from '@/types'
 
 const COLUNA_TITULO: Record<ColunaDemanda, string> = {
   ideias: 'Ideias',
-  a_fazer: 'A Fazer',
-  em_foco: 'Em Foco',
-  entregue_garantido: 'Entregue - Garantido',
+  fazendo: 'Fazendo',
+  revisao: 'Revisão',
+  concluido: 'Concluído',
 }
 
 interface KanbanColumnProps {
