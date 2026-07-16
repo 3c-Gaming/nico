@@ -6,7 +6,7 @@ import { KanbanCard } from './KanbanCard'
 import type { Demanda, UsuarioResponsavel, ColunaDemanda } from '@/types'
 
 const COLUNA_TITULO: Record<ColunaDemanda, string> = {
-  ideias: 'Ideias',
+  ideias: 'Na Fila',
   fazendo: 'Fazendo',
   revisao: 'Revisão',
   concluido: 'Concluído',

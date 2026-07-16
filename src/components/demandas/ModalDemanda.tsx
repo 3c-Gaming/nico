@@ -11,7 +11,7 @@ function gerarId() {
 }
 
 const COLUNAS: { value: ColunaDemanda; label: string }[] = [
-  { value: 'ideias', label: 'Ideias' },
+  { value: 'ideias', label: 'Na Fila' },
   { value: 'fazendo', label: 'Fazendo' },
   { value: 'revisao', label: 'Revisão' },
   { value: 'concluido', label: 'Concluído' },
