@@ -35,21 +35,23 @@ export function KanbanColumn({ coluna, demandas, usuarios, onCardClick }: Kanban
 
       <div
         ref={setNodeRef}
-        className={`flex-1 p-2 space-y-2 overflow-y-auto min-h-[200px] max-h-[calc(100vh-200px)] transition-colors ${isOver ? 'bg-[var(--bg-elevated)]/50' : ''}`}
+        className={`flex-1 p-2 space-y-2 overflow-y-auto transition-colors ${isOver ? 'bg-[var(--bg-elevated)]/50' : ''}`}
+        style={{ minHeight: '400px', maxHeight: 'calc(100vh - 200px)' }}
       >
         <SortableContext items={demandas.map((d) => d.id)} strategy={verticalListSortingStrategy}>
           {demandas.map((demanda) => (
-            <KanbanCard
-              key={demanda.id}
-              demanda={demanda}
-              usuario={demanda.responsavelId ? usuarios[demanda.responsavelId] : undefined}
-              onClick={() => onCardClick(demanda.id)}
-            />
+            <div key={demanda.id} className="pb-1">
+              <KanbanCard
+                demanda={demanda}
+                usuario={demanda.responsavelId ? usuarios[demanda.responsavelId] : undefined}
+                onClick={() => onCardClick(demanda.id)}
+              />
+            </div>
           ))}
         </SortableContext>
 
         {demandas.length === 0 && (
-          <div className="flex items-center justify-center h-24 text-xs text-[var(--text-muted)]">
+          <div className="flex items-center justify-center h-32 text-xs text-[var(--text-muted)]">
             Arraste uma demanda aqui
           </div>
         )}

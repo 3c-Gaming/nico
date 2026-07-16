@@ -32,7 +32,7 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
   const [creating, setCreating] = useState(false)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
   const demandasPorColuna = COLUNAS.reduce(
