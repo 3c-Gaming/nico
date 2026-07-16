@@ -187,12 +187,14 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const flowShort = '...' + estado.novoFlowId.slice(-8)
 
-    // Deploy no Lovable (server-side)
+    // Deploy no Lovable (server-side com verificação real)
     let deployMsg = ''
     if (pagina.lovable_project_id) {
-      await ctx.editMessageText('⏳ Deployando no Lovable...')
       const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
-      const deploy = await deployLovable(pagina.lovable_project_id)
+      const deploy = await deployLovable(
+        pagina.lovable_project_id,
+        async (msg) => { try { await ctx.editMessageText(msg) } catch {} },
+      )
       deployMsg = `\n${deploy.message}`
     }
 

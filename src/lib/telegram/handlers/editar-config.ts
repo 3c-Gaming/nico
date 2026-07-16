@@ -233,12 +233,14 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
 
     estadosEdicaoConfig.delete(chatId)
 
-    // Deploy no Lovable (server-side)
+    // Deploy no Lovable (server-side com verificação real)
     let deployMsg = ''
     if (pagina.lovable_project_id) {
-      await ctx.editMessageText('⏳ Deployando no Lovable...')
       const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
-      const deploy = await deployLovable(pagina.lovable_project_id)
+      const deploy = await deployLovable(
+        pagina.lovable_project_id,
+        async (msg) => { try { await ctx.editMessageText(msg) } catch {} },
+      )
       deployMsg = `\n${deploy.message}`
     }
 
