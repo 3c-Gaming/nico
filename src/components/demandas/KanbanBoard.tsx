@@ -137,6 +137,7 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
       </DndContext>
 
       <ModalDemanda
+        key={'criar'}
         open={creating}
         onClose={() => setCreating(false)}
         onSave={(d) => { onDemandaUpdate(d); setCreating(false) }}
