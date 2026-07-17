@@ -79,3 +79,40 @@ export async function deployLovable(
     return { ok: false, message: `❌ Erro no deploy: ${(err as Error).message}` }
   }
 }
+
+/**
+ * Poll deploy progress via GET /deployments/{id}/progress.
+ * Não precisa de Castle token — funciona server-side.
+ */
+export async function pollDeployProgress(
+  projectId: string,
+  deploymentId: string,
+  maxWaitMs = 90_000,
+): Promise<{ ok: boolean; status: string; url?: string }> {
+  const firebaseToken = await getFirebaseToken()
+  const headers = {
+    'Authorization': `Bearer ${firebaseToken}`,
+    'Content-Type': 'application/json',
+  }
+
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, 3000))
+    try {
+      const res = await fetch(
+        `https://api.lovable.dev/projects/${projectId}/deployments/${deploymentId}/progress`,
+        { headers }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const status = (data.status || '').toLowerCase()
+      if (status === 'completed') {
+        return { ok: true, status: 'completed', url: data.url }
+      }
+      if (status === 'failed' || status === 'error') {
+        return { ok: false, status: data.status }
+      }
+    } catch { /* retry */ }
+  }
+  return { ok: false, status: 'timeout' }
+}

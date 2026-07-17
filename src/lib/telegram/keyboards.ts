@@ -49,11 +49,15 @@ export function listaFluxos(fluxos: Array<{ id: string; nome: string; status: st
   return kb
 }
 
-export function confirmacao(paginaIdx: number): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('✅ Confirmar e Commitar', `pg:ok:${paginaIdx}`)
-    .row()
-    .text('❌ Cancelar', `pg:c:${paginaIdx}`)
+export function confirmacao(paginaIdx: number, webAppState?: object): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  if (webAppState) {
+    const s = Buffer.from(JSON.stringify(webAppState)).toString('base64')
+    kb.webApp('✅ Confirmar e Commitar', `${APP_URL}/commit-deploy?s=${s}`)
+  } else {
+    kb.text('✅ Confirmar e Commitar', `pg:ok:${paginaIdx}`)
+  }
+  return kb.row().text('❌ Cancelar', `pg:c:${paginaIdx}`)
 }
 
 export function listaCasasFiltro(casas: Array<{ id: string; nome: string }>, contagens: Map<string, number>): InlineKeyboard {
@@ -69,9 +73,13 @@ export function listaCasasFiltro(casas: Array<{ id: string; nome: string }>, con
   return kb
 }
 
-export function confirmacaoConfig(paginaIdx: number): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('✅ Confirmar e Commitar', `pg:okc:${paginaIdx}`)
-    .row()
-    .text('❌ Cancelar', `pg:cc:${paginaIdx}`)
+export function confirmacaoConfig(paginaIdx: number, webAppState?: object): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  if (webAppState) {
+    const s = Buffer.from(JSON.stringify(webAppState)).toString('base64')
+    kb.webApp('✅ Confirmar e Commitar', `${APP_URL}/commit-deploy?s=${s}`)
+  } else {
+    kb.text('✅ Confirmar e Commitar', `pg:okc:${paginaIdx}`)
+  }
+  return kb.row().text('❌ Cancelar', `pg:cc:${paginaIdx}`)
 }

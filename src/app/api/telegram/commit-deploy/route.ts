@@ -5,6 +5,7 @@ import {
   extractLeadFlowConfig, replaceLeadFlowConfig,
   extractRedirectConfig, replaceRedirectConfig,
 } from '@/lib/paginas/github-sync'
+import { pollDeployProgress } from '@/lib/paginas/lovable-deploy'
 
 const FIREBASE_API_KEY = process.env.LOVABLE_FIREBASE_API_KEY
 const REFRESH_TOKEN = process.env.LOVABLE_REFRESH_TOKEN
@@ -163,17 +164,32 @@ export async function POST(req: Request) {
       } catch { /* não crítico */ }
     }
 
-    // 4. Enviar mensagem de sucesso no Telegram
+    // 4. Poll deploy progress (se tiver deployment_id)
+    if (deployResult?.deployment_id && lovable_project_id) {
+      if (chatId) await sendTelegram(chatId, `⏳ *Commit feito!* Aguardando deploy...\n\n📄 ${nome}`)
+      const progress = await pollDeployProgress(lovable_project_id, deployResult.deployment_id)
+      if (progress.ok) {
+        deployResult.status = 'completed'
+        if (progress.url) deployResult.url = progress.url
+      } else {
+        deployResult.status = progress.status
+      }
+    }
+
+    // 5. Enviar mensagem final no Telegram
     if (chatId) {
-      let msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
-      if (deployResult?.url) {
-        msg += `\n🚀 Deploy: ${deployResult.url}`
-      } else if (deployResult?.deployment_id) {
-        msg += `\n🚀 Deploy iniciado`
+      let msg = ''
+      if (deployResult?.status === 'completed') {
+        msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
+        if (deployResult.url) msg += `\n🔗 ${deployResult.url}`
+      } else if (deployResult?.status === 'timeout') {
+        msg = `⚠️ *Commit feito, deploy em andamento*\n\n📄 ${nome}\n📝 ${commitMsg}\n⏳ O deploy pode levar mais tempo`
       } else if (deployResult?.error) {
-        msg += `\n⚠️ Deploy: erro`
+        msg = `⚠️ *Commit feito, deploy falhou*\n\n📄 ${nome}\n📝 ${commitMsg}\n❌ ${typeof deployResult.error === 'string' ? deployResult.error.slice(0, 100) : 'Erro no deploy'}`
       } else if (!lovable_project_id) {
-        msg += `\n📌 Sem deploy (sem projeto Lovable)`
+        msg = `✅ *Commit feito!*\n\n📄 ${nome}\n📝 ${commitMsg}\n📌 Sem deploy (sem projeto Lovable)`
+      } else {
+        msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
       }
       await sendTelegram(chatId, msg)
     }

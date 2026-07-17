@@ -163,12 +163,25 @@ export async function handleTextoRecebido(ctx: Context): Promise<boolean> {
   // Delete user's text message
   try { await ctx.deleteMessage() } catch {}
 
+  // Construir state para WebApp (commit + deploy com Castle token)
+  const webAppState = pagina?.lovable_project_id ? {
+    type: 'config',
+    chatId,
+    github_owner: pagina.github_owner,
+    github_repo: pagina.github_repo,
+    tracking_file: pagina.tracking_file,
+    lovable_project_id: pagina.lovable_project_id,
+    campo: estado.campo,
+    valorAtual: novoValor,
+    nome: pagina.nome,
+  } : undefined
+
   // Edit the original bot message
   await ctx.api.editMessageText(
     chatId,
     estado.originalMessageId!,
     texto,
-    { reply_markup: confirmacaoConfig(estado.paginaIdx), parse_mode: 'Markdown' }
+    { reply_markup: confirmacaoConfig(estado.paginaIdx, webAppState), parse_mode: 'Markdown' }
   )
 
   return true
