@@ -304,7 +304,8 @@ export default function HomePage() {
     const configs = getState().flowTagConfigs
 
     return pinnedFunis.map((funilNome) => {
-      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome)
+      const flowIdsValidos = new Set(Object.values(fluxosMap).flat().map(f => f.id))
+      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome && flowIdsValidos.has(c.flowId))
       const tags = [...new Set(flows.flatMap(([_, c]) => c.tags ?? []))]
       const botIds = [...new Set(flows.map(([_, c]) => c.botId))]
       const cache = getState().cacheMetricas[funilNome]

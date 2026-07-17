@@ -418,6 +418,7 @@ function FunisPageInner() {
     const rows: FlowRow[] = []
     for (const num of numeros) {
       if (filtroBot && num.id !== filtroBot) continue
+      if (num.status !== 'ativo') continue
       const flows = fluxosMap[num.id]
       if (!flows) continue
       for (const flow of flows) {
