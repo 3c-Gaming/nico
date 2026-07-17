@@ -49,7 +49,7 @@ export async function commitFile(token: string, owner: string, repo: string, pat
 }
 
 export function extractDestinations(content: string): Array<{ phone: string; flowId: string; weight: number }> {
-  const match = content.match(/const DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[([\s\S]*?)\];/)
+  const match = content.match(/(?:const|var|let)\s+DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[([\s\S]*?)\];/)
   if (!match) return []
   try {
     const arrayStr = '[' + match[1]
@@ -64,7 +64,7 @@ export function extractDestinations(content: string): Array<{ phone: string; flo
 }
 
 export function extractText(content: string): string {
-  const match = content.match(/const TEXT\s*=\s*["'`](.*?)["'`]/)
+  const match = content.match(/(?:const|var|let)\s+TEXT\s*=\s*["'`](.*?)["'`]/)
   return match ? match[1] : ''
 }
 
@@ -73,20 +73,24 @@ export function replaceDestinations(content: string, destinations: Array<{ phone
     .map(d => `{ phone: "${d.phone}", flowId: "${d.flowId}", weight: ${d.weight} }`)
     .join(', ')
   return content.replace(
-    /const DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[[\s\S]*?\];/,
+    /(?:const|var|let)\s+DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[[\s\S]*?\];/,
     (m) => {
-      // Preservar type annotation se existir
-      const typeMatch = m.match(/const DESTINATIONS(:\s*[^=]*)?\s*=/)
-      const typeAnnotation = typeMatch?.[1] || ''
-      return `const DESTINATIONS${typeAnnotation} = [${newDest}];`
+      // Preservar keyword e type annotation se existir
+      const kwMatch = m.match(/(const|var|let)\s+DESTINATIONS(:\s*[^=]*)?\s*=/)
+      const keyword = kwMatch?.[1] || 'const'
+      const typeAnnotation = kwMatch?.[2] || ''
+      return `${keyword} DESTINATIONS${typeAnnotation} = [${newDest}];`
     }
   )
 }
 
 export function replaceText(content: string, text: string): string {
   return content.replace(
-    /const TEXT\s*=\s*["'`].*?["'`]/,
-    `const TEXT = "${text}"`
+    /(?:const|var|let)\s+TEXT\s*=\s*["'`].*?["'`]/,
+    (m) => {
+      const kw = m.match(/(const|var|let)\s+TEXT/)?.[1] || 'const'
+      return `${kw} TEXT = "${text}"`
+    }
   )
 }
 
