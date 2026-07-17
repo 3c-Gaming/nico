@@ -160,16 +160,17 @@ export async function handleVerPagina(ctx: Context, paginaIdx: number) {
         return
       }
 
-      if (tipo === 'direto' || pagina.tracking_file.includes('RedirectUrl') || pagina.tracking_file.includes('TrackingRedirect')) {
-        return showRedirectUrlView(ctx, pagina, paginaIdx, content)
-      }
-
+      // Detecção por conteúdo do arquivo (mais específico primeiro)
       if (pagina.tracking_file.includes('leadFlow')) {
         return showLeadFlowView(ctx, pagina, paginaIdx, content)
       }
 
       if (pagina.tracking_file.includes('redirect.ts')) {
         return showRedirectConfigView(ctx, pagina, paginaIdx, content)
+      }
+
+      if (tipo === 'direto' || pagina.tracking_file.includes('RedirectUrl') || pagina.tracking_file.includes('TrackingRedirect')) {
+        return showRedirectUrlView(ctx, pagina, paginaIdx, content)
       }
 
       // Fallback
