@@ -5,7 +5,6 @@ import {
   extractLeadFlowConfig, replaceLeadFlowConfig,
   extractRedirectConfig, replaceRedirectConfig,
 } from '@/lib/paginas/github-sync'
-import { pollDeployProgress } from '@/lib/paginas/lovable-deploy'
 
 const FIREBASE_API_KEY = process.env.LOVABLE_FIREBASE_API_KEY
 const REFRESH_TOKEN = process.env.LOVABLE_REFRESH_TOKEN
@@ -123,7 +122,13 @@ export async function POST(req: Request) {
 
     await commitFile(ghToken, github_owner, github_repo, tracking_file, newContent, sha, commitMsg)
 
-    // 2. Deploy no Lovable
+    // 2. Esperar Lovable sincronizar o commit do GitHub antes de deployar
+    //    Sem esse delay, o deploy publica o código antigo (pré-commit)
+    if (lovable_project_id) {
+      await new Promise(r => setTimeout(r, 8000))
+    }
+
+    // 3. Deploy no Lovable
     let deployResult = null
     if (lovable_project_id) {
       const firebaseToken = await getFirebaseToken()
@@ -147,7 +152,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Atualizar Supabase (para whatsapp)
+    // 4. Atualizar Supabase (para whatsapp)
     if (type === 'whatsapp' && state.paginaId) {
       try {
         const { getSupabase } = await import('@/lib/db/supabase')
@@ -164,32 +169,18 @@ export async function POST(req: Request) {
       } catch { /* não crítico */ }
     }
 
-    // 4. Poll deploy progress (se tiver deployment_id)
-    if (deployResult?.deployment_id && lovable_project_id) {
-      if (chatId) await sendTelegram(chatId, `⏳ *Commit feito!* Aguardando deploy...\n\n📄 ${nome}`)
-      const progress = await pollDeployProgress(lovable_project_id, deployResult.deployment_id)
-      if (progress.ok) {
-        deployResult.status = 'completed'
-        if (progress.url) deployResult.url = progress.url
-      } else {
-        deployResult.status = progress.status
-      }
-    }
-
     // 5. Enviar mensagem final no Telegram
     if (chatId) {
       let msg = ''
-      if (deployResult?.status === 'completed') {
-        msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
+      if (deployResult?.deployment_id) {
+        msg = `✅ *Commit + Deploy disparado!*\n\n📄 ${nome}\n📝 ${commitMsg}`
         if (deployResult.url) msg += `\n🔗 ${deployResult.url}`
-      } else if (deployResult?.status === 'timeout') {
-        msg = `⚠️ *Commit feito, deploy em andamento*\n\n📄 ${nome}\n📝 ${commitMsg}\n⏳ O deploy pode levar mais tempo`
       } else if (deployResult?.error) {
         msg = `⚠️ *Commit feito, deploy falhou*\n\n📄 ${nome}\n📝 ${commitMsg}\n❌ ${typeof deployResult.error === 'string' ? deployResult.error.slice(0, 100) : 'Erro no deploy'}`
       } else if (!lovable_project_id) {
         msg = `✅ *Commit feito!*\n\n📄 ${nome}\n📝 ${commitMsg}\n📌 Sem deploy (sem projeto Lovable)`
       } else {
-        msg = `✅ *Commit + Deploy concluído!*\n\n📄 ${nome}\n📝 ${commitMsg}`
+        msg = `✅ *Commit + Deploy disparado!*\n\n📄 ${nome}\n📝 ${commitMsg}`
       }
       await sendTelegram(chatId, msg)
     }
