@@ -151,7 +151,7 @@ export function embedResultadoTeste(resultado: { botId: string; numero: string; 
   const isOk = resultado.status === 'ok'
   const statusEmoji = isOk ? '✅' : '❌'
   const ultimoOk = resultado.ultimoTesteOkMs
-    ? new Date(resultado.ultimoTesteOkMs).toLocaleString('pt-BR')
+    ? new Date(resultado.ultimoTesteOkMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     : 'Nunca'
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
@@ -197,7 +197,7 @@ export function embedResumoTestes(resultados: { botId: string; numero: string; n
   }
 
   return {
-    title: `📊 Teste de Números — ${new Date().toLocaleString('pt-BR')}`,
+    title: `📊 Teste de Números — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
     color: allOk ? 0x22c55e : 0xef4444,
     fields,
     timestamp: new Date().toISOString(),
