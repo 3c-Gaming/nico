@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { executarTesteParalelo } from '@/lib/bot-test/runner'
+import { obterBotsPinados } from '@/lib/bot-test/bot-list'
+import { executarCicloTeste } from '@/lib/bot-test/runner'
 import { getSupabase } from '@/lib/db/supabase'
 import { enviarMensagemGrupo } from '@/lib/integrações/whapi'
 import { formatarRelatorio } from '@/lib/bot-test/report'
 import { sendChannelMessage } from '@/lib/discord/verify'
-import { embedResumoTestes } from '@/lib/discord/embeds'
+import { embedResultadoTeste, embedResumoTestes } from '@/lib/discord/embeds'
 
 export const maxDuration = 120
 
@@ -40,10 +41,58 @@ export async function GET(request: Request) {
     }
   }
 
-  console.log('[cron] Testando bots em paralelo...')
+  console.log('[cron] Testando bots pinados sequencialmente...')
   const inicio = Date.now()
 
-  const resultados = await executarTesteParalelo()
+  const discordChannelId = process.env.DISCORD_REPORT_CHANNEL_ID
+  const bots = await obterBotsPinados()
+
+  if (bots.length === 0) {
+    console.log('[cron] Nenhum bot pinado encontrado.')
+    await supabase
+      .from('bot_test_config')
+      .update({ last_run_at: new Date().toISOString() })
+      .eq('id', 1)
+    return NextResponse.json({ ok: true, total: 0, message: 'Nenhum bot pinado' })
+  }
+
+  console.log(`[cron] ${bots.length} bots pinados. Iniciando testes...`)
+
+  if (discordChannelId) {
+    try {
+      await sendChannelMessage(discordChannelId, { content: `🔍 Cron: testando ${bots.length} bot(s) fixados...` })
+    } catch {}
+  }
+
+  const resultados: Awaited<ReturnType<typeof executarCicloTeste>>[] = []
+
+  for (const bot of bots) {
+    try {
+      const resultado = await executarCicloTeste(bot.botId)
+      resultados.push(resultado)
+      console.log(`[cron] ${bot.botId}: ${resultado.status} (${resultado.duracaoMs}ms)`)
+
+      if (discordChannelId) {
+        try {
+          await sendChannelMessage(discordChannelId, { embeds: [embedResultadoTeste(resultado)] })
+        } catch (err) {
+          console.error('[cron] Erro ao enviar resultado individual ao Discord:', (err as Error).message)
+        }
+      }
+    } catch (err) {
+      console.error(`[cron] Erro ao testar ${bot.botId}:`, (err as Error).message)
+      resultados.push({
+        botId: bot.botId,
+        numero: bot.numero,
+        nome: bot.nome,
+        ultimoTeste: new Date().toISOString(),
+        status: 'erro',
+        duracaoMs: 0,
+        erro: (err as Error).message,
+      })
+    }
+  }
+
   const duracao = Date.now() - inicio
 
   await supabase
@@ -55,7 +104,7 @@ export async function GET(request: Request) {
   const semResposta = resultados.filter((r) => r.status === 'sem_resposta').length
   const erros = resultados.filter((r) => r.status === 'erro').length
 
-  // Notificar WhatsApp (já existente)
+  // Notificar WhatsApp
   const groupId = process.env.WHAPI_GROUP_ID
   if (groupId) {
     try {
@@ -71,15 +120,14 @@ export async function GET(request: Request) {
     }
   }
 
-  // Notificar Discord
-  const discordChannelId = process.env.DISCORD_REPORT_CHANNEL_ID
+  // Notificar Discord — resumo final
   if (discordChannelId) {
     try {
       const embed = embedResumoTestes(resultados, duracao)
       await sendChannelMessage(discordChannelId, { embeds: [embed] })
-      console.log('[cron] Relatório enviado ao Discord')
+      console.log('[cron] Resumo enviado ao Discord')
     } catch (err) {
-      console.error('[cron] Erro ao enviar relatório (Discord):', (err as Error).message)
+      console.error('[cron] Erro ao enviar resumo (Discord):', (err as Error).message)
     }
   }
 

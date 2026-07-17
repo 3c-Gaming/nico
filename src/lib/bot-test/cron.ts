@@ -1,8 +1,8 @@
-import { obterBots } from './bot-list'
+import { obterBotsPinados } from './bot-list'
 import { executarCicloTeste } from './runner'
 
 export async function executarCicloCompleto() {
-  const bots = await obterBots()
+  const bots = await obterBotsPinados()
   for (const bot of bots) {
     try {
       await executarCicloTeste(bot.botId)

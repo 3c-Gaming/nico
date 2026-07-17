@@ -1,4 +1,4 @@
-import { obterBots } from './bot-list'
+import { obterBots, obterBotsPinados } from './bot-list'
 import { salvarResultado, obterResultado } from './store'
 import { enviarMensagemDireta } from '@/lib/integrações/sendpulse'
 import { getSupabase } from '@/lib/db/supabase'
@@ -118,7 +118,7 @@ export async function executarTesteManual(botId: string): Promise<BotTestResult>
 export async function executarTesteParalelo(): Promise<BotTestResult[]> {
   const inicio = Date.now()
 
-  const bots = await obterBots()
+  const bots = await obterBotsPinados()
   console.log(TAG, `executarTesteParalelo: enviando para ${bots.length} bots...`)
 
   const botContactIds = await obterBotContactIds()

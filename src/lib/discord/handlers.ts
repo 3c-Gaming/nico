@@ -96,10 +96,10 @@ export async function handleTestarTodos(reply: ReplyFn, channelId?: string) {
   }
 
   try {
-    const { obterBots } = await import('@/lib/bot-test/bot-list')
+    const { obterBotsPinados } = await import('@/lib/bot-test/bot-list')
     const { executarCicloTeste } = await import('@/lib/bot-test/runner')
 
-    const bots = await obterBots()
+    const bots = await obterBotsPinados()
     if (bots.length === 0) {
       await reply({ embeds: [embedErro('Nenhum bot ativo encontrado.')] })
       return
