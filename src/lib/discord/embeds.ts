@@ -161,12 +161,6 @@ export function embedResultadoTeste(resultado: { botId: string; numero: string; 
     { name: 'Último Teste OK', value: ultimoOk, inline: false },
   ]
 
-  if (resultado.responseBody) {
-    const json = JSON.stringify(resultado.responseBody, null, 2)
-    const truncated = json.length > 950 ? json.slice(0, 950) + '...' : json
-    fields.push({ name: 'Response', value: '```json\n' + truncated + '\n```', inline: false })
-  }
-
   if (resultado.erro) {
     fields.push({ name: 'Erro', value: resultado.erro, inline: false })
   }
