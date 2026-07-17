@@ -5,6 +5,7 @@ import { Input } from '../ui/Input'
 import { TimePicker } from '../ui/TimePicker'
 import { PreviewNomenclatura } from './PreviewNomenclatura'
 import { EsteiraPreview } from './EsteiraPreview'
+import { getState } from '@/lib/store'
 
 interface StepAgendamentoProps {
   tipo: TipoDisparo
@@ -82,18 +83,32 @@ export function StepAgendamento({
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="UTM (Superbet)"
-          placeholder="ex: superbet_fev_d1"
-          value={utm}
-          onChange={(e) => onChangeUtm(e.target.value)}
-        />
-        <Input
-          label="PID (BetMGM)"
-          placeholder="ex: 13382"
-          value={betmgmPid}
-          onChange={(e) => onChangeBetmgmPid(e.target.value)}
-        />
+        <div>
+          <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
+          <select
+            value={utm}
+            onChange={(e) => onChangeUtm(e.target.value)}
+            className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+          >
+            <option value="">Nenhum (UTM livre)</option>
+            {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
+              <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
+          <select
+            value={betmgmPid}
+            onChange={(e) => onChangeBetmgmPid(e.target.value)}
+            className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+          >
+            <option value="">Nenhum (PID livre)</option>
+            {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
+              <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="rounded-md border border-[var(--border)] p-3 space-y-2 text-sm">

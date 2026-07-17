@@ -3,8 +3,13 @@ import type { Esteira } from '@/types'
 import { listarEsteiras, criarEsteira } from '@/lib/api-store'
 
 export async function GET() {
-  const esteiras = await listarEsteiras()
-  return NextResponse.json({ esteiras })
+  try {
+    const esteiras = await listarEsteiras()
+    return NextResponse.json({ esteiras })
+  } catch (err) {
+    console.error('GET /api/esteiras error:', err)
+    return NextResponse.json({ esteiras: [] }, { status: 200 })
+  }
 }
 
 export async function POST(request: NextRequest) {

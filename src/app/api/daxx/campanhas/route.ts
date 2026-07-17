@@ -3,7 +3,7 @@ import { getOrFetch } from '@/lib/cache'
 
 const BRIDGE_URL = process.env.NEXT_PUBLIC_DAXX_BRIDGE_URL || 'http://localhost:3334'
 const TTL_MS = 5 * 60 * 1000
-const STALE_MULTIPLIER = 576
+const STALE_MULTIPLIER = 6
 
 export async function GET() {
   try {

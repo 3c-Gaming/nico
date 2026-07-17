@@ -30,6 +30,7 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
   const [activeId, setActiveId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [cloningDemanda, setCloningDemanda] = useState<Demanda | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -119,6 +120,7 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
               demandas={demandasPorColuna[coluna]}
               usuarios={usuarios}
               onCardClick={(id) => setEditingId(id)}
+              onCardClone={(d) => setCloningDemanda(d)}
             />
           ))}
         </div>
@@ -150,6 +152,15 @@ export function KanbanBoard({ demandas, usuarios, onDemandaUpdate, onDemandaDele
         demanda={editingDemanda}
         onSave={(d) => { onDemandaUpdate(d); setEditingId(null) }}
         onDelete={(id) => { onDemandaDelete(id); setEditingId(null) }}
+        usuarios={usuarios}
+      />
+
+      <ModalDemanda
+        key={cloningDemanda?.id ?? 'clone'}
+        open={cloningDemanda !== null}
+        onClose={() => setCloningDemanda(null)}
+        initialData={cloningDemanda}
+        onSave={(d) => { onDemandaUpdate(d); setCloningDemanda(null) }}
         usuarios={usuarios}
       />
 

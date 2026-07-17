@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, Copy } from 'lucide-react'
 import type { Demanda, UsuarioResponsavel } from '@/types'
 
 const PRIORIDADE_COR: Record<string, string> = {
@@ -23,9 +23,10 @@ interface KanbanCardProps {
   demanda: Demanda
   usuario?: UsuarioResponsavel
   onClick: () => void
+  onClone?: () => void
 }
 
-export function KanbanCard({ demanda, usuario, onClick }: KanbanCardProps) {
+export function KanbanCard({ demanda, usuario, onClick, onClone }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: demanda.id,
     data: { coluna: demanda.coluna },
@@ -62,6 +63,15 @@ export function KanbanCard({ demanda, usuario, onClick }: KanbanCardProps) {
           >
             <GripVertical size={14} />
           </button>
+          {onClone && (
+            <button
+              className="mt-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              onClick={(e) => { e.stopPropagation(); onClone() }}
+              title="Clonar demanda"
+            >
+              <Copy size={13} />
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap gap-1 mb-1.5">
               {demanda.prioridade && demanda.prioridade !== 'media' && (

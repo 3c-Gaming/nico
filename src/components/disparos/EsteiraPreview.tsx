@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo } from 'react'
-import type { CasaAposta } from '@/types'
-import { calcularDataFilho } from '@/lib/esteira'
+import type { CasaAposta, EsteiraEtapaConfig } from '@/types'
+import { calcularDataFilho, DEFAULT_CONFIGS } from '@/lib/esteira'
 import { formatarData } from '@/lib/datas'
+import { useEtapaConfigs } from '@/hooks/useEtapaConfigs'
 
 interface EsteiraPreviewProps {
   dataDisparo: string
@@ -12,17 +13,17 @@ interface EsteiraPreviewProps {
 }
 
 export function EsteiraPreview({ dataDisparo, casas, horario }: EsteiraPreviewProps) {
+  const { configs } = useEtapaConfigs()
   const previa = useMemo(() => {
     const [ano, mes, dia] = dataDisparo.split('-').map(Number)
     const dataD1 = new Date(ano, mes - 1, dia)
+    const cfgs: EsteiraEtapaConfig[] = configs.length > 0 ? configs : DEFAULT_CONFIGS
 
-    return ([
-      { tipo: 'D1' as const, data: dataD1 },
-      { tipo: 'D3' as const, data: calcularDataFilho(dataD1, 'D3') },
-      { tipo: 'D5' as const, data: calcularDataFilho(dataD1, 'D5') },
-      { tipo: 'D7' as const, data: calcularDataFilho(dataD1, 'D7') },
-    ])
-  }, [dataDisparo])
+    return cfgs.map((cfg) => ({
+      tipo: cfg.tipo,
+      data: calcularDataFilho(dataD1, cfg.offsetDias),
+    }))
+  }, [dataDisparo, configs])
 
   if (!dataDisparo || casas.length === 0) return null
 

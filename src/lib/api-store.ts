@@ -1,4 +1,4 @@
-import type { Demanda, Disparo, Esteira, UsuarioResponsavel } from '@/types'
+import type { Demanda, Disparo, Esteira, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig } from '@/types'
 import {
   listarDisparos as dbListarDisparos,
   getDisparo as dbGetDisparo,
@@ -17,11 +17,18 @@ import {
   listarUsuariosResponsaveis as dbListarUsuariosResponsaveis,
   criarUsuarioResponsavel as dbCriarUsuarioResponsavel,
   deletarUsuarioResponsavel as dbDeletarUsuarioResponsavel,
+  listarUtmConfigs as dbListarUtmConfigs,
+  criarUtmConfig as dbCriarUtmConfig,
+  deletarUtmConfig as dbDeletarUtmConfig,
+  atualizarUtmConfig as dbAtualizarUtmConfig,
+  listarEtapaConfigs as dbListarEtapaConfigs,
+  atualizarEtapaConfigs as dbAtualizarEtapaConfigs,
 } from '@/lib/db/supabase'
+import { migrarEsteiraParaEtapas } from '@/lib/store'
 
 declare global {
   var __NICO_STORE__:
-    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira>; demandas: Record<string, Demanda>; usuariosResponsaveis: Record<string, UsuarioResponsavel> }
+    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira>; demandas: Record<string, Demanda>; usuariosResponsaveis: Record<string, UsuarioResponsavel>; utmConfigs: Record<string, UtmConfig>; etapaConfigs: EsteiraEtapaConfig[] }
     | undefined
 }
 
@@ -33,7 +40,7 @@ export function isDbAvailable(): boolean {
 
 function getMemStore() {
   if (!globalThis.__NICO_STORE__) {
-    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {}, demandas: {}, usuariosResponsaveis: {} }
+    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {}, demandas: {}, usuariosResponsaveis: {}, utmConfigs: {}, etapaConfigs: [] }
   }
   return globalThis.__NICO_STORE__
 }
@@ -99,6 +106,12 @@ export async function deletarDisparo(id: string): Promise<boolean> {
   if (!store.disparos[id]) return false
   for (const esteiraId of Object.keys(store.esteiras)) {
     const e = store.esteiras[esteiraId]
+    if (e.etapas && e.etapas.length > 0) {
+      const filtered = e.etapas.filter((et) => et.disparoId !== id)
+      if (filtered.length === 0) { delete store.esteiras[esteiraId]; continue }
+      if (filtered.length !== e.etapas.length)
+        store.esteiras[esteiraId] = { ...e, etapas: filtered }
+    }
     if (e.disparos.d1 === id || e.disparos.d3 === id || e.disparos.d5 === id || e.disparos.d7 === id) {
       delete store.esteiras[esteiraId]
     }
@@ -197,21 +210,29 @@ export async function deletarUsuarioResponsavel(id: string): Promise<boolean> {
 // --- Esteiras ---
 
 export async function listarEsteiras(): Promise<Esteira[]> {
+  let esteiras: Esteira[]
   if (isDbAvailable()) {
     try {
-      return await dbListarEsteiras()
-    } catch { }
+      esteiras = await dbListarEsteiras()
+    } catch {
+      esteiras = Object.values(getMemStore().esteiras).filter((e) => e.ativa)
+    }
+  } else {
+    esteiras = Object.values(getMemStore().esteiras).filter((e) => e.ativa)
   }
-  return Object.values(getMemStore().esteiras).filter((e) => e.ativa)
+  return esteiras.map((e) => migrarEsteiraParaEtapas(e))
 }
 
 export async function getEsteira(id: string): Promise<Esteira | null> {
+  let esteira: Esteira | null = null
   if (isDbAvailable()) {
     try {
-      return await dbGetEsteira(id)
+      esteira = await dbGetEsteira(id)
     } catch { }
   }
-  return getMemStore().esteiras[id] ?? null
+  if (!esteira) esteira = getMemStore().esteiras[id] ?? null
+  if (!esteira) return null
+  return migrarEsteiraParaEtapas(esteira)
 }
 
 export async function criarEsteira(esteira: Esteira): Promise<Esteira> {
@@ -234,4 +255,70 @@ export async function deletarEsteira(id: string): Promise<boolean> {
   if (!store.esteiras[id]) return false
   delete store.esteiras[id]
   return true
+}
+
+// --- Utm Configs ---
+
+export async function listarUtmConfigs(): Promise<UtmConfig[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbListarUtmConfigs()
+    } catch { }
+  }
+  return Object.values(getMemStore().utmConfigs)
+}
+
+export async function criarUtmConfig(config: UtmConfig): Promise<UtmConfig> {
+  if (isDbAvailable()) {
+    try {
+      return await dbCriarUtmConfig(config)
+    } catch { }
+  }
+  getMemStore().utmConfigs[config.id] = config
+  return config
+}
+
+export async function atualizarUtmConfig(id: string, updates: Partial<UtmConfig>): Promise<UtmConfig | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbAtualizarUtmConfig(id, updates)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.utmConfigs[id]) return null
+  store.utmConfigs[id] = { ...store.utmConfigs[id], ...updates }
+  return store.utmConfigs[id]
+}
+
+export async function deletarUtmConfig(id: string): Promise<boolean> {
+  if (isDbAvailable()) {
+    try {
+      return await dbDeletarUtmConfig(id)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.utmConfigs[id]) return false
+  delete store.utmConfigs[id]
+  return true
+}
+
+// --- Etapa Configs ---
+
+export async function listarEtapaConfigs(): Promise<EsteiraEtapaConfig[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbListarEtapaConfigs()
+    } catch { }
+  }
+  return getMemStore().etapaConfigs
+}
+
+export async function atualizarEtapaConfigs(configs: EsteiraEtapaConfig[]): Promise<EsteiraEtapaConfig[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbAtualizarEtapaConfigs(configs)
+    } catch { }
+  }
+  getMemStore().etapaConfigs = configs
+  return configs
 }

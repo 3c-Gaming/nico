@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel } from '@/types'
+import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -396,6 +396,58 @@ export async function criarUsuarioResponsavel(usuario: UsuarioResponsavel): Prom
 export async function deletarUsuarioResponsavel(id: string): Promise<boolean> {
   const { error } = await tb('usuarios_responsaveis').delete().eq('id', id)
   return !error
+}
+
+// --- Utm Configs ---
+
+export async function listarUtmConfigs(): Promise<UtmConfig[]> {
+  const { data, error } = await tb('utm_configs').select('*').order('nome')
+  if (error) {
+    console.warn('[supabase] listarUtmConfigs error:', error.message)
+    return []
+  }
+  return rows<UtmConfig>(data)
+}
+
+export async function criarUtmConfig(config: UtmConfig): Promise<UtmConfig> {
+  const { data, error } = await tb('utm_configs').insert(toSnakeCase(config as any)).select().single()
+  if (error) throw new Error(`Erro ao criar utm config: ${error.message}`)
+  return row<UtmConfig>(data)!
+}
+
+export async function atualizarUtmConfig(id: string, updates: Partial<UtmConfig>): Promise<UtmConfig | null> {
+  const { data, error } = await tb('utm_configs')
+    .update(toSnakeCase(updates as any))
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return null
+  return row<UtmConfig>(data)
+}
+
+export async function deletarUtmConfig(id: string): Promise<boolean> {
+  const { error } = await tb('utm_configs').delete().eq('id', id)
+  return !error
+}
+
+// --- Etapa Configs ---
+
+export async function listarEtapaConfigs(): Promise<EsteiraEtapaConfig[]> {
+  const { data, error } = await tb('etapa_configs').select('*').order('tipo')
+  if (error) {
+    console.warn('[supabase] listarEtapaConfigs error:', error.message)
+    return []
+  }
+  return rows<EsteiraEtapaConfig>(data)
+}
+
+export async function atualizarEtapaConfigs(configs: EsteiraEtapaConfig[]): Promise<EsteiraEtapaConfig[]> {
+  // Replace all: delete existing, insert new
+  const { error: delErr } = await tb('etapa_configs').delete().gte('tipo', '')
+  if (delErr) throw new Error(`Erro ao limpar etapa configs: ${delErr.message}`)
+  const { data, error } = await tb('etapa_configs').insert(configs.map((c) => toSnakeCase(c as any))).select()
+  if (error) throw new Error(`Erro ao inserir etapa configs: ${error.message}`)
+  return rows<EsteiraEtapaConfig>(data)
 }
 
 export async function upsertCacheMetricas(metricas: CacheMetrica[]): Promise<CacheMetrica[]> {

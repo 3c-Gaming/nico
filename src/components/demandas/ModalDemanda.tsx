@@ -28,12 +28,13 @@ interface ModalDemandaProps {
   open: boolean
   onClose: () => void
   demanda?: Demanda | null
+  initialData?: Demanda | null
   onSave: (demanda: Demanda) => void
   onDelete?: (id: string) => void
   usuarios: Record<string, UsuarioResponsavel>
 }
 
-export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuarios }: ModalDemandaProps) {
+export function ModalDemanda({ open, onClose, demanda, initialData, onSave, onDelete, usuarios }: ModalDemandaProps) {
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
   const [coluna, setColuna] = useState<ColunaDemanda>('ideias')
@@ -54,6 +55,7 @@ export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuario
   const [newImagemUrl, setNewImagemUrl] = useState('')
 
   const isEditing = !!demanda
+  const isCloning = !!initialData && !demanda
 
   const resetForm = useCallback(() => {
     setTitulo('')
@@ -91,10 +93,23 @@ export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuario
       setImagens(demanda.imagens ?? [])
       setFunilIds(demanda.funilIds ?? [])
       setNumerosSendpulse(demanda.numerosSendpulse ?? [])
+    } else if (initialData) {
+      setTitulo(initialData.titulo)
+      setDescricao(initialData.descricao ?? '')
+      setColuna(initialData.coluna)
+      setPrioridade(initialData.prioridade)
+      setTags(initialData.tags ?? [])
+      setResponsavelId(initialData.responsavelId ?? '')
+      setDataCriacao('')
+      setUserStories((initialData.userStories ?? []).map((s) => ({ ...s, id: gerarId(), concluido: false })))
+      setLinks(initialData.links ?? [])
+      setImagens(initialData.imagens ?? [])
+      setFunilIds(initialData.funilIds ?? [])
+      setNumerosSendpulse(initialData.numerosSendpulse ?? [])
     } else {
       resetForm()
     }
-  }, [open, demanda, resetForm])
+  }, [open, demanda, initialData, resetForm])
 
   function handleSave() {
     if (!titulo.trim()) return
@@ -136,7 +151,7 @@ export function ModalDemanda({ open, onClose, demanda, onSave, onDelete, usuario
   const usuariosList = Object.values(usuarios)
 
   return (
-    <Modal open={open} onClose={onClose} title={isEditing ? 'Editar Demanda' : 'Nova Demanda'} width="640px">
+    <Modal open={open} onClose={onClose} title={isEditing ? 'Editar Demanda' : isCloning ? 'Clonar Demanda' : 'Nova Demanda'} width="640px">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
         <div>
           <label className="block text-xs text-[var(--text-muted)] mb-1">Titulo</label>

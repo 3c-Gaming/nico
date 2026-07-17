@@ -153,6 +153,7 @@ export default function HomePage() {
   const [daxxCampanhas, setDaxxCampanhas] = useState<DisparoDaxx[]>([])
   const [daxxLoaded, setDaxxLoaded] = useState(false)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
+  const [flowTagConfigsVersion, setFlowTagConfigsVersion] = useState(0)
 
   useEffect(() => {
     const s = getState()
@@ -164,6 +165,7 @@ export default function HomePage() {
     const s = getState()
     setPinnedNumeros(s.pinnedNumeros)
     setPinnedFunis(s.pinnedFunis)
+    setFlowTagConfigsVersion((v) => v + 1)
     setPinVersion((v) => v + 1)
   }, [])
 
@@ -280,7 +282,7 @@ export default function HomePage() {
     fetchDaxx()
     const interval = setInterval(() => { fetchData(); fetchTracking(); fetchDaxx() }, POLL_FUNIL_MS)
     return () => clearInterval(interval)
-  }, [pinnedFunis, pinVersion, trackingData])
+  }, [pinnedFunis, pinVersion, trackingData, flowTagConfigsVersion])
 
   const handleTestarBot = useCallback(async (botId: string) => {
     if (testandoBotId) return

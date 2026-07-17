@@ -1,6 +1,6 @@
 'use client'
 
-import type { AppState, CacheMetrica, CasaAposta, Demanda, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA, UsuarioResponsavel } from '@/types'
+import type { AppState, CacheMetrica, CasaAposta, Demanda, Disparo, Esteira, FlowTagConfig, LinkTemplate, NumeroSendpulse, PainelCPA, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig } from '@/types'
 
 const ESTADO_INICIAL: AppState = {
   disparos: {},
@@ -15,6 +15,8 @@ const ESTADO_INICIAL: AppState = {
   cacheMetricas: {},
   demandas: {},
   usuariosResponsaveis: {},
+  utmConfigs: {},
+  etapaConfigs: [],
 }
 
 let cachedState: AppState | null = null
@@ -162,6 +164,12 @@ export function deletarDisparo(id: string): void {
   delete state.disparos[id]
   for (const esteiraId of Object.keys(state.esteiras)) {
     const esteira = state.esteiras[esteiraId]
+    if (esteira.etapas && esteira.etapas.length > 0) {
+      const filtered = esteira.etapas.filter((e) => e.disparoId !== id)
+      if (filtered.length === 0) delete state.esteiras[esteiraId]
+      else if (filtered.length !== esteira.etapas.length)
+        state.esteiras[esteiraId] = { ...esteira, etapas: filtered }
+    }
     if (esteira.disparos.d1 === id) delete state.esteiras[esteiraId]
     else {
       if (esteira.disparos.d3 === id) esteira.disparos.d3 = undefined
@@ -263,4 +271,49 @@ export async function syncNumerosSendpulse(): Promise<NumeroSendpulse[]> {
   } catch {
     return getState().numerosDisponiveis
   }
+}
+
+// --- Utm Configs ---
+
+export function addUtmConfig(config: UtmConfig): void {
+  const state = getState()
+  state.utmConfigs[config.id] = config
+  setState(state)
+  syncToApi('/api/utm-configs', 'POST', config)
+}
+
+export function updateUtmConfig(id: string, data: Partial<UtmConfig>): void {
+  const state = getState()
+  if (state.utmConfigs[id]) {
+    state.utmConfigs[id] = { ...state.utmConfigs[id], ...data }
+    setState(state)
+    syncToApi('/api/utm-configs', 'PUT', { id, ...data })
+  }
+}
+
+export function deletarUtmConfig(id: string): void {
+  const state = getState()
+  delete state.utmConfigs[id]
+  setState(state)
+  syncToApi(`/api/utm-configs?id=${id}`, 'DELETE')
+}
+
+// --- Etapa Configs ---
+
+export function setEtapaConfigs(configs: EsteiraEtapaConfig[]): void {
+  const state = getState()
+  state.etapaConfigs = configs
+  setState(state)
+  syncToApi('/api/etapa-configs', 'PUT', { configs })
+}
+
+/** Migrates legacy esteiras (with `disparos.d1/d3/d5/d7`) to the new `etapas` format */
+export function migrarEsteiraParaEtapas(esteira: Esteira, estado?: AppState): Esteira {
+  if (esteira.etapas && esteira.etapas.length > 0) return esteira
+  const etapas: { tipo: string; disparoId: string }[] = []
+  if (esteira.disparos.d1) etapas.push({ tipo: 'D1', disparoId: esteira.disparos.d1 })
+  if (esteira.disparos.d3) etapas.push({ tipo: 'D3', disparoId: esteira.disparos.d3 })
+  if (esteira.disparos.d5) etapas.push({ tipo: 'D5', disparoId: esteira.disparos.d5 })
+  if (esteira.disparos.d7) etapas.push({ tipo: 'D7', disparoId: esteira.disparos.d7 })
+  return { ...esteira, etapas }
 }

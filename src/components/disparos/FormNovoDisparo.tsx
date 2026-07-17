@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getState } from '@/lib/store'
-import type { TipoDisparo, Disparo, BaseCSV, NumeroSendpulse, FluxoSendpulse, DisparoDaxx, CasaAposta } from '@/types'
+import type { TipoDisparo, Disparo, BaseCSV, NumeroSendpulse, FluxoSendpulse, DisparoDaxx, CasaAposta, EsteiraEtapaConfig } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useEsteiras } from '@/hooks/useEsteiras'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -163,7 +163,8 @@ export function FormNovoDisparo() {
       }
 
       if (tipo === 'D1') {
-        const { esteira, filhos } = criarEsteira(disparoData, Object.values(casasDisponiveis))
+        const etapaConfigs: EsteiraEtapaConfig[] = getState().etapaConfigs
+        const { esteira, filhos } = criarEsteira(disparoData, Object.values(casasDisponiveis), etapaConfigs)
         createDisparo(disparoData)
         for (const f of filhos) createDisparo(f)
         createEsteira(esteira)
@@ -352,18 +353,32 @@ export function FormNovoDisparo() {
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="UTM"
-                placeholder="ex: superbet_fev_d1"
-                value={utm}
-                onChange={(e) => setUtm(e.target.value)}
-              />
-              <Input
-                label="PID (BetMGM)"
-                placeholder="ex: 13382"
-                value={betmgmPid}
-                onChange={(e) => setBetmgmPid(e.target.value)}
-              />
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
+                <select
+                  value={utm}
+                  onChange={(e) => setUtm(e.target.value)}
+                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                >
+                  <option value="">Nenhum (UTM livre)</option>
+                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
+                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
+                <select
+                  value={betmgmPid}
+                  onChange={(e) => setBetmgmPid(e.target.value)}
+                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                >
+                  <option value="">Nenhum (PID livre)</option>
+                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
+                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>

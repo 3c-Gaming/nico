@@ -17,9 +17,10 @@ interface KanbanColumnProps {
   demandas: Demanda[]
   usuarios: Record<string, UsuarioResponsavel>
   onCardClick: (id: string) => void
+  onCardClone: (demanda: Demanda) => void
 }
 
-export function KanbanColumn({ coluna, demandas, usuarios, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ coluna, demandas, usuarios, onCardClick, onCardClone }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: coluna })
 
   return (
@@ -45,6 +46,7 @@ export function KanbanColumn({ coluna, demandas, usuarios, onCardClick }: Kanban
                 demanda={demanda}
                 usuario={demanda.responsavelId ? usuarios[demanda.responsavelId] : undefined}
                 onClick={() => onCardClick(demanda.id)}
+                onClone={() => onCardClone(demanda)}
               />
             </div>
           ))}

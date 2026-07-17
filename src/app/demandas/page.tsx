@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSyncExternalStore } from 'react'
 import { KanbanBoard } from '@/components/demandas/KanbanBoard'
-import { ModalDemanda } from '@/components/demandas/ModalDemanda'
+import { FiltrosDemandaBar, FILTROS_VAZIOS, type FiltrosDemanda } from '@/components/demandas/FiltrosDemanda'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
@@ -68,6 +68,18 @@ export default function DemandasPage() {
   useEffect(() => { carregarDados() }, [carregarDados])
 
   const [creating, setCreating] = useState(false)
+  const [filtros, setFiltros] = useState<FiltrosDemanda>(FILTROS_VAZIOS)
+
+  const demandasFiltradas = useMemo(() => {
+    return demandas.filter((d) => {
+      if (filtros.dataDe && d.criadoEm < filtros.dataDe) return false
+      if (filtros.dataAte && d.criadoEm > filtros.dataAte + 'T23:59:59') return false
+      if (filtros.responsavelId && d.responsavelId !== filtros.responsavelId) return false
+      if (filtros.tag && !d.tags.some((t) => t.toLowerCase().includes(filtros.tag.toLowerCase()))) return false
+      if (filtros.titulo && !d.titulo.toLowerCase().includes(filtros.titulo.toLowerCase())) return false
+      return true
+    })
+  }, [demandas, filtros])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -142,13 +154,22 @@ export default function DemandasPage() {
         )}
 
         {!loading && !error && (
-          <KanbanBoard
-            demandas={demandas}
-            usuarios={usuarios}
-            onDemandaUpdate={handleDemandaUpdate}
-            onDemandaDelete={handleDemandaDelete}
-            onReorder={handleReorder}
-          />
+          <>
+            <FiltrosDemandaBar
+              filtros={filtros}
+              onChange={(f) => setFiltros((prev) => ({ ...prev, ...f }))}
+              usuarios={usuarios}
+              total={demandas.length}
+              totalFiltrado={demandasFiltradas.length}
+            />
+            <KanbanBoard
+              demandas={demandasFiltradas}
+              usuarios={usuarios}
+              onDemandaUpdate={handleDemandaUpdate}
+              onDemandaDelete={handleDemandaDelete}
+              onReorder={handleReorder}
+            />
+          </>
         )}
       </div>
     </div>

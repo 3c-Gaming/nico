@@ -15,14 +15,14 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { useToast } from '@/components/ui/Toast'
-import { criarEsteira } from '@/lib/esteira'
+import { criarEsteira, calcularDataFilho } from '@/lib/esteira'
 import { getState } from '@/lib/store'
 import { ArrowLeft, Trash2, Pencil, X, Check, Copy, Link as LinkIcon, Play, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { StepNumero } from '@/components/disparos/StepNumero'
-import { sincronizarDisparos } from '@/lib/tracking/sync'
+import { sincronizarResultados } from '@/lib/casas/sync'
 import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
-import type { StatusDisparo, StatusBase, TipoDisparo, NumeroSendpulse, PainelCPA, ResultadoDisparo, ConversaoDisparo, FluxoSendpulse, TrackingResultado } from '@/types'
+import type { StatusDisparo, StatusBase, TipoDisparo, NumeroSendpulse, PainelCPA, ResultadoDisparo, ConversaoDisparo, FluxoSendpulse, UtmConfig } from '@/types'
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'rascunho', label: 'Rascunho' },
@@ -39,10 +39,15 @@ const BASE_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'erro', label: 'Erro' },
 ]
 
-const PROXIMO_TIPO: Record<string, TipoDisparo> = {
-  D1: 'D3',
-  D3: 'D5',
-  D5: 'D7',
+function getProximoDaEtapa(tipoAtual: string): string | null {
+  const configs = getState().etapaConfigs
+  if (!configs.length) {
+    const mapa: Record<string, string> = { D1: 'D3', D3: 'D5', D5: 'D7' }
+    return mapa[tipoAtual] ?? null
+  }
+  const idx = configs.findIndex((c) => c.tipo === tipoAtual)
+  if (idx === -1 || idx >= configs.length - 1) return null
+  return configs[idx + 1].tipo
 }
 
 export default function DetalheDisparoPage() {
@@ -181,9 +186,12 @@ export default function DetalheDisparoPage() {
 
   const esteira = disparo?.esteiraPaiId ? getEsteira(disparo.esteiraPaiId) : null
   const tipoAtual = disparo?.tipo ?? ''
-  const podeAvancar = tipoAtual in PROXIMO_TIPO && disparo?.status === 'executado'
-  const proximoTipo = PROXIMO_TIPO[tipoAtual]
-  const filhoExistente = proximoTipo && esteira ? esteira.disparos[proximoTipo.toLowerCase() as 'd3' | 'd5' | 'd7'] : null
+  const proximoTipoStr = getProximoDaEtapa(tipoAtual)
+  const podeAvancar = !!proximoTipoStr && disparo?.status === 'executado'
+  const proximoTipo = proximoTipoStr as TipoDisparo | null
+  const filhoExistente = proximoTipo && esteira
+    ? esteira.etapas.find((e) => e.tipo === proximoTipo)?.disparoId ?? null
+    : null
 
   if (!disparo) {
     return (
@@ -264,25 +272,24 @@ export default function DetalheDisparoPage() {
     if (!disparo) return
     setSincronizandoTracking(true)
     try {
-      const resultados = await sincronizarDisparos([disparo], disparo.dataDisparo)
+      const resultados = await sincronizarResultados([disparo], disparo.dataDisparo)
       const r = resultados[disparo.id]
-      if (r && (r.registros > 0 || r.ftds > 0)) {
+      if (r && (r.registros > 0 || r.ftds > 0 || r.cpas > 0)) {
         update(id, {
           resultados: {
+            ...(disparo.resultados ?? { custo: 0, valorFaturadoCPA: 0 }),
             registros: r.registros,
             ftds: r.ftds,
-            cpas: disparo.resultados?.cpas ?? 0,
-            custo: disparo.resultados?.custo ?? 0,
-            valorFaturadoCPA: disparo.resultados?.valorFaturadoCPA ?? 0,
+            cpas: r.cpas,
             atualizadoEm: new Date().toISOString(),
           },
         })
-        addToast('success', `Tracking sincronizado: ${r.registros} registros, ${r.ftds} FTDs`)
+        addToast('success', `Resultados sincronizados: ${r.registros} registros, ${r.ftds} FTDs, ${r.cpas} CPAs`)
       } else {
-        addToast('info', 'Nenhum dado de tracking encontrado para este disparo')
+        addToast('info', 'Nenhum dado encontrado para este disparo')
       }
     } catch {
-      addToast('error', 'Erro ao sincronizar tracking')
+      addToast('error', 'Erro ao sincronizar resultados')
     } finally {
       setSincronizandoTracking(false)
     }
@@ -302,23 +309,27 @@ export default function DetalheDisparoPage() {
     try {
       const agora = new Date()
       const dataD1 = new Date(disparo.dataDisparo + 'T12:00:00')
-      const offset = proximoTipo === 'D3' ? 2 : proximoTipo === 'D5' ? 4 : 6
-      const dataFilho = new Date(dataD1)
-      dataFilho.setDate(dataFilho.getDate() + offset)
+      const configs = getState().etapaConfigs
+      const cfg = configs.length
+        ? configs.find((c) => c.tipo === proximoTipo)
+        : null
+      const offset = cfg?.offsetDias ?? (proximoTipo === 'D3' ? 2 : proximoTipo === 'D5' ? 4 : 6)
+      const dataFilho = calcularDataFilho(dataD1, offset)
       const dataFilhoStr = dataFilho.toISOString().split('T')[0]
+      const casasFilho = cfg?.casaId ? [cfg.casaId] : []
 
       const novoDisparo = {
         id: crypto.randomUUID(),
         tipo: proximoTipo,
-        nomenclatura: disparo.nomenclatura.replace(`D1`, proximoTipo).replace(disparo.dataDisparo, dataFilhoStr),
+        nomenclatura: disparo.nomenclatura.replace(disparo.tipo, proximoTipo).replace(disparo.dataDisparo, dataFilhoStr),
         status: 'pronto' as StatusDisparo,
-        casasAposta: [...disparo.casasAposta],
+        casasAposta: casasFilho.length > 0 ? casasFilho : [...disparo.casasAposta],
         dataDisparo: dataFilhoStr,
         horarioDisparo: disparo.horarioDisparo,
         base: { ...disparo.base },
-        templateDaxx: disparo.templateDaxx ? { ...disparo.templateDaxx } : undefined,
-        numerosSendpulse: disparo.numerosSendpulse?.map((n) => ({ ...n })),
-        flowIds: [...(disparo.flowIds ?? (disparo.flowId ? [disparo.flowId] : []))],
+        numerosSendpulse: undefined,
+        utm: undefined,
+        betmgmPid: undefined,
         esteiraPaiId: esteira.id,
         criadoEm: agora.toISOString(),
         atualizadoEm: agora.toISOString(),
@@ -326,9 +337,11 @@ export default function DetalheDisparoPage() {
 
       createDisparo(novoDisparo)
 
+      const novasEtapas = [...esteira.etapas, { tipo: proximoTipo, disparoId: novoDisparo.id }]
       const chave = proximoTipo.toLowerCase() as 'd3' | 'd5' | 'd7'
       updateEsteira(esteira.id, {
         disparos: { ...esteira.disparos, [chave]: novoDisparo.id },
+        etapas: novasEtapas,
       })
 
       addToast('success', `${proximoTipo} criado a partir deste disparo`)
@@ -541,18 +554,32 @@ export default function DetalheDisparoPage() {
 
             <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
               <span className="text-xs text-[var(--text-muted)] font-medium block">Tracking / CPA</span>
-              <Input
-                label="UTM (Superbet)"
-                placeholder="ex: superbet_fev_d1"
-                value={formData.utm}
-                onChange={(e) => setFormData((prev) => ({ ...prev, utm: e.target.value }))}
-              />
-              <Input
-                label="PID (BetMGM)"
-                placeholder="ex: 13382"
-                value={formData.betmgmPid}
-                onChange={(e) => setFormData((prev) => ({ ...prev, betmgmPid: e.target.value }))}
-              />
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
+                <select
+                  value={formData.utm}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, utm: e.target.value }))}
+                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                >
+                  <option value="">Nenhum (UTM livre)</option>
+                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
+                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
+                <select
+                  value={formData.betmgmPid}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, betmgmPid: e.target.value }))}
+                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                >
+                  <option value="">Nenhum (PID livre)</option>
+                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
+                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
+                  ))}
+                </select>
+              </div>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-[var(--text-secondary)] font-medium">Painel CPA</span>
                 <select
@@ -743,11 +770,21 @@ export default function DetalheDisparoPage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-[var(--text-muted)] text-xs block">UTM (Superbet)</span>
-                  <span className="text-[var(--text-primary)] font-mono">{disparo.utm || '—'}</span>
+                  <span className="text-[var(--text-primary)] font-mono">
+                    {(() => {
+                      const found = Object.values(getState().utmConfigs).find((u) => u.casa === 'superbet' && u.valor === disparo.utm)
+                      return found ? `${found.nome} (${found.valor})` : (disparo.utm || '—')
+                    })()}
+                  </span>
                 </div>
                 <div>
                   <span className="text-[var(--text-muted)] text-xs block">PID (BetMGM)</span>
-                  <span className="text-[var(--text-primary)] font-mono">{disparo.betmgmPid || '—'}</span>
+                  <span className="text-[var(--text-primary)] font-mono">
+                    {(() => {
+                      const found = Object.values(getState().utmConfigs).find((u) => u.casa === 'betmgm' && u.valor === disparo.betmgmPid)
+                      return found ? `${found.nome} (${found.valor})` : (disparo.betmgmPid || '—')
+                    })()}
+                  </span>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-[var(--border)]">

@@ -4,7 +4,21 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Search, RefreshCw, ExternalLink, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import type { DisparoDaxx } from '@/types'
+import type { DisparoDaxx, Disparo } from '@/types'
+
+interface ResultadoCampanha {
+  registros: number
+  ftds: number
+  cpas: number
+}
+
+interface ExportItem {
+  acid?: string
+  marketing_source_id?: string
+  registrations?: number
+  ftds?: number
+  cpa?: number
+}
 
 const CACHE_KEY = 'daxx-campanhas'
 const TS_KEY = 'daxx-campanhas-timestamp'
@@ -13,6 +27,12 @@ function parseDataDaxx(str: string): Date | null {
   const match = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
   if (!match) return null
   return new Date(+match[3], +match[2] - 1, +match[1])
+}
+
+function daxxDateToISO(str: string): string | null {
+  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return null
+  return `${match[3]}-${match[2]}-${match[1]}`
 }
 
 function hojeISO(): string {
@@ -67,6 +87,9 @@ export default function DaxxPage() {
   const [dataFim, setDataFim] = useState(hojeISO)
   const [busca, setBusca] = useState('')
 
+  const [resultados, setResultados] = useState<Map<string, ResultadoCampanha>>(new Map())
+  const [loadingResultados, setLoadingResultados] = useState(false)
+
   const fetchData = useCallback(async (isRefresh = false, background = false) => {
     if (isRefresh) setRefreshing(true)
     else if (background) setRefreshing(true)
@@ -106,6 +129,111 @@ export default function DaxxPage() {
       fetchData()
     }
   }, [fetchData])
+
+  // Buscar resultados (registros/ftds/cpas) das casas ao carregar campanhas
+  useEffect(() => {
+    if (!campanhas.length) return
+    let cancelled = false
+
+    async function buscarResultados() {
+      setLoadingResultados(true)
+      try {
+        // 1) Buscar todos os disparos para mapear templateDaxx.id → utm/betmgmPid
+        const resDisp = await fetch('/api/disparos')
+        if (!resDisp.ok) throw new Error('Erro ao buscar disparos')
+        const { disparos } = await resDisp.json() as { disparos: Disparo[] }
+
+        // Map: daxxCampaignId → disparo[]
+        const dispPorDaxx = new Map<string, Disparo[]>()
+        for (const d of disparos) {
+          if (!d.templateDaxx?.id) continue
+          const list = dispPorDaxx.get(d.templateDaxx.id)
+          if (list) list.push(d)
+          else dispPorDaxx.set(d.templateDaxx.id, [d])
+        }
+
+        // 2) Agrupar campanhas por data (YYYY-MM-DD) para minimizar chamadas à API
+        const porData = new Map<string, DisparoDaxx[]>()
+        for (const c of campanhas) {
+          const iso = daxxDateToISO(c.dataCriacao)
+          if (!iso) continue
+          const list = porData.get(iso)
+          if (list) list.push(c)
+          else porData.set(iso, [c])
+        }
+
+        // 3) Buscar dados de export para cada data única
+        const datasUnicas = [...porData.keys()]
+        const exportPorData = new Map<string, { superbet: ExportItem[]; mgm: ExportItem[] }>()
+
+        await Promise.allSettled(
+          datasUnicas.map(async (date) => {
+            const res = await fetch(`/api/casas/export?date=${date}`)
+            if (!res.ok) return
+            const data = await res.json()
+            exportPorData.set(date, {
+              superbet: (data.superbet?.data as ExportItem[]) ?? [],
+              mgm: (data.mgm?.data as ExportItem[]) ?? [],
+            })
+          }),
+        )
+
+        // 4) Para cada campanha, cruzar utm/pid dos disparos vinculados com os dados exportados
+        const nuevos = new Map<string, ResultadoCampanha>()
+
+        for (const [date, cams] of porData) {
+          const exportData = exportPorData.get(date)
+          if (!exportData) continue
+
+          for (const c of cams) {
+            const disps = dispPorDaxx.get(c.id) ?? []
+            if (!disps.length) continue
+
+            let registros = 0
+            let ftds = 0
+            let cpas = 0
+
+            for (const d of disps) {
+              // Superbet: match via acid.includes(utm)
+              if (d.utm) {
+                for (const item of exportData.superbet) {
+                  const acid = String(item.acid ?? '')
+                  if (acid.includes(d.utm)) {
+                    registros += item.registrations ?? 0
+                    ftds += item.ftds ?? 0
+                    cpas += item.cpa ?? 0
+                  }
+                }
+              }
+              // BetMGM: match via marketing_source_id === betmgmPid
+              if (d.betmgmPid) {
+                for (const item of exportData.mgm) {
+                  if (String(item.marketing_source_id ?? '') === d.betmgmPid) {
+                    registros += item.registrations ?? 0
+                    ftds += item.ftds ?? 0
+                    cpas += item.cpa ?? 0
+                  }
+                }
+              }
+            }
+
+            if (registros > 0 || ftds > 0 || cpas > 0) {
+              nuevos.set(c.id, { registros, ftds, cpas })
+            }
+          }
+        }
+
+        if (!cancelled) setResultados(nuevos)
+      } catch {
+        // silencioso
+      } finally {
+        if (!cancelled) setLoadingResultados(false)
+      }
+    }
+
+    buscarResultados()
+    return () => { cancelled = true }
+  }, [campanhas])
 
   const filtradas = useMemo(() => {
     const termo = busca.toLowerCase().trim()
@@ -229,6 +357,15 @@ export default function DaxxPage() {
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Rejeitados</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">
+                      {loadingResultados ? <Spinner size={12} /> : 'Registros'}
+                    </th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">
+                      {loadingResultados ? <Spinner size={12} /> : 'FTDs'}
+                    </th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">
+                      {loadingResultados ? <Spinner size={12} /> : 'CPAs'}
+                    </th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Responsável</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Data</th>
                     <th className="py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Msg</th>
@@ -243,6 +380,24 @@ export default function DaxxPage() {
                       <td className="py-3 px-3 text-right font-mono text-green-500">{formatNumero(c.entregues)}</td>
                       <td className="py-3 px-3 text-right font-mono text-[var(--d1)]">{formatNumero(c.lidas)}</td>
                       <td className="py-3 px-3 text-right font-mono text-red-400">{formatNumero(c.rejeitados)}</td>
+                      <td className="py-3 px-3 text-right font-mono text-[var(--d1)]">
+                        {(() => {
+                          const r = resultados.get(c.id)
+                          return r ? formatNumero(r.registros) : <span className="text-[var(--text-muted)]">—</span>
+                        })()}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-green-500">
+                        {(() => {
+                          const r = resultados.get(c.id)
+                          return r ? formatNumero(r.ftds) : <span className="text-[var(--text-muted)]">—</span>
+                        })()}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-[var(--warning)]">
+                        {(() => {
+                          const r = resultados.get(c.id)
+                          return r ? formatNumero(r.cpas) : <span className="text-[var(--text-muted)]">—</span>
+                        })()}
+                      </td>
                       <td className="py-3 px-3 text-[var(--text-secondary)]">{c.responsavel}</td>
                       <td className="py-3 px-3 text-[var(--text-muted)] text-xs">{c.dataCriacao}</td>
                       <td className="py-3 px-3 text-center">

@@ -15,6 +15,7 @@ interface PersistedCache {
 const CACHE_PATH = path.join(process.cwd(), 'data', 'cache.json')
 const PERSIST_INTERVAL = 30_000
 const DEFAULT_STALE_MULTIPLIER = 3
+const DISK_MAX_AGE = 24 * 60 * 60 * 1000
 
 const store = new Map<string, CacheEntry>()
 const pending = new Map<string, Promise<unknown>>()
@@ -28,8 +29,9 @@ function loadFromDisk() {
     if (fs.existsSync(CACHE_PATH)) {
       const raw = fs.readFileSync(CACHE_PATH, 'utf-8')
       const parsed: PersistedCache = JSON.parse(raw)
+      const now = Date.now()
       for (const [key, entry] of Object.entries(parsed)) {
-        if (Date.now() < entry.staleExpiry) {
+        if (now < entry.staleExpiry && now - entry.expiry < DISK_MAX_AGE) {
           store.set(key, entry)
         }
       }

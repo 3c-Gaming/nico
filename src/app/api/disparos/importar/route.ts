@@ -96,6 +96,11 @@ export async function POST(request: NextRequest) {
           const todasCasas = itens.flatMap((i) => i.slugCasas)
           const casasUnicas = [...new Set(todasCasas)]
 
+          const etapas: { tipo: string; disparoId: string }[] = [{ tipo: 'D1', disparoId: disD1.id }]
+          if (d3 && disparosDoGrupo.get('D3')) etapas.push({ tipo: 'D3', disparoId: disparosDoGrupo.get('D3')!.id })
+          if (d5 && disparosDoGrupo.get('D5')) etapas.push({ tipo: 'D5', disparoId: disparosDoGrupo.get('D5')!.id })
+          if (d7 && disparosDoGrupo.get('D7')) etapas.push({ tipo: 'D7', disparoId: disparosDoGrupo.get('D7')!.id })
+
           const esteira: Esteira = {
             id: crypto.randomUUID(),
             nome: `Retro: ${d1.data}`,
@@ -106,6 +111,7 @@ export async function POST(request: NextRequest) {
               ...(d5 ? { d5: disparosDoGrupo.get('D5')!.id } : {}),
               ...(d7 ? { d7: disparosDoGrupo.get('D7')!.id } : {}),
             },
+            etapas,
             criadaEm: agora,
             atualizadoEm: agora,
             ativa: true,

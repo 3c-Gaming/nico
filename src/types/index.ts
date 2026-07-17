@@ -1,5 +1,24 @@
 ﻿export type TipoDisparo = 'D1' | 'D3' | 'D5' | 'D7' | 'PONTUAL'
 
+export interface UtmConfig {
+  id: string
+  nome: string
+  valor: string
+  casa: 'superbet' | 'betmgm'
+  criadoEm: string
+}
+
+export interface EsteiraEtapaConfig {
+  tipo: string
+  casaId: string
+  offsetDias: number
+}
+
+export interface EsteiraEtapa {
+  tipo: string
+  disparoId: string
+}
+
 export interface LinkTemplate {
   id: string
   casaId: string
@@ -191,6 +210,8 @@ export interface Esteira {
     d5?: string
     d7?: string
   }
+  /** @deprecated Use `etapas` */
+  etapas: EsteiraEtapa[]
   criadaEm: string
   atualizadoEm: string
   ativa: boolean
@@ -391,5 +412,7 @@ export interface AppState {
   cacheMetricas: Record<string, CacheMetrica>
   demandas: Record<string, Demanda>
   usuariosResponsaveis: Record<string, UsuarioResponsavel>
+  utmConfigs: Record<string, UtmConfig>
+  etapaConfigs: EsteiraEtapaConfig[]
   ultimaSync?: string
 }

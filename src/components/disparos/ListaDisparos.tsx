@@ -12,8 +12,7 @@ import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle, Copy } from 'lucide-react'
 import Link from 'next/link'
-import { sincronizarDisparos } from '@/lib/tracking/sync'
-import { sincronizarCpa } from '@/lib/cpa/sync'
+import { sincronizarResultados } from '@/lib/casas/sync'
 import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
 import type { Disparo, TipoDisparo } from '@/types'
 
@@ -65,63 +64,41 @@ export function ListaDisparos() {
       .finally(() => setRecalculando(false))
   }, [])
 
-  // Auto-sync tracking ao carregar
-  const [sincronizando, setSincronizando] = useState(false)
-  const [sincronizandoCpa, setSincronizandoCpa] = useState(false)
-
   useEffect(() => {
-    const hoje = new Date().toISOString().split('T')[0]
-    const comTracking = list.filter((d) => (d.utm || d.betmgmPid) && d.dataDisparo === hoje)
+    const comTracking = list.filter((d) => d.utm || d.betmgmPid)
     if (!comTracking.length) return
 
-    setSincronizando(true)
-    sincronizarDisparos(comTracking, hoje)
-      .then((resultados) => {
-        for (const [id, r] of Object.entries(resultados)) {
-          const dis = getById(id)
-          if (dis) {
-            update(id, {
-              resultados: {
-                ...(dis.resultados ?? { registros: 0, ftds: 0, cpas: 0, custo: 0, valorFaturadoCPA: 0 }),
-                registros: r.registros,
-                ftds: r.ftds,
-                atualizadoEm: new Date().toISOString(),
-              },
-            })
+    const porData = new Map<string, typeof comTracking>()
+    for (const d of comTracking) {
+      const key = d.dataDisparo
+      if (!porData.has(key)) porData.set(key, [])
+      porData.get(key)!.push(d)
+    }
+
+    Promise.all(
+      Array.from(porData.entries()).map(([date, grupos]) =>
+        sincronizarResultados(grupos, date).catch(() => ({})),
+      ),
+    )
+      .then((resultadosPorData) => {
+        for (const resultados of resultadosPorData) {
+          for (const [id, r] of Object.entries(resultados)) {
+            const dis = getById(id)
+            if (dis) {
+              update(id, {
+                resultados: {
+                  ...(dis.resultados ?? { registros: 0, ftds: 0, cpas: 0, custo: 0, valorFaturadoCPA: 0 }),
+                  registros: r.registros,
+                  ftds: r.ftds,
+                  cpas: r.cpas,
+                  atualizadoEm: new Date().toISOString(),
+                },
+              })
+            }
           }
         }
       })
       .catch(() => {})
-      .finally(() => setSincronizando(false))
-  }, [])
-
-  // Auto-sync CPA ao carregar (D+1)
-  useEffect(() => {
-    const ontem = new Date()
-    ontem.setDate(ontem.getDate() - 1)
-    const dataOntem = ontem.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-
-    const comCpa = list.filter((d) => (d.utm || d.betmgmPid))
-    if (!comCpa.length) return
-
-    setSincronizandoCpa(true)
-    sincronizarCpa(comCpa, dataOntem)
-      .then((resultados) => {
-        for (const [id, r] of Object.entries(resultados)) {
-          const dis = getById(id)
-          if (dis) {
-            update(id, {
-              resultados: {
-                ...(dis.resultados ?? { registros: 0, ftds: 0, cpas: 0, custo: 0, valorFaturadoCPA: 0 }),
-                cpas: r.cpas,
-                atualizadoEm: new Date().toISOString(),
-              },
-            })
-          }
-        }
-      })
-      .catch(() => {})
-      .finally(() => setSincronizandoCpa(false))
   }, [])
 
   async function handleRecalcularCustos() {
