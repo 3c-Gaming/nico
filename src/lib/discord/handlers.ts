@@ -30,7 +30,8 @@ export async function handleStatus(reply: ReplyFn) {
   try {
     const { listarNumeros } = await import('@/lib/integrações/sendpulse')
     const numeros = await listarNumeros(AbortSignal.timeout(30_000))
-    await reply({ embeds: [embedStatusBots(numeros)] })
+    const ativos = numeros.filter(n => n.status === 'ativo')
+    await reply({ embeds: [embedStatusBots(ativos)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao buscar status: ${(err as Error).message}`)] })
   }
@@ -129,9 +130,10 @@ export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
     const numeros = await listarNumeros(AbortSignal.timeout(30_000))
+    const ativos = numeros.filter(n => n.status === 'ativo')
     const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
 
-    await Promise.all(numeros.map(async num => {
+    await Promise.all(ativos.map(async num => {
       try {
         const fluxos = await listarFluxos(num.id, AbortSignal.timeout(10_000))
         fluxosPorBot.set(num.id, fluxos)
@@ -140,7 +142,7 @@ export async function handleRelatorio(reply: ReplyFn) {
       }
     }))
 
-    await reply({ embeds: [embedRelatorio(numeros, fluxosPorBot)] })
+    await reply({ embeds: [embedRelatorio(ativos, fluxosPorBot)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao gerar relatório: ${(err as Error).message}`)] })
   }

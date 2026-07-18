@@ -337,7 +337,7 @@ export default function NumerosPage() {
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
     return [...data.numeros]
-      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero)
+      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero && n.numero.status === 'ativo')
       .sort((a, b) => {
         const va = a.ultimoAumentoMs ?? 0
         const vb = b.ultimoAumentoMs ?? 0

@@ -149,17 +149,29 @@ export function embedAjuda(): DiscordEmbed {
 
 export function embedResultadoTeste(resultado: { botId: string; numero: string; nome: string; status: string; duracaoMs: number; erro?: string; ultimoTesteOkMs?: number; responseBody?: unknown; requestBody?: unknown }): DiscordEmbed {
   const isOk = resultado.status === 'ok'
-  const statusEmoji = isOk ? '✅' : '❌'
+  const isCaido = !isOk && resultado.status !== 'pendente'
+
+  const statusEmoji = isOk ? '✅' : '💀'
+  const statusLabel = isOk ? 'Online' : 'NUMERO CAIU'
+
   const ultimoOk = resultado.ultimoTesteOkMs
     ? new Date(resultado.ultimoTesteOkMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     : 'Nunca'
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
-    { name: 'Status', value: `${statusEmoji} \`${resultado.status}\``, inline: true },
+    { name: 'Status', value: `${statusEmoji} **${statusLabel}**`, inline: true },
     { name: 'Número', value: `\`${resultado.numero || 'N/A'}\``, inline: true },
     { name: 'Duração', value: `${resultado.duracaoMs}ms`, inline: true },
     { name: 'Último Teste OK', value: ultimoOk, inline: false },
   ]
+
+  if (isCaido) {
+    fields.push({
+      name: '⚠️ Atenção',
+      value: 'Este bot **não será mais testado** pois o número está inativo/caído.',
+      inline: false,
+    })
+  }
 
   if (resultado.erro) {
     fields.push({ name: 'Erro', value: resultado.erro, inline: false })
@@ -183,17 +195,16 @@ export function embedResumoTestes(resultados: { botId: string; numero: string; n
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Total', value: `${total}`, inline: true },
     { name: '✅ Ok', value: `${ok}`, inline: true },
-    { name: '❌ Erros', value: `${erros}`, inline: true },
-    { name: '⏳ Sem resposta', value: `${semResposta}`, inline: true },
+    { name: '💀 Números caídos', value: `${erros + semResposta}`, inline: true },
     { name: 'Duração total', value: `${duracaoTotalMs}ms`, inline: true },
   ]
 
-  const falhas = resultados.filter(r => r.status === 'erro')
+  const falhas = resultados.filter(r => r.status !== 'ok')
   if (falhas.length > 0) {
     const detalhes = falhas.map(f =>
-      `❌ **${f.nome}** (\`${f.numero || '?'}\`): ${f.erro ? f.erro.slice(0, 200) : 'Erro desconhecido'}`
+      `💀 **${f.nome}** (\`${f.numero || '?'}\`): ${f.status === 'sem_resposta' ? 'Sem resposta — número caído' : (f.erro ? f.erro.slice(0, 200) : 'Erro desconhecido')}`
     ).join('\n')
-    fields.push({ name: 'Detalhes dos erros', value: detalhes.length > 1000 ? detalhes.slice(0, 1000) + '...' : detalhes, inline: false })
+    fields.push({ name: 'Números caídos (não serão mais testados)', value: detalhes.length > 1000 ? detalhes.slice(0, 1000) + '...' : detalhes, inline: false })
   }
 
   return {

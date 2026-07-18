@@ -4,12 +4,14 @@ import type { BotConfig } from './types'
 
 export async function obterBots(): Promise<BotConfig[]> {
   const numeros = await listarNumeros()
-  return numeros.map((n) => ({
-    botId: n.id,
-    numero: n.numero,
-    botNumero: n.numero,
-    nome: n.nome,
-  }))
+  return numeros
+    .filter((n) => n.status === 'ativo')
+    .map((n) => ({
+      botId: n.id,
+      numero: n.numero,
+      botNumero: n.numero,
+      nome: n.nome,
+    }))
 }
 
 export async function obterBotsPinados(): Promise<BotConfig[]> {

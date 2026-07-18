@@ -108,7 +108,7 @@ export function StepNumero({ numeros: selected, onChange }: StepNumeroProps) {
       )}
 
       <div className="space-y-2">
-        {numeros.map((num) => {
+        {numeros.filter((num) => num.status === 'ativo').map((num) => {
           const ativo = selected.some((n) => n.id === num.id)
           return (
             <button
