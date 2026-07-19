@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (esteira) {
-    esteiraPersistida = { ...esteira, criadaEm: agora, atualizadoEm: agora }
+    esteiraPersistida = { ...esteira, criadoEm: agora, atualizadoEm: agora }
     await criarEsteira(esteiraPersistida!)
   }
 

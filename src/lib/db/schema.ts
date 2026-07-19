@@ -31,7 +31,7 @@ export const esteiras = pgTable('esteiras', {
   nome: text('nome').notNull(),
   casasAposta: jsonb('casas_aposta').notNull().default('[]'),
   disparos: jsonb('disparos').notNull().default('{}'),
-  criadaEm: text('criado_em').notNull(),
+  criadoEm: text('criado_em').notNull(),
   atualizadoEm: text('atualizado_em').notNull(),
   ativa: boolean('ativa').notNull().default(true),
 })
@@ -65,6 +65,7 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   utm: text('utm'),
   casas: jsonb('casas').default('[]'),
   tipo: text('tipo').notNull().default('disparo'),
+  lpUrl: text('lp_url'),
 })
 
 export const demandas = pgTable('demandas', {

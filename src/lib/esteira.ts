@@ -99,7 +99,7 @@ export function criarEsteira(
       d7: filhos.find((f) => f.tipo === 'D7')?.id,
     },
     etapas,
-    criadaEm: new Date().toISOString(),
+    criadoEm: new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
     ativa: true,
   }

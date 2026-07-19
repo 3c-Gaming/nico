@@ -212,7 +212,7 @@ export interface Esteira {
   }
   /** @deprecated Use `etapas` */
   etapas: EsteiraEtapa[]
-  criadaEm: string
+  criadoEm: string
   atualizadoEm: string
   ativa: boolean
 }

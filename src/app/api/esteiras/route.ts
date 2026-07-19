@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   const esteira: Esteira = {
     ...body,
     id,
-    criadaEm: agora,
+    criadoEm: agora,
     atualizadoEm: agora,
     ativa: true,
   }

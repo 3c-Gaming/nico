@@ -27,10 +27,21 @@ function syncToApi(path: string, method: string, body?: unknown) {
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   })
-    .then((res) => {
-      if (!res.ok) console.warn('[sync]', method, path, res.status)
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        console.error('[sync] ERRO ao salvar:', method, path, res.status, text)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('nico:sync-error', { detail: { method, path, status: res.status, body: text } }))
+        }
+      }
     })
-    .catch((err) => console.warn('[sync]', path, err))
+    .catch((err) => {
+      console.error('[sync] ERRO de rede:', path, err)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nico:sync-error', { detail: { method, path, error: String(err) } }))
+      }
+    })
 }
 
 let snapshotCache: AppState | null = null

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -45,6 +45,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
+
+  useEffect(() => {
+    function onSyncError(e: Event) {
+      const detail = (e as CustomEvent).detail
+      const msg = detail?.path
+        ? `Falha ao salvar: ${detail.path} (${detail.status ?? detail.error ?? 'erro desconhecido'})`
+        : 'Falha ao salvar dados'
+      addToast('error', msg)
+    }
+    window.addEventListener('nico:sync-error', onSyncError)
+    return () => window.removeEventListener('nico:sync-error', onSyncError)
+  }, [addToast])
 
   return (
     <ToastContext.Provider value={{ addToast }}>

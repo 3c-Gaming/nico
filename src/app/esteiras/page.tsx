@@ -170,7 +170,7 @@ export default function EsteirasPage() {
                     {esteira.nome}
                   </h3>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    Criada em {formatarData(parsearDataISO(esteira.criadaEm), 'DD/MM/YYYY')}
+                    Criada em {formatarData(parsearDataISO(esteira.criadoEm), 'DD/MM/YYYY')}
                   </p>
                 </div>
                 <span

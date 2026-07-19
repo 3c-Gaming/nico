@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
               ...(d7 ? { d7: disparosDoGrupo.get('D7')!.id } : {}),
             },
             etapas,
-            criadaEm: agora,
+            criadoEm: agora,
             atualizadoEm: agora,
             ativa: true,
           }
