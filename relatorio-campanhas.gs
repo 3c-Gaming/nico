@@ -1,8 +1,8 @@
 // ============================================
 // CONFIGURAÇÃO — trocar pelos domínios reais
 // ============================================
-const API_BASE = 'https://SEU-DOMINIO.vercel.app'
-const DAXX_BRIDGE = 'https://SEU-BRIDGE.railway.app'
+const API_BASE = 'https://controlenumeros.vercel.app'
+const DAXX_BRIDGE = 'https://nico-g3g3.onrender.com'
 
 // Colunas da planilha (letras)
 const COL = {
@@ -70,16 +70,16 @@ function buscarResultados() {
 
   for (let i = 0; i < data.length; i++) {
     const row = i + 2
-    const dateStr = String(data[i][0]).trim()
+    const rawDate = data[i][0]
     const casa = String(casas[i][0]).trim()
     const nome = String(nomes[i][0]).trim()
     const utm = String(utms[i][0]).trim()
 
-    if (!dateStr || !casa || !utm) continue
+    if (!rawDate || !casa || !utm) continue
 
-    const date = normalizeDate(dateStr)
+    const date = normalizeDate(rawDate)
     if (!date) {
-      logSheet.getRange(`A${row}`).setValue(`Linha ${row}: data inválida "${dateStr}"`)
+      logSheet.getRange(`A${row}`).setValue(`Linha ${row}: data inválida "${rawDate}"`)
       erros++
       continue
     }
@@ -136,7 +136,14 @@ function buscarResultados() {
 // UTILIDADES
 // ============================================
 
-function normalizeDate(str) {
+function normalizeDate(val) {
+  if (val instanceof Date) {
+    const y = val.getFullYear()
+    const m = String(val.getMonth() + 1).padStart(2, '0')
+    const d = String(val.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  const str = String(val).trim()
   const ddmmyyyy = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
