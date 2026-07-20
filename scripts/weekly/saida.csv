@@ -1,47 +1,209 @@
 DATA,CASA,UTM,DATE_API,REGISTROS,FTDS,CPAS,STATUS
-13/07,SuperBet,pilhado-disp-traf-sb-d1,2026-07-13,6,2,0,ok
-13/07,MGMBET,13398,2026-07-13,15,7,1,ok
-13/07,MGMBET,13538,2026-07-13,6,2,0,ok
-13/07,MGMBET,13540,2026-07-13,3,1,0,ok
-13/07,SuperBet,pilhado-disp-traf-sb-d5,2026-07-13,2,2,0,ok
-13/07,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-07-13,3,1,0,ok
-13/07,SuperBet,pilhado-disp-bete-d5-sb,2026-07-13,0,0,0,ok
-14/07,SuperBet,pilhado-disp-total-semifinal-01,2026-07-14,402,145,83,ok
-14/07,MGMBET,13398,2026-07-14,14,7,3,ok
-14/07,MGMBET,13538,2026-07-14,11,6,0,ok
-14/07,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-07-14,3,3,2,ok
-14/07,SuperBet,pilhado-disp-traf-bete-d5-sb,2026-07-14,0,0,0,ok
-14/07,SuperBet,pilhado-disp-traf-vaidebet-d5-sb,2026-07-14,0,0,0,ok
-14/07,MGMBET,13422,2026-07-14,4,1,0,ok
-14/07,MGMBET,13542,2026-07-14,0,0,0,ok
-15/07,SuperBet,pilhado-disp-total-semifinal-02,2026-07-15,178,67,38,ok
-15/07,MGMBET,13398,2026-07-15,10,6,3,ok
-15/07,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-07-15,2,1,1,ok
-15/07,SuperBet,pilhado-disp-traf-bete-d5-sb,2026-07-15,0,1,1,ok
-15/07,SuperBet,pilhado-disp-traf-vaidebet-d5-sb,2026-07-15,3,2,2,ok
-15/07,MGMBET,13422,2026-07-15,5,1,1,ok
-15/07,MGMBET,13542,2026-07-15,3,1,1,ok
-15/07,MGMBET,13544,2026-07-15,3,2,1,ok
-15/07,MGMBET,13548,2026-07-15,1,0,0,ok
-16/07,SEM CASA,-,,,,,ignorada (casa não mapeada ou utm inválido)
-16/07,SuperBet,pilhado-disp-traf-sb-d1,2026-07-16,2,0,0,ok
-16/07,MGMBET,13398,2026-07-16,3,3,1,ok
-16/07,SuperBet,pilhado-disp-traf-sb-d5,2026-07-16,3,2,0,ok
-16/07,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-07-16,1,2,1,ok
-17/07,SuperBet,pilhado-disp-traf-mgm-d1,2026-07-17,1,1,1,ok
-17/07,SuperBet,pilhado-disp-traf-sb-d1,2026-07-17,0,0,1,ok
-17/07,SuperBet,pilhado-disp-traf-sb-d5,2026-07-17,3,2,2,ok
-17/07,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-07-17,1,0,1,ok
-18/07,SuperBet,pilhado-disp-traf-sb-d1,2026-07-18,3,2,0,ok
-18/07,SuperBet,pilhado-disp-traf-mgm-d1,2026-07-18,0,1,1,ok
-18/07,SuperBet,pilhado-disp-traf-bete-d1,2026-07-18,5,1,1,ok
-18/07,MGMBET,13398,2026-07-18,2,1,2,ok
-18/07,SuperBet,pilhado-disp-traf-sb-d5,2026-07-18,3,0,0,ok
-19/07,SuperBet,pilhado-disp-traf-sb-d1,2026-07-19,0,0,0,ok
-19/07,SuperBet,pilhado-disp-traf-mgm-d1,2026-07-19,0,0,0,ok
-19/07,SuperBet,pilhado-disp-traf-bete-d1,2026-07-19,0,0,0,ok
-19/07,SuperBet,pilhado-disp-traf-d1-ouro,2026-07-19,0,0,0,ok
-19/07,MGMBET,13398,2026-07-19,2,2,2,ok
-19/07,MGMBET,13538,2026-07-19,1,1,0,ok
-19/07,NoviBet,-,,,,,ignorada (casa não mapeada ou utm inválido)
-19/07,NoviBet,-,,,,,ignorada (casa não mapeada ou utm inválido)
+01/06,MGM,,,,,,ignorada (casa não mapeada ou utm inválido)
+01/06,SuperBet,,,,,,ignorada (casa não mapeada ou utm inválido)
+04/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-04,0,0,0,ok
+04/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+04/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+05/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-05,0,0,0,ok
+05/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+05/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+05/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+05/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-05,32,16,16,ok
+05/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-05,32,16,16,ok
+06/06,MGM,13393,,,,,ignorada (casa não mapeada ou utm inválido)
+07/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-07,0,0,0,ok
+07/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+07/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+07/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+08/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-08,0,0,0,ok
+08/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+08/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+09/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-09,0,0,0,ok
+09/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+09/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+09/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+09/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+09/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-09,14,8,8,ok
+09/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-09,142,72,72,ok
+09/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-09,65,42,42,ok
+10/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-10,0,0,0,ok
+10/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-10,5,2,2,ok
+10/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-10,8,5,5,ok
+10/06,KingPanda,-,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,KingPanda,-,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,KingPanda,-,,,,,ignorada (casa não mapeada ou utm inválido)
+10/06,KingPanda,-,,,,,ignorada (casa não mapeada ou utm inválido)
+11/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-11,0,0,0,ok
+11/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+11/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+11/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-11,2,2,2,ok
+11/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-11,0,0,0,ok
+11/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-11,4,1,1,ok
+11/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-11,0,0,0,ok
+11/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+11/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+11/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-12,0,0,0,ok
+12/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-12,9,5,5,ok
+12/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-12,11,6,6,ok
+12/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-12,11,3,3,ok
+12/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+12/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-13,0,0,0,ok
+13/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-13,4,1,1,ok
+13/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-13,5,3,3,ok
+13/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+13/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-13,5,3,3,ok
+13/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-13,22,6,6,ok
+13/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-13,72,40,40,ok
+13/06,MGM,13393,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-14,0,0,0,ok
+14/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-14,1,2,2,ok
+14/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-14,0,0,0,ok
+14/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-14,4,1,1,ok
+14/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-14,0,0,0,ok
+14/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+14/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-14,2,1,1,ok
+14/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-14,2,1,1,ok
+15/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-15,0,0,0,ok
+15/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-15,8,6,6,ok
+15/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-15,1,0,0,ok
+15/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+15/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-15,10,5,5,ok
+15/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-15,4,1,1,ok
+15/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-15,1,1,1,ok
+16/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+16/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-16,0,0,0,ok
+16/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-16,0,1,1,ok
+16/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+16/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+16/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-16,5,3,3,ok
+16/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+16/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-16,2,3,3,ok
+16/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+16/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-16,1,1,1,ok
+17/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-17,0,0,0,ok
+17/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13397,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-17,13,9,9,ok
+17/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-17,58,32,32,ok
+17/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-17,68,23,23,ok
+17/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-17,1,1,1,ok
+17/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+17/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-17,3,1,1,ok
+17/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-17,0,0,0,ok
+18/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-18,0,0,0,ok
+18/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,MGM,13426,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-18,39,11,5,ok
+18/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-18,4,2,2,ok
+18/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+18/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-18,1,1,0,ok
+18/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-18,2,1,0,ok
+18/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-18,2,2,2,ok
+19/06,MGM,13393,,,,,ignorada (casa não mapeada ou utm inválido)
+19/06,SuperBet,pilhado-disp-total-sb,2026-06-01 a 2026-06-30,6969,3486,2254,ok (compilado mês)
+19/06,MGM,13396,,,,,ignorada (casa não mapeada ou utm inválido)
+19/06,MGM,13423,,,,,ignorada (casa não mapeada ou utm inválido)
+19/06,SuperBet,pilhado-disp-traf-king-d1,2026-06-19,106,34,19,ok
+19/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-19,0,0,0,ok
+19/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-19,6,7,3,ok
+19/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-19,8,4,3,ok
+19/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-19,35,19,14,ok
+19/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+19/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+19/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-19,6,2,1,ok
+19/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-19,2,1,1,ok
+19/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+20/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-20,0,0,0,ok
+20/06,SuperBet,pilhado-disp-traf-mgm-d1,2026-06-20,0,0,0,ok
+20/06,SuperBet,pilhado-disp-traf-esp-d1,2026-06-20,0,0,0,ok
+20/06,SuperBet,pilhado-disp-traf-king-d1,2026-06-20,294,118,78,ok
+20/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+20/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-20,38,19,11,ok
+20/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-20,2,0,0,ok
+20/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+20/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+20/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-20,2,1,1,ok
+20/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-20,33,11,8,ok
+20/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-20,16,7,3,ok
+21/06,SuperBet,pilhado-disp-traf-bs-sb-d1,2026-06-21,0,0,0,ok
+21/06,SuperBet,pilhado-disp-traf-king-d1,2026-06-21,39,13,15,ok
+21/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+21/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-21,20,6,5,ok
+21/06,SuperBet,pilhado-disp-traf-bete-d3,2026-06-21,5,1,0,ok
+21/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-21,3,1,1,ok
+21/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+21/06,MGM,13400,,,,,ignorada (casa não mapeada ou utm inválido)
+21/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+21/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+21/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-21,10,3,1,ok
+22/06,SuperBet,pilhado-disp-traf-king-d1,2026-06-22,79,34,20,ok
+22/06,SuperBet,pilhado-disp-traf-mgm-d1,2026-06-22,74,33,15,ok
+22/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+22/06,SuperBet,pilhado-disp-traf-mgm-d3,2026-06-22,34,18,12,ok
+22/06,SuperBet,pilhado-disp-traf-esp-d3,2026-06-22,60,22,15,ok
+22/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-22,1,0,0,ok
+22/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+22/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+22/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-22,10,5,2,ok
+23/06,SuperBet,pilhado-disp-traf-king-d1,2026-06-23,54,20,6,ok
+23/06,SuperBet,pilhado-disp-traf-mgm-d1,2026-06-23,46,22,14,ok
+23/06,MGM,13538,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,MGM,13502,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,MGM,13398,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-23,8,5,4,ok
+23/06,MGM,13399,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,MGM,13394,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+23/06,SuperBet,pilhado-disp-traf-mgm-d7,2026-06-23,11,6,5,ok
+23/06,SuperBet,pilhado-disp-traf-esp-d7,2026-06-23,4,2,0,ok
+23/06,SuperBet,pilhado-disp-traf-bete-d7,2026-06-23,5,4,2,ok
+24/06,SuperBet,pilhado-disp-total-sb-2406,2026-06-01 a 2026-06-30,855,456,318,ok (compilado mês)
+24/06,SuperBet,pilhado-disp-total-sb-2026,2026-06-01 a 2026-06-30,813,402,252,ok (compilado mês)
+25/06,SuperBet,pilhado-disp-total-sb-500-A,2026-06-01 a 2026-06-30,597,312,196,ok (compilado mês)
+25/06,SuperBet,pilhado-disp-total-sb-500-B,2026-06-01 a 2026-06-30,651,342,223,ok (compilado mês)
+26/06,SuperBet,pilhado-disp-total-sb-400,2026-06-01 a 2026-06-30,1160,570,382,ok (compilado mês)
+27/06,SuperBet,pilhado-disp-total-sb-5K,2026-06-01 a 2026-06-30,1313,675,455,ok (compilado mês)
+28/06,SuperBet,pilhado-disp-total-sb-odm,2026-06-01 a 2026-06-30,659,288,130,ok (compilado mês)
+30/06,MGM,13538,,,,,ignorada (casa não mapeada ou utm inválido)
+30/06,MGM,13502,,,,,ignorada (casa não mapeada ou utm inválido)
+30/06,SuperBet,pilhado-disp-traf-sb-d5,2026-06-30,1,0,0,ok
+30/06,SuperBet,pilhado-disp-traf-esp-d5-sb,2026-06-30,7,2,1,ok
+30/06,SuperBet,pilhado-disp-traf-mgm-d5-sb,2026-06-30,3,1,1,ok
+30/06,MGM,13542,,,,,ignorada (casa não mapeada ou utm inválido)
+30/06,MGM,13422,,,,,ignorada (casa não mapeada ou utm inválido)
+30/06,MGM,13545,,,,,ignorada (casa não mapeada ou utm inválido)
+30/06,MGM,13393,,,,,ignorada (casa não mapeada ou utm inválido)

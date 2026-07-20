@@ -24,6 +24,7 @@ const ANO = 2026;
 // Ajuste os valores da direita conforme o slug real de cada casa na API.
 const CASA_MAP = {
   "MGMBET": "mgm",
+  "MGM": "mgm",
   "SuperBet": "superbet",
   "NoviBet": "novibet",
 };
@@ -41,6 +42,13 @@ const API_BASE = "https://controlenumeros.vercel.app/api/campanhas/relatorio/utm
 // usados quando nada é passado por linha de comando.
 const ARQUIVO_ENTRADA_PADRAO = "entrada.csv";
 const ARQUIVO_SAIDA_PADRAO = "saida.csv";
+
+// UTMs que contêm esse trecho são "compiladas": os dados se propagam ao
+// longo do mês inteiro, então em vez de consultar um único dia, somamos
+// os valores de cada dia do intervalo abaixo.
+const PADRAO_UTM_COMPILADA = "pilhado-disp-total";
+const COMPILADO_DATA_INICIO = "2026-06-01";
+const COMPILADO_DATA_FIM = "2026-06-30";
 
 // ---------------------------------------------------------------------
 
@@ -100,6 +108,45 @@ async function consultarUTM(utm, casa, date) {
   }
 }
 
+// Gera lista de datas "yyyy-mm-dd" entre início e fim (inclusive).
+function gerarIntervaloDatas(inicio, fim) {
+  const datas = [];
+  let atual = new Date(`${inicio}T00:00:00Z`);
+  const fimDate = new Date(`${fim}T00:00:00Z`);
+  while (atual <= fimDate) {
+    datas.push(atual.toISOString().slice(0, 10));
+    atual.setUTCDate(atual.getUTCDate() + 1);
+  }
+  return datas;
+}
+
+// Consulta e soma os valores de um UTM "compilado" ao longo de todo o
+// intervalo (ex: pilhado-disp-total-*, que se propaga o mês inteiro).
+async function consultarUTMCompilado(utm, casa) {
+  const datas = gerarIntervaloDatas(COMPILADO_DATA_INICIO, COMPILADO_DATA_FIM);
+  let registros = 0;
+  let ftds = 0;
+  let cpas = 0;
+  const erros = [];
+
+  for (const date of datas) {
+    const resultado = await consultarUTM(utm, casa, date);
+    if (resultado.erro) {
+      erros.push(`${date}: ${resultado.erro}`);
+    } else {
+      registros += Number(resultado.registros) || 0;
+      ftds += Number(resultado.ftds) || 0;
+      cpas += Number(resultado.cpas) || 0;
+    }
+    await sleep(DELAY_MS);
+  }
+
+  if (erros.length > 0) {
+    return { registros, ftds, cpas, erro: erros.join(" | ") };
+  }
+  return { registros, ftds, cpas };
+}
+
 async function main() {
   const [, , argInput, argOutput] = process.argv;
 
@@ -121,6 +168,11 @@ async function main() {
 
   const resultados = [];
   let ignoradas = 0;
+
+  // Cache para UTMs "compiladas" (pilhado-disp-total-*), já que a mesma
+  // combinação utm+casa pode aparecer em várias linhas com datas diferentes
+  // — não faz sentido buscar o mês inteiro de novo a cada linha.
+  const cacheCompilado = new Map();
 
   for (let i = 0; i < rows.length; i++) {
     const { data, casa, utm } = rows[i];
@@ -162,37 +214,57 @@ async function main() {
       continue;
     }
 
-    const resultado = await consultarUTM(utm, casaApi, dateApi);
+    const isCompilada = utm.includes(PADRAO_UTM_COMPILADA);
+
+    let resultado;
+    let dateApiSaida;
+
+    if (isCompilada) {
+      const chaveCache = `${casaApi}|${utm}`;
+      if (cacheCompilado.has(chaveCache)) {
+        resultado = cacheCompilado.get(chaveCache);
+        console.log(`${progresso} COMPILADA (cache) -> utm=${utm} casa=${casaApi}`);
+      } else {
+        console.log(
+          `${progresso} COMPILADA -> utm=${utm} casa=${casaApi} :: somando ${COMPILADO_DATA_INICIO} a ${COMPILADO_DATA_FIM}...`
+        );
+        resultado = await consultarUTMCompilado(utm, casaApi);
+        cacheCompilado.set(chaveCache, resultado);
+      }
+      dateApiSaida = `${COMPILADO_DATA_INICIO} a ${COMPILADO_DATA_FIM}`;
+    } else {
+      resultado = await consultarUTM(utm, casaApi, dateApi);
+      dateApiSaida = dateApi;
+      await sleep(DELAY_MS);
+    }
 
     if (resultado.erro) {
-      console.log(`${progresso} ERRO -> utm=${utm} casa=${casaApi} date=${dateApi} :: ${resultado.erro}`);
+      console.log(`${progresso} ERRO -> utm=${utm} casa=${casaApi} date=${dateApiSaida} :: ${resultado.erro}`);
       resultados.push({
         data,
         casa,
         utm,
-        date_api: dateApi,
-        registros: "",
-        ftds: "",
-        cpas: "",
+        date_api: dateApiSaida,
+        registros: resultado.registros ?? "",
+        ftds: resultado.ftds ?? "",
+        cpas: resultado.cpas ?? "",
         status: `erro: ${resultado.erro}`,
       });
     } else {
       console.log(
-        `${progresso} OK -> utm=${utm} casa=${casaApi} date=${dateApi} :: registros=${resultado.registros} ftds=${resultado.ftds} cpas=${resultado.cpas}`
+        `${progresso} OK -> utm=${utm} casa=${casaApi} date=${dateApiSaida} :: registros=${resultado.registros} ftds=${resultado.ftds} cpas=${resultado.cpas}`
       );
       resultados.push({
         data,
         casa,
         utm,
-        date_api: dateApi,
+        date_api: dateApiSaida,
         registros: resultado.registros,
         ftds: resultado.ftds,
         cpas: resultado.cpas,
-        status: "ok",
+        status: isCompilada ? "ok (compilado mês)" : "ok",
       });
     }
-
-    await sleep(DELAY_MS);
   }
 
   // Monta CSV de saída
