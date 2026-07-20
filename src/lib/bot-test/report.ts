@@ -29,6 +29,11 @@ const FRASES_SEM_RESPOSTA = [
   'Teve silencio em alguns canais...',
 ]
 
+const FRASES_AVISO = [
+  'Alguns bots precisam de atencao...',
+  'Tem bot precisando de interacao manual...',
+]
+
 function fraseAleatoria(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]
 }
@@ -40,6 +45,7 @@ export function formatarRelatorio(resultados: BotTestResult[]): string {
 
   const ok = resultados.filter((r) => r.status === 'ok').length
   const erros = resultados.filter((r) => r.status === 'erro').length
+  const avisos = resultados.filter((r) => r.status === 'aviso').length
   const semResposta = resultados.filter((r) => r.status === 'sem_resposta' || r.status === 'pendente').length
   const total = resultados.length
 
@@ -55,6 +61,9 @@ export function formatarRelatorio(resultados: BotTestResult[]): string {
 
     if (r.status === 'ok') {
       linhas.push(`*${nome}*  ✅ _OK_ _(${formatarDuracao(r.duracaoMs)})_  ⏱ ${horario}`)
+    } else if (r.status === 'aviso') {
+      linhas.push(`*${nome}*  ⚠️ _AVISO_  ⏱ ${horario}`)
+      linhas.push(`> _O contact_id precisa de interação manual para voltar a ser testado._`)
     } else if (r.status === 'erro') {
       linhas.push(`*${nome}*  ❌ _ERRO_  ⏱ ${horario}`)
       if (r.erro) {
@@ -68,12 +77,14 @@ export function formatarRelatorio(resultados: BotTestResult[]): string {
 
   linhas.push('')
   linhas.push('```')
-  linhas.push(`  ✅  ${ok} ok    ❌  ${erros} erro    ⏳  ${semResposta} sem resp    📊  ${total} total`)
+  linhas.push(`  ✅  ${ok} ok    ⚠️  ${avisos} aviso    ❌  ${erros} erro    ⏳  ${semResposta} sem resp    📊  ${total} total`)
   linhas.push('```')
   linhas.push('')
 
-  if (erros === 0 && semResposta === 0) {
+  if (erros === 0 && semResposta === 0 && avisos === 0) {
     linhas.push(`_*${fraseAleatoria(FRASES_OK)}*_ ✨`)
+  } else if (avisos > 0 && erros === 0 && semResposta === 0) {
+    linhas.push(`_*${fraseAleatoria(FRASES_AVISO)}*_`)
   } else if (erros > 0) {
     linhas.push(`_*${fraseAleatoria(FRASES_ERRO)}*_`)
   } else {

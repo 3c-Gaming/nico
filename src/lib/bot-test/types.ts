@@ -1,4 +1,4 @@
-export type BotTestStatus = 'pendente' | 'ok' | 'sem_resposta' | 'erro'
+export type BotTestStatus = 'pendente' | 'ok' | 'sem_resposta' | 'erro' | 'aviso'
 
 export interface BotConfig {
   botId: string

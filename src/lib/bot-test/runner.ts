@@ -21,6 +21,14 @@ async function obterBotContactIds(): Promise<Record<string, string>> {
   }
 }
 
+const MSG_AVISO = 'O contact_id deste bot precisa receber uma interação manual para voltar a ser testado.'
+
+function isContactNotActive(resposta: { ok: boolean; statusCode: number; body: unknown }): boolean {
+  if (resposta.ok || resposta.statusCode !== 422) return false
+  const bodyStr = JSON.stringify(resposta.body).toLowerCase()
+  return bodyStr.includes('contact is not active')
+}
+
 export async function executarCicloTeste(botId: string): Promise<BotTestResult> {
   const bots = await obterBots()
   const config = bots.find((b) => b.botId === botId)
@@ -80,9 +88,13 @@ export async function executarCicloTeste(botId: string): Promise<BotTestResult> 
       numero: config.numero,
       nome: config.nome,
       ultimoTeste: nowISO(),
-      status: resposta.ok ? 'ok' : 'erro',
+      status: isContactNotActive(resposta) ? 'aviso' : (resposta.ok ? 'ok' : 'erro'),
       duracaoMs,
-      erro: resposta.ok ? undefined : `HTTP ${resposta.statusCode}: ${JSON.stringify(resposta.body).slice(0, 200)}`,
+      erro: resposta.ok
+        ? undefined
+        : isContactNotActive(resposta)
+          ? MSG_AVISO
+          : `HTTP ${resposta.statusCode}: ${JSON.stringify(resposta.body).slice(0, 200)}`,
       ultimoTesteOkMs: resposta.ok ? Date.now() : (existente?.ultimoTesteOkMs ?? undefined),
       ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
       requestBody,
@@ -165,9 +177,13 @@ export async function executarTesteParalelo(): Promise<BotTestResult[]> {
       numero: config.numero,
       nome: config.nome,
       ultimoTeste: nowISO(),
-      status: resposta.ok ? 'ok' : 'erro',
+      status: isContactNotActive(resposta) ? 'aviso' : (resposta.ok ? 'ok' : 'erro'),
       duracaoMs: Date.now() - inicio,
-      erro: resposta.ok ? undefined : `HTTP ${resposta.statusCode}: ${JSON.stringify(resposta.body).slice(0, 200)}`,
+      erro: resposta.ok
+        ? undefined
+        : isContactNotActive(resposta)
+          ? MSG_AVISO
+          : `HTTP ${resposta.statusCode}: ${JSON.stringify(resposta.body).slice(0, 200)}`,
       ultimoTesteOkMs: resposta.ok ? Date.now() : (existente?.ultimoTesteOkMs ?? undefined),
       ultimoTriggerOkMs: existente?.ultimoTriggerOkMs ?? undefined,
       requestBody,

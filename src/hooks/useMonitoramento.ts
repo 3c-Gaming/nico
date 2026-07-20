@@ -37,6 +37,8 @@ function enriquecer(json: DadosMonitoramento, botTestResults?: BotTestApiResult[
 
     if (botInfo?.status === 'ok') {
       status = 'respondendo'
+    } else if (botInfo?.status === 'aviso') {
+      status = 'respondendo'
     } else if ((botInfo?.status === 'sem_resposta' || botInfo?.status === 'erro') && !isPendente) {
       status = 'numero_caido'
     } else {

@@ -149,10 +149,11 @@ export function embedAjuda(): DiscordEmbed {
 
 export function embedResultadoTeste(resultado: { botId: string; numero: string; nome: string; status: string; duracaoMs: number; erro?: string; ultimoTesteOkMs?: number; responseBody?: unknown; requestBody?: unknown }): DiscordEmbed {
   const isOk = resultado.status === 'ok'
-  const isCaido = !isOk && resultado.status !== 'pendente'
+  const isAviso = resultado.status === 'aviso'
+  const isCaido = !isOk && !isAviso && resultado.status !== 'pendente'
 
-  const statusEmoji = isOk ? '✅' : '💀'
-  const statusLabel = isOk ? 'Online' : 'NUMERO CAIU'
+  const statusEmoji = isOk ? '✅' : isAviso ? '⚠️' : '💀'
+  const statusLabel = isOk ? 'Online' : isAviso ? 'ATENÇÃO' : 'NUMERO CAIU'
 
   const ultimoOk = resultado.ultimoTesteOkMs
     ? new Date(resultado.ultimoTesteOkMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
@@ -165,7 +166,13 @@ export function embedResultadoTeste(resultado: { botId: string; numero: string; 
     { name: 'Último Teste OK', value: ultimoOk, inline: false },
   ]
 
-  if (isCaido) {
+  if (isAviso) {
+    fields.push({
+      name: '⚠️ Aviso',
+      value: 'O contact_id deste bot precisa receber uma interação manual para voltar a ser testado.',
+      inline: false,
+    })
+  } else if (isCaido) {
     fields.push({
       name: '⚠️ Atenção',
       value: 'Este bot **não será mais testado** pois o número está inativo/caído.',
@@ -189,17 +196,26 @@ export function embedResumoTestes(resultados: { botId: string; numero: string; n
   const total = resultados.length
   const ok = resultados.filter(r => r.status === 'ok').length
   const erros = resultados.filter(r => r.status === 'erro').length
+  const avisos = resultados.filter(r => r.status === 'aviso').length
   const semResposta = resultados.filter(r => r.status === 'sem_resposta').length
   const allOk = erros === 0 && semResposta === 0
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Total', value: `${total}`, inline: true },
     { name: '✅ Ok', value: `${ok}`, inline: true },
+    { name: '⚠️ Avisos', value: `${avisos}`, inline: true },
     { name: '💀 Números caídos', value: `${erros + semResposta}`, inline: true },
     { name: 'Duração total', value: `${duracaoTotalMs}ms`, inline: true },
   ]
 
-  const falhas = resultados.filter(r => r.status !== 'ok')
+  if (avisos > 0) {
+    const detalhesAvisos = resultados.filter(r => r.status === 'aviso').map(f =>
+      `⚠️ **${f.nome}** (\`${f.numero || '?'}\`): O contact_id precisa de interação manual para voltar a ser testado.`
+    ).join('\n')
+    fields.push({ name: 'Avisos — interação manual necessária', value: detalhesAvisos.length > 1000 ? detalhesAvisos.slice(0, 1000) + '...' : detalhesAvisos, inline: false })
+  }
+
+  const falhas = resultados.filter(r => r.status === 'erro' || r.status === 'sem_resposta')
   if (falhas.length > 0) {
     const detalhes = falhas.map(f =>
       `💀 **${f.nome}** (\`${f.numero || '?'}\`): ${f.status === 'sem_resposta' ? 'Sem resposta — número caído' : (f.erro ? f.erro.slice(0, 200) : 'Erro desconhecido')}`
