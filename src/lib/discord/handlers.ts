@@ -129,8 +129,12 @@ export async function handleTestarTodos(reply: ReplyFn, channelId?: string) {
 export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
-    const ativos = numeros.filter(n => n.status === 'ativo')
+    const { getPreferencias } = await import('@/lib/db/supabase')
+    const [numeros, { pinnedNumeros }] = await Promise.all([
+      listarNumeros(AbortSignal.timeout(30_000)),
+      getPreferencias(),
+    ])
+    const ativos = numeros.filter(n => n.status === 'ativo' && pinnedNumeros.includes(n.id))
     const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
 
     await Promise.all(ativos.map(async num => {

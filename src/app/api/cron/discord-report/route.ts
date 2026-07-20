@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sendChannelMessage } from '@/lib/discord/verify'
 import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
+import { getPreferencias } from '@/lib/db/supabase'
 import { embedRelatorio } from '@/lib/discord/embeds'
 
 export const maxDuration = 60
@@ -28,7 +29,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
+    const [todosNumeros, { pinnedNumeros }] = await Promise.all([
+      listarNumeros(AbortSignal.timeout(30_000)),
+      getPreferencias(),
+    ])
+    const numeros = todosNumeros.filter(n => pinnedNumeros.includes(n.id))
     const fluxosPorBot = new Map()
 
     await Promise.all(numeros.map(async num => {
