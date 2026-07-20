@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Disparo, StatusDisparo } from '@/types'
+import type { ItemCalendario, StatusDisparo } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEsteiras } from '@/hooks/useEsteiras'
@@ -12,7 +12,7 @@ import { StatusDot } from '../ui/StatusDot'
 import { Modal } from '../ui/Modal'
 import { Dropdown } from '../ui/Dropdown'
 import { useToast } from '../ui/Toast'
-import { ExternalLink, Trash2, Play, Check } from 'lucide-react'
+import { ExternalLink, Trash2, Play, Check, Clock, Database } from 'lucide-react'
 import Link from 'next/link'
 
 const TIPO_CORES: Record<string, string> = {
@@ -31,37 +31,206 @@ const STATUS_DISPONIVEIS: { value: StatusDisparo; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
-interface CardDisparoProps {
-  disparo: Disparo
+interface CardItemCalendarioProps {
+  item: ItemCalendario
 }
 
-export function CardDisparo({ disparo }: CardDisparoProps) {
+function formatNumero(n: number): string {
+  return n.toLocaleString('pt-BR')
+}
+
+export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [open, setOpen] = useState(false)
   const { update, remove } = useDisparos()
   const { getById } = useEsteiras()
   const { casas } = useCasasAposta()
   const { addToast } = useToast()
 
-  const cor = TIPO_CORES[disparo.tipo] ?? 'var(--text-secondary)'
-  const esteira = disparo.esteiraPaiId ? getById(disparo.esteiraPaiId) : null
+  const cor = TIPO_CORES[item.tipo] ?? 'var(--text-secondary)'
+  const esteira = item.disparoLocal?.esteiraPaiId ? getById(item.disparoLocal.esteiraPaiId) : null
 
   function handleStatusChange(status: StatusDisparo) {
-    update(disparo.id, { status })
+    if (!item.disparoLocal) return
+    update(item.disparoLocal.id, { status })
     addToast('success', `Status alterado para ${status.replace('_', ' ')}`)
   }
 
   function handleExecutar() {
-    update(disparo.id, { status: 'executado' })
-    addToast('success', `${disparo.tipo} marcado como executado`)
+    if (!item.disparoLocal) return
+    update(item.disparoLocal.id, { status: 'executado' })
+    addToast('success', `${item.tipo} marcado como executado`)
     setOpen(false)
   }
 
   function handleDelete() {
+    if (!item.disparoLocal) return
     if (confirm('Tem certeza que deseja apagar este disparo?')) {
-      remove(disparo.id)
+      remove(item.disparoLocal.id)
       addToast('success', 'Disparo removido')
       setOpen(false)
     }
+  }
+
+  if (item.fonte === 'daxx') {
+    return (
+      <>
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full text-left rounded p-2.5 transition-all duration-150 group"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px dashed var(--border-strong)',
+            borderLeft: `3px solid ${cor}`,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-elevated)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-surface)' }}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-xs font-semibold" style={{ color: cor }}>{item.tipo}</span>
+            <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)]">
+              <Database size={9} />
+              DAXX
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {item.casasAposta.map((casaId) => {
+              const casa = casas[casaId]
+              if (!casa) return null
+              return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
+            })}
+          </div>
+          <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
+            {item.nome}
+          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+            <span className="capitalize">{item.status}</span>
+            {item.totalBase != null && (
+              <>
+                <span>·</span>
+                <span>{formatNumero(item.totalBase)} base</span>
+              </>
+            )}
+          </div>
+          {(item.entregues != null || item.lidas != null) && (
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-muted)]">
+              {item.entregues != null && <span>Enviados: {formatNumero(item.entregues)}</span>}
+              {item.lidas != null && <span>Lidos: {formatNumero(item.lidas)}</span>}
+              {item.rejeitados != null && item.rejeitados > 0 && <span className="text-[var(--error)]">Rej: {formatNumero(item.rejeitados)}</span>}
+            </div>
+          )}
+        </button>
+
+        <Modal open={open} onClose={() => setOpen(false)} title={item.nome}>
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Tipo</span>
+                <Badge variant="tipo" value={item.tipo} />
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Status DAXX</span>
+                <span className="text-[var(--text-primary)]">{item.status}</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Data</span>
+                <span className="text-[var(--text-primary)]">{item.dataDisparo}</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Base</span>
+                <span className="text-[var(--text-primary)]">{item.totalBase != null ? formatNumero(item.totalBase) : '—'}</span>
+              </div>
+            </div>
+            <div>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">Métricas</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.entregues != null ? formatNumero(item.entregues) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? formatNumero(item.lidas) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? formatNumero(item.rejeitados) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
+                </div>
+              </div>
+            </div>
+            {item.campanhaDaxx?.responsavel && (
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Responsável</span>
+                <span className="text-[var(--text-primary)]">{item.campanhaDaxx.responsavel}</span>
+              </div>
+            )}
+          </div>
+        </Modal>
+      </>
+    )
+  }
+
+  if (item.fonte === 'agendado') {
+    return (
+      <>
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full text-left rounded p-2.5 transition-all duration-150 group"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--info)',
+            borderLeft: '3px solid var(--info)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-elevated)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-surface)' }}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-xs font-semibold text-[var(--info)]">{item.tipo}</span>
+            <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--info)]/30 text-[var(--info)]">
+              <Clock size={9} />
+              Agendado
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {item.casasAposta.map((casaId) => {
+              const casa = casas[casaId]
+              if (!casa) return null
+              return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
+            })}
+          </div>
+          <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
+            {item.nome}
+          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+            <span className="capitalize">{item.status}</span>
+          </div>
+        </button>
+
+        <Modal open={open} onClose={() => setOpen(false)} title={item.nome}>
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Tipo</span>
+                <Badge variant="tipo" value={item.tipo} />
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Status</span>
+                <span className="text-[var(--text-primary)]">{item.status}</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Data Agendada</span>
+                <span className="text-[var(--text-primary)]">{item.dataDisparo}</span>
+              </div>
+            </div>
+            {item.agendado?.marcas?.nome && (
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs">Marca</span>
+                <span className="text-[var(--text-primary)]">{item.agendado.marcas.nome}</span>
+              </div>
+            )}
+          </div>
+        </Modal>
+      </>
+    )
   }
 
   return (
@@ -85,9 +254,9 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
       >
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-xs font-semibold" style={{ color: cor }}>
-            {disparo.tipo}
+            {item.tipo}
           </span>
-          {disparo.status !== 'executado' && disparo.status !== 'cancelado' && (
+          {item.status !== 'executado' && item.status !== 'cancelado' && (
             <span
               role="button"
               tabIndex={0}
@@ -111,7 +280,7 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
         </div>
 
         <div className="flex flex-wrap gap-1 mb-1">
-          {disparo.casasAposta.map((casaId) => {
+          {item.casasAposta.map((casaId) => {
             const casa = casas[casaId]
             if (!casa) return null
             return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
@@ -119,27 +288,37 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
         </div>
 
         <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
-          {disparo.nomenclatura}
+          {item.nomenclatura}
         </p>
 
         <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-          <span>{disparo.horarioDisparo}</span>
+          <span>{item.horarioDisparo}</span>
           <span>·</span>
-          <StatusDot status={disparo.status} size={6} />
-          <span className="capitalize">{disparo.status.replace('_', ' ')}</span>
+          {item.fonte === 'local' ? (
+            <StatusDot status={item.status as StatusDisparo} size={6} />
+          ) : (
+            <span className="inline-block rounded-full" style={{ width: 6, height: 6, backgroundColor: 'var(--text-muted)' }} />
+          )}
+          <span className="capitalize">{item.status.replace('_', ' ')}</span>
+          {item.entregues != null && (
+            <>
+              <span>·</span>
+              <span className="text-[var(--success)]">{formatNumero(item.entregues)} env.</span>
+            </>
+          )}
         </div>
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={disparo.nomenclatura}>
+      <Modal open={open} onClose={() => setOpen(false)} title={item.nomenclatura}>
         <div className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <span className="text-[var(--text-muted)] block text-xs">Tipo</span>
-              <Badge variant="tipo" value={disparo.tipo} />
+              <Badge variant="tipo" value={item.tipo} />
             </div>
             <div>
               <span className="text-[var(--text-muted)] block text-xs mb-1">Status</span>
-              <Dropdown label={disparo.status.replace('_', ' ')}>
+              <Dropdown label={item.status.replace('_', ' ')}>
                 <div className="p-1 min-w-[140px]">
                   {STATUS_DISPONIVEIS.map((opt) => (
                     <button
@@ -149,13 +328,13 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
                         setOpen(false)
                       }}
                       className={`flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded transition-colors ${
-                        opt.value === disparo.status
+                        opt.value === item.status
                           ? 'text-[var(--d1)] bg-[var(--d1)]/10'
                           : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
                       }`}
                     >
-                      {opt.value === disparo.status && <Check size={14} className="text-[var(--d1)]" />}
-                      <span className={opt.value === disparo.status ? '' : 'ml-6'}>{opt.label}</span>
+                      {opt.value === item.status && <Check size={14} className="text-[var(--d1)]" />}
+                      <span className={opt.value === item.status ? '' : 'ml-6'}>{opt.label}</span>
                     </button>
                   ))}
                 </div>
@@ -163,18 +342,18 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
             </div>
             <div>
               <span className="text-[var(--text-muted)] block text-xs">Data</span>
-              <span className="text-[var(--text-primary)]">{disparo.dataDisparo}</span>
+              <span className="text-[var(--text-primary)]">{item.dataDisparo}</span>
             </div>
             <div>
               <span className="text-[var(--text-muted)] block text-xs">Horário</span>
-              <span className="text-[var(--text-primary)]">{disparo.horarioDisparo}</span>
+              <span className="text-[var(--text-primary)]">{item.horarioDisparo}</span>
             </div>
           </div>
 
           <div>
             <span className="text-[var(--text-muted)] block text-xs mb-1">Casas de Aposta</span>
             <div className="flex flex-wrap gap-1">
-              {disparo.casasAposta.map((casaId) => {
+              {item.casasAposta.map((casaId) => {
                 const casa = casas[casaId]
                 if (!casa) return null
                 return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="md" />
@@ -182,22 +361,44 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
             </div>
           </div>
 
-          <div>
-            <span className="text-[var(--text-muted)] block text-xs mb-1">Base CSV</span>
-            <span className="text-[var(--text-primary)]">{disparo.base.status}</span>
-            {disparo.base.nomeArquivo && (
-              <span className="text-[var(--text-secondary)] ml-2">({disparo.base.nomeArquivo})</span>
-            )}
-          </div>
-
-          {disparo.notas && (
+          {item.disparoLocal && (
             <div>
-              <span className="text-[var(--text-muted)] block text-xs mb-1">Notas</span>
-              <p className="text-[var(--text-primary)]">{disparo.notas}</p>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">Base CSV</span>
+              <span className="text-[var(--text-primary)]">{item.disparoLocal.base.status}</span>
+              {item.disparoLocal.base.nomeArquivo && (
+                <span className="text-[var(--text-secondary)] ml-2">({item.disparoLocal.base.nomeArquivo})</span>
+              )}
             </div>
           )}
 
-          {esteira && disparo.tipo === 'D1' && (
+          {item.entregues != null && (
+            <div>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">Métricas DAXX</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(item.entregues)}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? formatNumero(item.lidas) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? formatNumero(item.rejeitados) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {item.disparoLocal?.notas && (
+            <div>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">Notas</span>
+              <p className="text-[var(--text-primary)]">{item.disparoLocal.notas}</p>
+            </div>
+          )}
+
+          {esteira && item.tipo === 'D1' && (
             <div>
               <span className="text-[var(--text-muted)] block text-xs mb-1">Esteira</span>
               <Link href="/esteiras" className="text-[var(--d1)] text-xs hover:underline">
@@ -208,19 +409,23 @@ export function CardDisparo({ disparo }: CardDisparoProps) {
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--border)]">
-          {disparo.status !== 'executado' && disparo.status !== 'cancelado' && (
+          {item.status !== 'executado' && item.status !== 'cancelado' && (
             <Button variant="primary" size="sm" icon={<Play size={14} />} onClick={handleExecutar}>
               Executar
             </Button>
           )}
-          <Link href={`/disparos/${disparo.id}`}>
-            <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />}>
-              Detalhes
+          {item.disparoLocal && (
+            <Link href={`/disparos/${item.disparoLocal.id}`}>
+              <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />}>
+                Detalhes
+              </Button>
+            </Link>
+          )}
+          {item.disparoLocal && (
+            <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={handleDelete}>
+              Excluir
             </Button>
-          </Link>
-          <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={handleDelete}>
-            Excluir
-          </Button>
+          )}
         </div>
       </Modal>
     </>

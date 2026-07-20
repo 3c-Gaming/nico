@@ -20,6 +20,20 @@ export function LegendaTipos() {
           {tipo.label}
         </span>
       ))}
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-2.5 h-2.5 rounded-sm inline-block"
+          style={{ backgroundColor: 'var(--text-muted)', opacity: 0.6 }}
+        />
+        DAXX
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-2.5 h-2.5 rounded-sm inline-block border"
+          style={{ borderColor: 'var(--info)', backgroundColor: 'transparent' }}
+        />
+        Agendado
+      </span>
     </div>
   )
 }

@@ -399,6 +399,25 @@ export interface CacheMetrica {
   atualizadoEm: string
 }
 
+export interface ItemCalendario {
+  id: string
+  tipo: TipoDisparo
+  nome: string
+  nomenclatura: string
+  dataDisparo: string
+  horarioDisparo?: string
+  casasAposta: string[]
+  status: string
+  fonte: 'local' | 'daxx' | 'agendado'
+  entregues?: number
+  lidas?: number
+  rejeitados?: number
+  totalBase?: number
+  disparoLocal?: Disparo
+  campanhaDaxx?: DisparoDaxx
+  agendado?: DisparoAgendadoDaxx
+}
+
 export interface AppState {
   disparos: Record<string, Disparo>
   esteiras: Record<string, Esteira>

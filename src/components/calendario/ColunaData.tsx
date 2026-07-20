@@ -1,13 +1,13 @@
 'use client'
 
-import type { Disparo } from '@/types'
+import type { ItemCalendario } from '@/types'
 import { isMesmaData } from '@/lib/datas'
-import { CardDisparo } from './CardDisparo'
+import { CardItemCalendario } from './CardDisparo'
 
 interface ColunaDataProps {
   data: Date
   hoje: Date
-  disparos: Disparo[]
+  disparos: ItemCalendario[]
   index: number
 }
 
@@ -45,9 +45,9 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
       </div>
 
       <div className="p-2 space-y-2 min-h-[200px]">
-        {disparos.map((disparo) => (
-          <div key={disparo.id} className="relative">
-            <CardDisparo disparo={disparo} />
+        {disparos.map((item) => (
+          <div key={item.id} className="relative">
+            <CardItemCalendario item={item} />
           </div>
         ))}
       </div>

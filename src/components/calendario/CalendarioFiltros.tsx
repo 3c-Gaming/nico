@@ -101,6 +101,16 @@ export function CalendarioFiltros({ filtros, onChange }: CalendarioFiltrosProps)
         />
         Apenas esteiras
       </label>
+
+      <label className="flex items-center gap-1.5 h-8 px-2.5 text-xs text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border)] rounded cursor-pointer hover:text-[var(--text-primary)] transition-colors">
+        <input
+          type="checkbox"
+          checked={filtros.mostrarDaxx}
+          onChange={(e) => onChange({ mostrarDaxx: e.target.checked })}
+          className="accent-[var(--d1)]"
+        />
+        Mostrar DAXX
+      </label>
     </div>
   )
 }
