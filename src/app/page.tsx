@@ -484,13 +484,7 @@ export default function HomePage() {
 
   const disparosDoModal = useMemo<Disparo[]>(() => {
     if (!modalLinkFunil) return []
-    const configs = getState().flowTagConfigs
-    const funilUtms = new Set(
-      Object.values(configs)
-        .filter((c) => c.funil === modalLinkFunil && c.utm)
-        .map((c) => c.utm as string)
-    )
-    return todosDisparos.filter((d) => d.utm && funilUtms.has(d.utm))
+    return todosDisparos.filter((d) => d.dataDisparo === getLocalDate())
   }, [modalLinkFunil, todosDisparos])
 
   function handleLinkDaxx(disparoId: string, templateDaxx: TemplateDaxx | undefined) {
