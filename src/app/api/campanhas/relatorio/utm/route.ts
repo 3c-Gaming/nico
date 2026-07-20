@@ -58,11 +58,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const items = await fetchExportData(casaId, date)
+    const normalizedUtm = utm.replace(/-/g, '_').toLowerCase()
 
     for (const item of items) {
       if (casaId === 'superbet') {
-        const acid = String(item.acid ?? '')
-        if (acid.includes(utm)) {
+        const acid = String(item.acid ?? '').replace(/-/g, '_').toLowerCase()
+        if (acid.includes(normalizedUtm)) {
           registros += item.registrations ?? 0
           ftds += item.ftds ?? 0
           cpas += item.cpa ?? 0
