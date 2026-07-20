@@ -48,7 +48,8 @@ async function fetchExportData(
   date: string,
 ): Promise<ExportItem[]> {
   if (!EXPORT_API_KEY) return []
-  const url = `${EXPORT_API_BASE}/export/${casa}?key=${EXPORT_API_KEY}&project=${PROJECT}&date=${date}`
+  const apiCasa = casa === 'mgm' ? 'betmgm' : casa
+  const url = `${EXPORT_API_BASE}/export/${apiCasa}?key=${EXPORT_API_KEY}&project=${PROJECT}&date=${date}`
   const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
   if (!res.ok) return []
   const data = await res.json()
