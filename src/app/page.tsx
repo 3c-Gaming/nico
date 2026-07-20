@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink } from 'lucide-react'
+import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { ModalLinkDaxx } from '@/components/home/ModalLinkDaxx'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
+import { useDisparos } from '@/hooks/useDisparos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 
 const POLL_FUNIL_MS = 30_000
 
@@ -138,6 +140,7 @@ interface FunilRow {
 export default function HomePage() {
   const router = useRouter()
   const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
+  const { list: todosDisparos, update: updateDisparo } = useDisparos()
   const [contagens, setContagens] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
@@ -148,6 +151,7 @@ export default function HomePage() {
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(getLocalDate())
   const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
+  const [modalLinkFunil, setModalLinkFunil] = useState<string | null>(null)
   const [liveLeadsLoaded, setLiveLeadsLoaded] = useState(false)
   const [liveTrackingLoaded, setLiveTrackingLoaded] = useState(false)
   const [daxxCampanhas, setDaxxCampanhas] = useState<DisparoDaxx[]>([])
@@ -478,6 +482,21 @@ export default function HomePage() {
   const disparoRows = funilRows.filter((r) => r.tipo === 'disparo')
   const trafficRows = funilRows.filter((r) => r.tipo === 'traffic')
 
+  const disparosDoModal = useMemo<Disparo[]>(() => {
+    if (!modalLinkFunil) return []
+    const configs = getState().flowTagConfigs
+    const funilUtms = new Set(
+      Object.values(configs)
+        .filter((c) => c.funil === modalLinkFunil && c.utm)
+        .map((c) => c.utm as string)
+    )
+    return todosDisparos.filter((d) => d.utm && funilUtms.has(d.utm))
+  }, [modalLinkFunil, todosDisparos])
+
+  function handleLinkDaxx(disparoId: string, templateDaxx: TemplateDaxx | undefined) {
+    updateDisparo(disparoId, { templateDaxx } as Partial<Disparo>)
+  }
+
   function handleToggleFunil(nome: string) {
     togglePinFunil(nome)
     forceUpdate()
@@ -616,12 +635,24 @@ export default function HomePage() {
             </span>
           </td>
           <td className="py-3 px-3 text-right">
-            <button
-              onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
-              className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
-            >
-              ver fluxos
-            </button>
+            <div className="flex items-center justify-end gap-2">
+              {isDisparo && (
+                <button
+                  onClick={() => setModalLinkFunil(row.funilNome)}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--d1)]/10 transition-colors"
+                  title="Linkar disparos a campanhas DAXX"
+                >
+                  <Link2 size={11} />
+                  DAXX
+                </button>
+              )}
+              <button
+                onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
+                className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
+              >
+                ver fluxos
+              </button>
+            </div>
           </td>
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
@@ -952,6 +983,15 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      <ModalLinkDaxx
+        open={modalLinkFunil !== null}
+        funilNome={modalLinkFunil}
+        disparos={disparosDoModal}
+        campanhas={daxxCampanhas}
+        onLink={handleLinkDaxx}
+        onClose={() => setModalLinkFunil(null)}
+      />
     </>
   )
 }
