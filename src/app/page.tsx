@@ -362,7 +362,7 @@ export default function HomePage() {
         }
       }
 
-      const disparos = Object.values(getState().disparos)
+      const disparos = todosDisparos
       const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
       const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm))
 
@@ -475,7 +475,7 @@ export default function HomePage() {
 
       return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
-  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas])
+  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0
 
