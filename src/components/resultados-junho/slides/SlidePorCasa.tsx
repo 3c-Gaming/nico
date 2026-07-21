@@ -30,26 +30,26 @@ export function SlidePorCasa({ dados }: { dados: ResultadosJunho2026 }) {
         {casas.map(([casa, agg]) => (
           <div
             key={casa}
-            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 text-left"
+            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 sm:p-4 text-left"
             style={{ borderLeft: `3px solid ${CORES_CASA[casa] ?? 'var(--d1)'}` }}
           >
             <div className="text-sm font-bold mb-2" style={{ color: CORES_CASA[casa] ?? 'var(--d1)' }}>
               {casa}
             </div>
-            <div className="text-xs text-[var(--text-primary)] space-y-1">
+            <div className="text-[11px] sm:text-xs text-[var(--text-primary)] space-y-1">
               <div>{agg.disparos} Disparos Efetuados</div>
               <div>{agg.entregues.toLocaleString('pt-BR')} Mensagens entregues</div>
               <div>ROAS {agg.roas.toFixed(2)}x</div>
-              <div className="grid grid-cols-3 gap-2 border border-[var(--glass-border)] rounded">
-                <div className="p-4 text-center">
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 border border-[var(--glass-border)] rounded">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{agg.registros}</b>
                   <p>REG</p>
                 </div>
-                <div className="p-4 text-center">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{agg.ftd}</b>
                   <p>FTDs</p>
                 </div>
-                <div className="p-4 text-center">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{agg.cpas}</b>
                   <p>CPAs</p>
                 </div>

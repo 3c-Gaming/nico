@@ -53,27 +53,27 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
         {ciclos.map((c) => (
           <div
             key={c}
-            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 text-left"
+            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 sm:p-4 text-left"
             style={{ borderLeft: `3px solid ${CORES_CICLO[c]}` }}
           >
             <div className="text-sm font-bold mb-2" style={{ color: CORES_CICLO[c] }}>
               {c}
             </div>
-            <div className="text-xs text-[var(--text-primary)] space-y-1">
+            <div className="text-[11px] sm:text-xs text-[var(--text-primary)] space-y-1">
               <div>{porCiclo[c].disparos} Disparos Efetuados</div>
               <div>{formatarMoeda(porCiclo[c].lucro)} Lucro sob custo</div>
               <div>{formatarMoeda(porCiclo[c].custo)} Investido</div>
               <div>{formatarMoeda(porCiclo[c].faturamento)} Faturamento</div>
-              <div className="grid grid-cols-3 gap-2 border border-[var(--glass-border)] rounded">
-                <div className="p-4">
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 border border-[var(--glass-border)] rounded">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{porCiclo[c].registros}</b>
                   <p>REG</p>
                 </div>
-                <div className="p-4">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{porCiclo[c].ftd}</b>
                   <p>FTD</p>
                 </div>
-                <div className="p-4">
+                <div className="p-1.5 sm:p-4 text-center">
                   <b>{porCiclo[c].cpas}</b>
                   <p>CPA</p>
                 </div>

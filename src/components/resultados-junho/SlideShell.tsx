@@ -26,7 +26,7 @@ export function SlideShell({ eyebrow, titulo, subtitulo, children, align = 'cent
       variants={containerVariants}
       initial="oculto"
       animate="visivel"
-      className={`w-full max-w-5xl mx-auto flex flex-col gap-8 px-8 py-16 md:px-16 ${align === 'center' ? 'items-center text-center' : 'items-start text-left'}`}
+      className={`w-full max-w-5xl mx-auto flex flex-col gap-5 sm:gap-8 px-4 py-10 sm:px-8 sm:py-16 md:px-16 ${align === 'center' ? 'items-center text-center' : 'items-start text-left'}`}
     >
       {eyebrow && (
         <motion.div

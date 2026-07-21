@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
 import { ModalNovoResultado } from '@/components/resultados-junho/ModalNovoResultado'
 import { formatarMoeda } from '@/components/resultados-junho/formato'
-import { Trophy, Plus, Presentation, Globe } from 'lucide-react'
+import { Trophy, Plus, Presentation, Globe, Pencil } from 'lucide-react'
 import type { Resultado } from '@/types'
 
 export default function ResultadosPage() {
@@ -56,38 +56,61 @@ export default function ResultadosPage() {
             {resultados.map((r) => (
               <div
                 key={r.id}
-                className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 flex flex-col gap-3"
+                className="rounded-lg overflow-hidden glass bg-[var(--glass-bg)] border border-[var(--glass-border)] flex flex-col"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-semibold text-[var(--text-primary)]">{r.titulo}</h2>
-                    <p className="text-xs text-[var(--text-muted)]">{r.periodoInicio} a {r.periodoFim}</p>
-                  </div>
+                <div
+                  className="relative h-40 w-full bg-cover bg-center flex items-end p-3"
+                  style={{
+                    backgroundImage: r.topicos?.capaImagemFundo
+                      ? `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.55)), url(${r.topicos.capaImagemFundo})`
+                      : 'linear-gradient(120deg, var(--d1), var(--d3), var(--d5), var(--d7))',
+                  }}
+                >
                   {r.publicToken && (
-                    <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-[var(--success)]/15 text-[var(--success)]">
+                    <span className="absolute top-2 right-2 flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-black/40 text-white backdrop-blur-sm">
                       <Globe size={10} /> Público
                     </span>
                   )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <div className="text-[var(--text-muted)]">Lucro</div>
-                    <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.lucro)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-muted)]">ROAS</div>
-                    <div className="font-semibold text-[var(--text-primary)]">{r.dados.totais.roas.toFixed(2)}x</div>
+                    <h2 className="text-sm font-semibold text-white drop-shadow">{r.titulo}</h2>
+                    <p className="text-xs text-white/80 drop-shadow">{r.periodoInicio} a {r.periodoFim}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-auto pt-2 border-t border-[var(--border)]">
-                  <Link href={`/resultados/${r.id}`} className="flex-1">
-                    <Button variant="secondary" size="sm" className="w-full">Editar</Button>
-                  </Link>
-                  <Link href={`/resultados/${r.id}/apresentar`} target="_blank">
-                    <Button variant="ghost" size="sm" title="Abrir apresentação"><Presentation size={14} /></Button>
-                  </Link>
+                <div className="p-4 flex flex-col gap-3 flex-1">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="text-[var(--text-muted)]">Investimento</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.custo)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[var(--text-muted)]">Faturamento</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.faturamento)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[var(--text-muted)]">Lucro</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.lucro)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[var(--text-muted)]">ROAS</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{r.dados.totais.roas.toFixed(2)}x</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-auto pt-2 border-t border-[var(--border)]">
+                    <Link href={`/resultados/${r.id}`} className="flex-1">
+                      <Button variant="secondary" size="sm" className="w-full">
+                        Editar
+                        <Pencil size={14} />
+                      </Button>
+                    </Link>
+                    <Link href={`/resultados/${r.id}/apresentar`} className="flex justify-center items-center gap-1 flex-1" target="_blank">
+                      <Button variant="secondary" size="sm" className="w-full">
+                        Visualizar
+                        <Presentation size={14} />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </div>
             ))}

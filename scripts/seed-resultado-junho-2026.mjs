@@ -1,8 +1,9 @@
-// Script one-off: le DISP_JUNHO_RESULTADO_OK.csv da raiz do repo (mesma fonte de
-// gerar-resultados-junho-2026.mjs) e insere/atualiza a linha "Junho 2026" na
-// tabela `resultados`, para que ela apareca na listagem /resultados.
+// Script: le um CSV de disparos (por padrao DISP_JUNHO_RESULTADO_OK.csv na raiz
+// do repo, mesma fonte de gerar-resultados-junho-2026.mjs) e insere/atualiza a
+// linha "Junho 2026" na tabela `resultados`, preservando o `topicos` ja
+// customizado no editor (so os numeros em `dados` sao recalculados).
 //
-// Uso: node --env-file=.env.local scripts/seed-resultado-junho-2026.mjs
+// Uso: node --env-file=.env.local scripts/seed-resultado-junho-2026.mjs [caminho-do-csv]
 
 import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
@@ -11,7 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(__dirname, '..')
-const CSV_PATH = resolve(REPO_ROOT, 'DISP_JUNHO_RESULTADO_OK.csv')
+const CSV_PATH = process.argv[2] ? resolve(process.argv[2]) : resolve(REPO_ROOT, 'DISP_JUNHO_RESULTADO_OK.csv')
 
 function parseCsvLine(line) {
   const campos = []
@@ -170,6 +171,11 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
 
+// Preserva os topicos (textos, fonte, imagens, cor) ja customizados no editor —
+// atualizar o CSV so deve refrescar `dados`, nunca apagar o que ja foi editado.
+const { data: existente } = await supabase.from('resultados').select('topicos').eq('id', 'junho-2026').single()
+const topicos = existente?.topicos ?? { acertos: [], pontosAtencao: [], proximosPassos: [] }
+
 const agora = new Date().toISOString()
 const { error } = await supabase.from('resultados').upsert({
   id: 'junho-2026',
@@ -177,7 +183,7 @@ const { error } = await supabase.from('resultados').upsert({
   periodo_inicio: '01/06',
   periodo_fim: '30/06',
   dados,
-  topicos: { acertos: [], pontosAtencao: [], proximosPassos: [] },
+  topicos,
   criado_em: agora,
   atualizado_em: agora,
 })
@@ -186,5 +192,7 @@ if (error) {
   console.error('[seed-resultado] erro ao inserir:', error.message)
   process.exit(1)
 }
+
+console.log(`[seed-resultado] topicos preservados: ${existente ? 'sim (registro ja existia)' : 'nao (registro novo)'}`)
 
 console.log(`[seed-resultado] "Junho 2026" inserido/atualizado em resultados (${disparos.length} disparos).`)
