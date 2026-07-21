@@ -56,6 +56,17 @@ export async function POST() {
         criado_em TIMESTAMP DEFAULT NOW()
       )`,
       `ALTER TABLE flow_tag_configs ADD COLUMN IF NOT EXISTS casas JSONB DEFAULT '[]'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS resultados (
+        id TEXT PRIMARY KEY,
+        titulo TEXT NOT NULL,
+        periodo_inicio TEXT NOT NULL,
+        periodo_fim TEXT NOT NULL,
+        dados JSONB NOT NULL,
+        topicos JSONB NOT NULL DEFAULT '{}'::jsonb,
+        public_token TEXT UNIQUE,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      )`,
     ]
 
     for (const stmt of migrationSql) {

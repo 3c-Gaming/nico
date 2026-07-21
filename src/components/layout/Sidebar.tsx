@@ -22,6 +22,7 @@ const LINKS = [
   { href: '/bases', label: 'Bases', icon: null },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
   { href: '/daxx', label: 'daxX', icon: Send },
+  { href: '/resultados', label: 'Resultados', icon: Trophy },
 ]
 
 export function Sidebar() {

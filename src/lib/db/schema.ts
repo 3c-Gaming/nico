@@ -88,6 +88,18 @@ export const demandas = pgTable('demandas', {
   atualizadoEm: text('atualizado_em').notNull(),
 })
 
+export const resultados = pgTable('resultados', {
+  id: text('id').primaryKey(),
+  titulo: text('titulo').notNull(),
+  periodoInicio: text('periodo_inicio').notNull(),
+  periodoFim: text('periodo_fim').notNull(),
+  dados: jsonb('dados').notNull(),
+  topicos: jsonb('topicos').notNull().default('{}'),
+  publicToken: text('public_token').unique(),
+  criadoEm: text('criado_em').notNull(),
+  atualizadoEm: text('atualizado_em').notNull(),
+})
+
 export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),

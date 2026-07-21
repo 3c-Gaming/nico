@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig } from '@/types'
+import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -37,8 +37,11 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   linkTemplatesSelecionados: 'link_templates_selecionados',
   numerosSendpulse: 'numeros_sendpulse',
   paineisCPA: 'paineis_cpa',
+  periodoInicio: 'periodo_inicio',
+  periodoFim: 'periodo_fim',
   pinnedFunis: 'pinned_funis',
   pinnedNumeros: 'pinned_numeros',
+  publicToken: 'public_token',
   responsavelId: 'responsavel_id',
   templateDaxx: 'template_daxx',
   totalLeads: 'total_leads',
@@ -100,6 +103,9 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   paineis_cpa: 'paineisCPA',
   leads_hoje: 'leadsHoje',
   total_leads: 'totalLeads',
+  periodo_inicio: 'periodoInicio',
+  periodo_fim: 'periodoFim',
+  public_token: 'publicToken',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -380,6 +386,50 @@ export async function atualizarDemanda(id: string, updates: Partial<Demanda>): P
 
 export async function deletarDemanda(id: string): Promise<boolean> {
   const { error } = await tb('demandas').delete().eq('id', id)
+  return !error
+}
+
+// --- Resultados ---
+
+export async function listarResultados(): Promise<Resultado[]> {
+  const { data, error } = await tb('resultados').select('*').order('criado_em', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarResultados error:', error.message)
+    return []
+  }
+  return rows<Resultado>(data)
+}
+
+export async function getResultado(id: string): Promise<Resultado | null> {
+  const { data, error } = await tb('resultados').select('*').eq('id', id).single()
+  if (error) return null
+  return row<Resultado>(data)
+}
+
+export async function getResultadoPorToken(token: string): Promise<Resultado | null> {
+  const { data, error } = await tb('resultados').select('*').eq('public_token', token).single()
+  if (error) return null
+  return row<Resultado>(data)
+}
+
+export async function criarResultado(resultado: Resultado): Promise<Resultado> {
+  const { data, error } = await tb('resultados').insert(toSnakeCase(resultado as any)).select().single()
+  if (error) throw new Error(`Erro ao criar resultado: ${error.message}`)
+  return row<Resultado>(data)!
+}
+
+export async function atualizarResultado(id: string, updates: Partial<Resultado>): Promise<Resultado | null> {
+  const { data, error } = await tb('resultados')
+    .update(toSnakeCase({ ...updates, atualizadoEm: new Date().toISOString() } as any))
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return null
+  return row<Resultado>(data)
+}
+
+export async function deletarResultado(id: string): Promise<boolean> {
+  const { error } = await tb('resultados').delete().eq('id', id)
   return !error
 }
 

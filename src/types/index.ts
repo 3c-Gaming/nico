@@ -435,3 +435,91 @@ export interface AppState {
   etapaConfigs: EsteiraEtapaConfig[]
   ultimaSync?: string
 }
+
+// --- Retrospectiva mensal de disparos (ex: /resultados-junho-26) ---
+
+export type CicloDisparo = 'D1' | 'D3' | 'D5' | 'D7' | 'TOTAL'
+
+export interface DisparoJunho {
+  data: string
+  casa: string
+  utm: string
+  nome: string
+  ciclo: CicloDisparo
+  lucro: number
+  roas: number
+  entregues: number
+  lidas: number
+  cliques: number
+  custo: number
+  registros: number
+  ftd: number
+  cpas: number
+  cpaReceita: number
+}
+
+export interface AgregadoJunho {
+  disparos: number
+  entregues: number
+  lidas: number
+  custo: number
+  faturamento: number
+  lucro: number
+  registros: number
+  ftd: number
+  cpas: number
+  roas: number
+}
+
+export interface DiaJunho {
+  data: string
+  lucro: number
+  entregues: number
+  ftd: number
+}
+
+export interface ResultadosJunho2026 {
+  periodo: { inicio: string; fim: string }
+  totais: AgregadoJunho & {
+    custoPorFtd: number
+    custoPorRegistro: number
+    convFtd: number
+    txLidas: number
+  }
+  porCiclo: Record<CicloDisparo, AgregadoJunho>
+  porCasa: Record<string, AgregadoJunho>
+  porDia: DiaJunho[]
+  melhorDia: DiaJunho
+  topDisparos: DisparoJunho[]
+  bottomDisparos: DisparoJunho[]
+  disparos: DisparoJunho[]
+}
+
+// --- Resultados (listagem de apresentações mensais, ex: /resultados) ---
+
+export interface TopicosResultado {
+  capaTituloPrincipal?: string
+  capaSubtitulo?: string
+  fechamentoTitulo?: string
+  fechamentoMensagem?: string
+  acertos: string[]
+  pontosAtencao: string[]
+  proximosPassos: string[]
+  fonte?: string
+  capaImagemFundo?: string
+  logos?: string[]
+  logoAltura?: number
+  capaTituloCor?: string
+}
+
+export interface Resultado {
+  id: string
+  titulo: string
+  periodoInicio: string
+  periodoFim: string
+  dados: ResultadosJunho2026
+  topicos: TopicosResultado
+  publicToken?: string | null
+  criadoEm: string
+  atualizadoEm: string
+}

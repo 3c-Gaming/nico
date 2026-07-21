@@ -1,4 +1,4 @@
-import type { Demanda, Disparo, Esteira, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig } from '@/types'
+import type { Demanda, Disparo, Esteira, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
 import {
   listarDisparos as dbListarDisparos,
   getDisparo as dbGetDisparo,
@@ -14,6 +14,12 @@ import {
   criarDemanda as dbCriarDemanda,
   atualizarDemanda as dbAtualizarDemanda,
   deletarDemanda as dbDeletarDemanda,
+  listarResultados as dbListarResultados,
+  getResultado as dbGetResultado,
+  getResultadoPorToken as dbGetResultadoPorToken,
+  criarResultado as dbCriarResultado,
+  atualizarResultado as dbAtualizarResultado,
+  deletarResultado as dbDeletarResultado,
   listarUsuariosResponsaveis as dbListarUsuariosResponsaveis,
   criarUsuarioResponsavel as dbCriarUsuarioResponsavel,
   deletarUsuarioResponsavel as dbDeletarUsuarioResponsavel,
@@ -28,7 +34,7 @@ import { migrarEsteiraParaEtapas } from '@/lib/store'
 
 declare global {
   var __NICO_STORE__:
-    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira>; demandas: Record<string, Demanda>; usuariosResponsaveis: Record<string, UsuarioResponsavel>; utmConfigs: Record<string, UtmConfig>; etapaConfigs: EsteiraEtapaConfig[] }
+    | { disparos: Record<string, Disparo>; esteiras: Record<string, Esteira>; demandas: Record<string, Demanda>; resultados: Record<string, Resultado>; usuariosResponsaveis: Record<string, UsuarioResponsavel>; utmConfigs: Record<string, UtmConfig>; etapaConfigs: EsteiraEtapaConfig[] }
     | undefined
 }
 
@@ -40,7 +46,7 @@ export function isDbAvailable(): boolean {
 
 function getMemStore() {
   if (!globalThis.__NICO_STORE__) {
-    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {}, demandas: {}, usuariosResponsaveis: {}, utmConfigs: {}, etapaConfigs: [] }
+    globalThis.__NICO_STORE__ = { disparos: {}, esteiras: {}, demandas: {}, resultados: {}, usuariosResponsaveis: {}, utmConfigs: {}, etapaConfigs: [] }
   }
   return globalThis.__NICO_STORE__
 }
@@ -171,6 +177,69 @@ export async function deletarDemanda(id: string): Promise<boolean> {
   const store = getMemStore()
   if (!store.demandas[id]) return false
   delete store.demandas[id]
+  return true
+}
+
+// --- Resultados ---
+
+export async function listarResultados(): Promise<Resultado[]> {
+  if (isDbAvailable()) {
+    try {
+      return await dbListarResultados()
+    } catch { }
+  }
+  return Object.values(getMemStore().resultados).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+}
+
+export async function getResultado(id: string): Promise<Resultado | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbGetResultado(id)
+    } catch { }
+  }
+  return getMemStore().resultados[id] ?? null
+}
+
+export async function getResultadoPorToken(token: string): Promise<Resultado | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbGetResultadoPorToken(token)
+    } catch { }
+  }
+  return Object.values(getMemStore().resultados).find((r) => r.publicToken === token) ?? null
+}
+
+export async function criarResultado(resultado: Resultado): Promise<Resultado> {
+  if (isDbAvailable()) {
+    try {
+      return await dbCriarResultado(resultado)
+    } catch { }
+  }
+  getMemStore().resultados[resultado.id] = resultado
+  return resultado
+}
+
+export async function atualizarResultado(id: string, updates: Partial<Resultado>): Promise<Resultado | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbAtualizarResultado(id, updates)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.resultados[id]) return null
+  store.resultados[id] = { ...store.resultados[id], ...updates, atualizadoEm: new Date().toISOString() }
+  return store.resultados[id]
+}
+
+export async function deletarResultado(id: string): Promise<boolean> {
+  if (isDbAvailable()) {
+    try {
+      return await dbDeletarResultado(id)
+    } catch { }
+  }
+  const store = getMemStore()
+  if (!store.resultados[id]) return false
+  delete store.resultados[id]
   return true
 }
 
