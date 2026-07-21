@@ -24,7 +24,7 @@ export function SlideProximosPassos({ dados, topicos }: SlideProximosPassosProps
   const passos = topicos?.proximosPassos?.length ? topicos.proximosPassos : passosSugeridos
 
   return (
-    <SlideShell eyebrow="Olhando pra frente" titulo="Próximos passos" subtitulo="Sugestões geradas a partir dos dados — ajuste antes de apresentar.">
+    <SlideShell eyebrow="Olhando pra frente" titulo="Próximos passos" subtitulo="Ideias/Sugestões que podemos tirar dos dados apresentados.">
       <SlideItem className="w-full flex flex-col gap-3 text-left">
         {passos.map((texto, i) => (
           <div

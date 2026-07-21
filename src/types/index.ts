@@ -455,7 +455,8 @@ export interface DisparoJunho {
   registros: number
   ftd: number
   cpas: number
-  cpaReceita: number
+  cpaReceita: number,
+  img?: string
 }
 
 export interface AgregadoJunho {

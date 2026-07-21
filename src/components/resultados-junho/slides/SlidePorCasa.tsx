@@ -39,8 +39,21 @@ export function SlidePorCasa({ dados }: { dados: ResultadosJunho2026 }) {
             <div className="text-xs text-[var(--text-primary)] space-y-1">
               <div>{agg.disparos} Disparos Efetuados</div>
               <div>{agg.entregues.toLocaleString('pt-BR')} Mensagens entregues</div>
-              <div>{agg.cpas} CPAs</div>
               <div>ROAS {agg.roas.toFixed(2)}x</div>
+              <div className="grid grid-cols-3 gap-2 border border-[var(--glass-border)] rounded">
+                <div className="p-4 text-center">
+                  <b>{agg.registros}</b>
+                  <p>REG</p>
+                </div>
+                <div className="p-4 text-center">
+                  <b>{agg.ftd}</b>
+                  <p>FTDs</p>
+                </div>
+                <div className="p-4 text-center">
+                  <b>{agg.cpas}</b>
+                  <p>CPAs</p>
+                </div>
+              </div>
             </div>
           </div>
         ))}

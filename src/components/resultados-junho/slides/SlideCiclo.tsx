@@ -28,7 +28,7 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
     <SlideShell
       eyebrow="Esteira Ciclo de 7 dias"
       titulo="Conversão por etapa do ciclo"
-      subtitulo={`A base "quente" logo após o registro (D1) teve ROAS ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaprovamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
+      subtitulo={`A base "quente" logo após o registro (D1) teve ROAS ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
     >
       <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
         <StatTile label="Investimento" value={totalCiclo.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" />

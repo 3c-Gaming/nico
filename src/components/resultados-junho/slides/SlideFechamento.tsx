@@ -27,7 +27,7 @@ export function SlideFechamento({ dados, topicos }: SlideFechamentoProps) {
         {topicos?.fechamentoTitulo || 'Fechando o período'}
       </motion.div>
       <motion.h1 variants={itemVariants} className="text-3xl md:text-5xl font-bold text-[var(--text-primary)] max-w-3xl">
-        {formatarMoeda(dados.totais.lucro)} de lucro, {dados.totais.roas.toFixed(2)}x de ROAS
+        {formatarMoeda(dados.totais.faturamento)} de faturamento, custo de {formatarMoeda(dados.totais.custo)} e um ROAS de {dados.totais.roas.toFixed(2)}x
       </motion.h1>
       <motion.p variants={itemVariants} className="text-base md:text-lg text-[var(--text-secondary)] max-w-xl">
         {topicos?.fechamentoMensagem || 'Obrigado ao time de disparos.'}

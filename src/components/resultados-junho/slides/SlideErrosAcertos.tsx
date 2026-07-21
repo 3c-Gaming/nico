@@ -42,7 +42,7 @@ export function SlideErrosAcertos({ dados, topicos }: SlideErrosAcertosProps) {
   const pontosDeAtencao = topicos?.pontosAtencao?.length ? topicos.pontosAtencao : pontosDeAtencaoSugeridos
 
   return (
-    <SlideShell eyebrow="Retrospectiva do setor" titulo="Erros e acertos" subtitulo="Sugestões geradas a partir dos dados — ajuste antes de apresentar.">
+    <SlideShell eyebrow="Retrospectiva do setor" titulo="Erros e acertos" subtitulo="Ideias/Sugestões que podemos tirar dos dados apresentados.">
       <SlideItem className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-[var(--success)]">
