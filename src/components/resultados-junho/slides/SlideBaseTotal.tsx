@@ -21,11 +21,13 @@ export function SlideBaseTotal({ dados }: { dados: ResultadosJunho2026 }) {
         100
       ).toFixed(0)}% do lucro do mês.`}
     >
-      <SlideItem className="grid grid-cols-2 md:grid-cols-2 gap-4 w-full">
+      <SlideItem className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full">
+        <StatTile label="DISPAROS" value={total.disparos} cor="var(--text-primary)" tamanho="lg" delay={0.3} />
         <StatTile label="Mensagens Entregues" value={total.entregues} cor="var(--text-primary)" tamanho="lg" />
         <StatTile label="Investido / Custo" value={total.custo} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.1} />
         <StatTile label="Faturamento Total" value={total.faturamento} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.2} />
         <StatTile label="Lucro TOTAL" value={total.lucro} prefix="R$ " cor="var(--success)" tamanho="lg" delay={0.3} />
+        <StatTile label="ROAS TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
       </SlideItem>
 
       <SlideItem className="w-full flex flex-col gap-2">
