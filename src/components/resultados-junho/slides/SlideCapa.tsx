@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import type { ResultadosJunho2026, TopicosResultado } from '@/types'
 import { itemVariants } from '../SlideShell'
 
+
 const containerVariants = {
   oculto: {},
   visivel: { transition: { staggerChildren: 0.12, delayChildren: 0.2 } },
@@ -47,7 +48,7 @@ export function SlideCapa({ dados, titulo, topicos }: SlideCapaProps) {
         <motion.div variants={itemVariants} className="text-sm font-semibold tracking-[0.3em] uppercase text-[var(--text-secondary)]">
           Pilhado · 3C Sports
         </motion.div>
-        <motion.h1 variants={itemVariants} className="text-6xl md:text-8xl font-bold text-[var(--text-primary)]">
+        <motion.h1 variants={itemVariants} className="text-6xl md:text-8xl font-bold tracking-tighter text-[var(--text-primary)]">
           {topicos?.capaTituloPrincipal || 'Retrospectiva'}
         </motion.h1>
         <motion.h2
@@ -57,11 +58,11 @@ export function SlideCapa({ dados, titulo, topicos }: SlideCapaProps) {
             topicos?.capaTituloCor
               ? { color: topicos.capaTituloCor }
               : {
-                  backgroundImage: 'linear-gradient(90deg, var(--d1), var(--d3), var(--d5), var(--d7))',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }
+                backgroundImage: 'linear-gradient(90deg, var(--d1), var(--d3), var(--d5), var(--d7))',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+              }
           }
         >
           {titulo}
@@ -75,7 +76,14 @@ export function SlideCapa({ dados, titulo, topicos }: SlideCapaProps) {
             animate={{ y: [0, 6, 0] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
           >
-            use → ou clique para começar
+            <div className="flex items-center justify-center gap-2 text-[var(--text-primary)]">
+              <p>Utilize </p>
+              <div className="flex items-center justify-center gap-1">
+                <img src={'/key-left.png'} alt="Seta para a esquerda" className='w-10' />
+                <img src={'/key-right.png'} alt="Seta para a direita" className='w-10' />
+              </div>
+              <p>para navegar</p>
+            </div>
           </motion.span>
         </motion.div>
       </motion.div>
