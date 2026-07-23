@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server'
+import { sql } from 'drizzle-orm'
+import { db } from '@/lib/db'
 
 export async function POST() {
   try {
-    const databaseUrl = process.env.DATABASE_URL
-    if (!databaseUrl) {
-      return NextResponse.json({ error: 'DATABASE_URL não configurada' }, { status: 500 })
-    }
-
-    const { default: postgres } = await import('postgres')
-
-    const sql = postgres(databaseUrl, { max: 1 })
-
     const migrationSql = [
       `CREATE TABLE IF NOT EXISTS disparos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -71,10 +64,8 @@ export async function POST() {
     ]
 
     for (const stmt of migrationSql) {
-      await sql.unsafe(stmt)
+      await db.execute(sql.raw(stmt))
     }
-
-    await sql.end()
 
     return NextResponse.json({ success: true, statements: migrationSql.length })
   } catch (err) {
