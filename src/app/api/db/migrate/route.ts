@@ -63,11 +63,19 @@ export async function POST() {
       )`,
     ]
 
+    const resultados: { statement: string; ok: boolean; error?: string }[] = []
+
     for (const stmt of migrationSql) {
-      await db.execute(sql.raw(stmt))
+      try {
+        await db.execute(sql.raw(stmt))
+        resultados.push({ statement: stmt.slice(0, 60), ok: true })
+      } catch (err) {
+        const cause = (err as { cause?: { message?: string } }).cause
+        resultados.push({ statement: stmt.slice(0, 60), ok: false, error: cause?.message ?? (err as Error).message })
+      }
     }
 
-    return NextResponse.json({ success: true, statements: migrationSql.length })
+    return NextResponse.json({ success: resultados.every((r) => r.ok), resultados })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 })
   }
