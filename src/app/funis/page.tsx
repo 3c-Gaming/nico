@@ -290,9 +290,10 @@ function FunisPageInner() {
       const nums: NumeroSendpulse[] = numData.numeros
       setNumeros(nums)
 
+      const naoMonitorados = getState().numerosNaoMonitorados
       const fluxos: Record<string, FluxoSendpulse[]> = {}
       await Promise.allSettled(
-        nums.map(async (num) => {
+        nums.filter((num) => !naoMonitorados.includes(num.id)).map(async (num) => {
           const fRes = await fetch(`/api/sendpulse/fluxos?bot_id=${encodeURIComponent(num.id)}`)
           if (!fRes.ok) return
           const fData = await fRes.json()
@@ -418,7 +419,7 @@ function FunisPageInner() {
     const rows: FlowRow[] = []
     for (const num of numeros) {
       if (filtroBot && num.id !== filtroBot) continue
-      if (num.status !== 'ativo') continue
+      if (getState().numerosNaoMonitorados.includes(num.id)) continue
       const flows = fluxosMap[num.id]
       if (!flows) continue
       for (const flow of flows) {

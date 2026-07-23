@@ -134,7 +134,7 @@ function tb(name: string) {
 
 // --- Preferências (pins) ---
 
-export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[] }> {
+export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[]; numerosNaoMonitorados: string[] }> {
   try {
     const { data } = await tb('user_preferences').select('*').eq('id', 'global').single()
     const raw = data as any
@@ -146,18 +146,20 @@ export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinn
     return {
       pinnedNumeros: parse(raw?.pinned_numeros),
       pinnedFunis: parse(raw?.pinned_funis),
+      numerosNaoMonitorados: parse(raw?.numeros_nao_monitorados),
     }
   } catch {
-    return { pinnedNumeros: [], pinnedFunis: [] }
+    return { pinnedNumeros: [], pinnedFunis: [], numerosNaoMonitorados: [] }
   }
 }
 
-export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[]): Promise<void> {
+export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[]): Promise<void> {
   await tb('user_preferences')
     .upsert({
       id: 'global',
       pinned_numeros: pinnedNumeros,
       pinned_funis: pinnedFunis,
+      numeros_nao_monitorados: numerosNaoMonitorados,
       updated_at: new Date().toISOString(),
     })
 }

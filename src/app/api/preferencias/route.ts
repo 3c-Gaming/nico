@@ -6,7 +6,7 @@ export async function GET() {
     const prefs = await getPreferencias()
     return NextResponse.json(prefs)
   } catch {
-    return NextResponse.json({ pinnedNumeros: [], pinnedFunis: [] })
+    return NextResponse.json({ pinnedNumeros: [], pinnedFunis: [], numerosNaoMonitorados: [] })
   }
 }
 
@@ -14,7 +14,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { updatePreferencias } = await import('@/lib/db/supabase')
     const body = await request.json()
-    await updatePreferencias(body.pinnedNumeros ?? [], body.pinnedFunis ?? [])
+    await updatePreferencias(body.pinnedNumeros ?? [], body.pinnedFunis ?? [], body.numerosNaoMonitorados ?? [])
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Erro' }, { status: 500 })

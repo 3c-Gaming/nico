@@ -163,7 +163,7 @@ export function useCalendario() {
 
       if (filtros.mostrarDaxx) {
         const vinculados = new Set<string>()
-        for (const d of disparosLocais) {
+        for (const d of todosDisparos) {
           if (d.templateDaxx?.id) vinculados.add(d.templateDaxx.id)
         }
 
@@ -225,7 +225,7 @@ export function useCalendario() {
     }
 
     return map
-  }, [diasVisiveis, disparosLocais, campanhasDaxx, agendadosDaxx, filtros, casas])
+  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas])
 
   const setFiltros = useCallback((f: Partial<FiltrosCalendario>) => {
     setFiltrosState((prev) => {

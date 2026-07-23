@@ -51,7 +51,7 @@ export function DataInitializer() {
         casasRes.json().catch(() => ({ casas: [] })),
         templatesRes.json().catch(() => ({ templates: [] })),
         configsRes.json().catch(() => ({ configs: [] })),
-        prefsRes.json().catch(() => ({ pinnedNumeros: [], pinnedFunis: [] })),
+        prefsRes.json().catch(() => ({ pinnedNumeros: [], pinnedFunis: [], numerosNaoMonitorados: [] })),
         cacheRes.json().catch(() => ({ metricas: [] })),
         utmRes.json().catch(() => ({ configs: [] })),
         etapaRes.json().catch(() => ({ configs: [] })),
@@ -69,6 +69,7 @@ export function DataInitializer() {
       const prefs = prefsData as any
       const pinnedNumeros: string[] = prefs?.pinnedNumeros ?? state.pinnedNumeros
       const pinnedFunis: string[] = prefs?.pinnedFunis ?? state.pinnedFunis
+      const numerosNaoMonitorados: string[] = prefs?.numerosNaoMonitorados ?? state.numerosNaoMonitorados
 
       const merged = {
         ...state,
@@ -82,6 +83,7 @@ export function DataInitializer() {
         etapaConfigs: novasEtapaConfigs,
         pinnedNumeros,
         pinnedFunis,
+        numerosNaoMonitorados,
         ultimaSync: new Date().toISOString(),
       }
 

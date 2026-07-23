@@ -56,6 +56,7 @@ export async function POST() {
         criado_em TIMESTAMP DEFAULT NOW()
       )`,
       `ALTER TABLE flow_tag_configs ADD COLUMN IF NOT EXISTS casas JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS numeros_nao_monitorados JSONB NOT NULL DEFAULT '[]'::jsonb`,
       `CREATE TABLE IF NOT EXISTS resultados (
         id TEXT PRIMARY KEY,
         titulo TEXT NOT NULL,

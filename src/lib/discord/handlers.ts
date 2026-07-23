@@ -29,9 +29,13 @@ type ReplyFn = (payload: { embeds?: DiscordEmbed[]; content?: string }) => Promi
 export async function handleStatus(reply: ReplyFn) {
   try {
     const { listarNumeros } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
-    const ativos = numeros.filter(n => n.status === 'ativo')
-    await reply({ embeds: [embedStatusBots(ativos)] })
+    const { getPreferencias } = await import('@/lib/db/supabase')
+    const [numeros, { numerosNaoMonitorados }] = await Promise.all([
+      listarNumeros(AbortSignal.timeout(30_000)),
+      getPreferencias(),
+    ])
+    const monitorados = numeros.filter(n => !numerosNaoMonitorados.includes(n.id))
+    await reply({ embeds: [embedStatusBots(monitorados)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao buscar status: ${(err as Error).message}`)] })
   }
@@ -130,11 +134,11 @@ export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
     const { getPreferencias } = await import('@/lib/db/supabase')
-    const [numeros, { pinnedNumeros }] = await Promise.all([
+    const [numeros, { pinnedNumeros, numerosNaoMonitorados }] = await Promise.all([
       listarNumeros(AbortSignal.timeout(30_000)),
       getPreferencias(),
     ])
-    const ativos = numeros.filter(n => n.status === 'ativo' && pinnedNumeros.includes(n.id))
+    const ativos = numeros.filter(n => !numerosNaoMonitorados.includes(n.id) && pinnedNumeros.includes(n.id))
     const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
 
     await Promise.all(ativos.map(async num => {

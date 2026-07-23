@@ -12,6 +12,7 @@ const ESTADO_INICIAL: AppState = {
   flowTagConfigs: {},
   pinnedNumeros: [],
   pinnedFunis: [],
+  numerosNaoMonitorados: [],
   cacheMetricas: {},
   demandas: {},
   usuariosResponsaveis: {},
@@ -231,8 +232,8 @@ export function deletarUsuarioResponsavel(id: string): void {
   syncToApi(`/api/usuarios-responsaveis/${id}`, 'DELETE')
 }
 
-function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[]) {
-  syncToApi('/api/preferencias', 'PUT', { pinnedNumeros, pinnedFunis })
+function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[]) {
+  syncToApi('/api/preferencias', 'PUT', { pinnedNumeros, pinnedFunis, numerosNaoMonitorados })
 }
 
 export function togglePinNumero(id: string): void {
@@ -244,7 +245,7 @@ export function togglePinNumero(id: string): void {
     state.pinnedNumeros.push(id)
   }
   setState(state)
-  syncPreferencias(state.pinnedNumeros, state.pinnedFunis)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
 }
 
 export function togglePinFunil(nome: string): void {
@@ -256,7 +257,19 @@ export function togglePinFunil(nome: string): void {
     state.pinnedFunis.push(nome)
   }
   setState(state)
-  syncPreferencias(state.pinnedNumeros, state.pinnedFunis)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
+}
+
+export function toggleMonitorarNumero(id: string): void {
+  const state = getState()
+  const idx = state.numerosNaoMonitorados.indexOf(id)
+  if (idx >= 0) {
+    state.numerosNaoMonitorados.splice(idx, 1)
+  } else {
+    state.numerosNaoMonitorados.push(id)
+  }
+  setState(state)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
 }
 
 export function updateCacheMetricas(metricas: CacheMetrica[]): void {

@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check, Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento, POLL_INTERVAL } from '@/hooks/useMonitoramento'
-import { getState, togglePinNumero } from '@/lib/store'
+import { getState, togglePinNumero, toggleMonitorarNumero } from '@/lib/store'
 import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse } from '@/types'
 
 interface BotTestApiResult {
@@ -337,7 +337,7 @@ export default function NumerosPage() {
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
     return [...data.numeros]
-      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero && n.numero.status === 'ativo')
+      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero)
       .sort((a, b) => {
         const va = a.ultimoAumentoMs ?? 0
         const vb = b.ultimoAumentoMs ?? 0
@@ -488,6 +488,17 @@ export default function NumerosPage() {
                             title={getState().pinnedNumeros.includes(item.numero.id) ? 'Desafixar da Home' : 'Fixar na Home'}
                           >
                             <Pin size={13} className={getState().pinnedNumeros.includes(item.numero.id) ? 'text-amber-400' : 'text-[var(--text-muted)]/40'} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleMonitorarNumero(item.numero.id) }}
+                            className="shrink-0 flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title={getState().numerosNaoMonitorados.includes(item.numero.id) ? 'Ativar monitoramento' : 'Desativar monitoramento'}
+                          >
+                            {getState().numerosNaoMonitorados.includes(item.numero.id) ? (
+                              <EyeOff size={13} className="text-[var(--text-muted)]/40" />
+                            ) : (
+                              <Eye size={13} className="text-green-500" />
+                            )}
                           </button>
                         </div>
                       </td>

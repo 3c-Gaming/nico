@@ -3,9 +3,12 @@ import { getPreferencias } from '@/lib/db/supabase'
 import type { BotConfig } from './types'
 
 export async function obterBots(): Promise<BotConfig[]> {
-  const numeros = await listarNumeros()
+  const [numeros, { numerosNaoMonitorados }] = await Promise.all([
+    listarNumeros(),
+    getPreferencias(),
+  ])
   return numeros
-    .filter((n) => n.status === 'ativo')
+    .filter((n) => !numerosNaoMonitorados.includes(n.id))
     .map((n) => ({
       botId: n.id,
       numero: n.numero,

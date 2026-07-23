@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Phone, AlertTriangle, Wifi, WifiOff, Check } from 'lucide-react'
 import { Spinner } from '../ui/Spinner'
 import { Input } from '../ui/Input'
+import { getState } from '@/lib/store'
 import type { NumeroSendpulse } from '@/types'
 
 function StatusNumero({ status, inboxNaoLidas }: { status: NumeroSendpulse['status']; inboxNaoLidas: number }) {
@@ -108,7 +109,7 @@ export function StepNumero({ numeros: selected, onChange }: StepNumeroProps) {
       )}
 
       <div className="space-y-2">
-        {numeros.filter((num) => num.status === 'ativo').map((num) => {
+        {numeros.filter((num) => !getState().numerosNaoMonitorados.includes(num.id)).map((num) => {
           const ativo = selected.some((n) => n.id === num.id)
           return (
             <button
