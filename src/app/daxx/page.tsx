@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, RefreshCw, ExternalLink, AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Search, RefreshCw, ExternalLink, AlertTriangle, BarChart3 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import type { DisparoDaxx, Disparo } from '@/types'
@@ -76,6 +77,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function DaxxPage() {
+  const router = useRouter()
   const [campanhas, setCampanhas] = useState<DisparoDaxx[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -401,14 +403,23 @@ export default function DaxxPage() {
                       <td className="py-3 px-3 text-[var(--text-secondary)]">{c.responsavel}</td>
                       <td className="py-3 px-3 text-[var(--text-muted)] text-xs">{c.dataCriacao}</td>
                       <td className="py-3 px-3 text-center">
-                        <button
-                          onClick={() => handleVerMensagem(c.id)}
-                          disabled={loadingLink === c.id}
-                          className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
-                          title="Ver mensagem"
-                        >
-                          {loadingLink === c.id ? <Spinner size={14} /> : <ExternalLink size={14} />}
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleVerMensagem(c.id)}
+                            disabled={loadingLink === c.id}
+                            className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+                            title="Ver mensagem"
+                          >
+                            {loadingLink === c.id ? <Spinner size={14} /> : <ExternalLink size={14} />}
+                          </button>
+                          <button
+                            onClick={() => router.push(`/daxx/analise/${c.id}?nome=${encodeURIComponent(c.nome)}`)}
+                            className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                            title="Analisar base"
+                          >
+                            <BarChart3 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

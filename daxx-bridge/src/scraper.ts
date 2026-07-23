@@ -253,6 +253,25 @@ export async function getTemplateLink(id: string): Promise<string> {
   return link
 }
 
+export async function baixarBaseCSV(id: string): Promise<string> {
+  const p = await ensureLoggedIn()
+
+  const botao = p.locator(`button[onclick*="exportCSVDisparo('${id}'"]`)
+  if (!(await botao.count())) {
+    throw new Error('botao de exportar CSV nao encontrado para esse disparo')
+  }
+
+  const [download] = await Promise.all([
+    p.waitForEvent('download', { timeout: 30000 }),
+    botao.first().click(),
+  ])
+
+  const caminho = await download.path()
+  if (!caminho) throw new Error('Download nao gerou arquivo local')
+
+  return readFileSync(caminho, 'utf-8')
+}
+
 export async function invalidateCache() {
   cacheCampanhas = null
 }

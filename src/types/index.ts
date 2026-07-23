@@ -95,6 +95,45 @@ export interface DisparoDaxx {
   linkTemplate?: string
 }
 
+export interface FaixaLeitura {
+  label: string
+  total: number
+}
+
+export interface DistribuicaoDdd {
+  ddd: string
+  uf: string
+  total: number
+}
+
+export interface FalhaBase {
+  numero: string
+  erroDescricao: string | null
+}
+
+export interface AnaliseBaseDaxx {
+  total: number
+  entregues: number
+  lidos: number
+  falhas: number
+  pendentes: number
+  pctEntregues: number
+  pctLidos: number
+  pctFalhas: number
+  pctPendentes: number
+  taxaEntregaTotal: number
+  optOuts: number
+  pctOptOuts: number
+  tempoEntregaMedioSeg: number
+  tempoEntregaMedianaSeg: number
+  tempoLeituraMedioSeg: number
+  tempoLeituraMedianaSeg: number
+  faixasLeitura: FaixaLeitura[]
+  distribuicaoDdd: DistribuicaoDdd[]
+  falhasLista: FalhaBase[]
+  optOutsLista: string[]
+}
+
 export interface DisparoAgendadoDaxx {
   id: string
   cliente_id: string
