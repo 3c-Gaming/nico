@@ -157,8 +157,6 @@ export default function EsteirasPage() {
       {/* Lista de Esteiras */}
       <div className="p-6 grid gap-4 md:grid-cols-2">
         {esteiras.map((esteira) => {
-          const d1 = getDisparo(esteira.disparos.d1)
-
           return (
             <div
               key={esteira.id}

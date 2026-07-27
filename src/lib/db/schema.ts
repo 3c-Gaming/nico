@@ -10,6 +10,7 @@ export const disparos = pgTable('disparos', {
   horarioDisparo: text('horario_disparo').notNull().default('10:00'),
   base: jsonb('base').notNull().default('{}'),
   templateDaxx: jsonb('template_daxx'),
+  daxxCampanhaId: text('daxx_campanha_id'),
   numeroSendpulse: jsonb('numero_sendpulse'),
   esteiraPaiId: text('esteira_pai_id'),
   numerosSendpulse: jsonb('numeros_sendpulse'),
@@ -29,8 +30,9 @@ export const disparos = pgTable('disparos', {
 export const esteiras = pgTable('esteiras', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),
+  chave: text('chave'),
   casasAposta: jsonb('casas_aposta').notNull().default('[]'),
-  disparos: jsonb('disparos').notNull().default('{}'),
+  etapas: jsonb('etapas').notNull().default('[]'),
   criadoEm: text('criado_em').notNull(),
   atualizadoEm: text('atualizado_em').notNull(),
   ativa: boolean('ativa').notNull().default(true),

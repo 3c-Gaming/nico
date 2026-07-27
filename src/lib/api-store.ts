@@ -5,10 +5,12 @@ import {
   criarDisparo as dbCriarDisparo,
   atualizarDisparo as dbAtualizarDisparo,
   deletarDisparo as dbDeletarDisparo,
+  getDisparoPorDaxxCampanhaId as dbGetDisparoPorDaxxCampanhaId,
   listarEsteiras as dbListarEsteiras,
   getEsteira as dbGetEsteira,
   criarEsteira as dbCriarEsteira,
   deletarEsteira as dbDeletarEsteira,
+  upsertEtapaDaxx as dbUpsertEtapaDaxx,
   listarDemandas as dbListarDemandas,
   getDemanda as dbGetDemanda,
   criarDemanda as dbCriarDemanda,
@@ -30,7 +32,6 @@ import {
   listarEtapaConfigs as dbListarEtapaConfigs,
   atualizarEtapaConfigs as dbAtualizarEtapaConfigs,
 } from '@/lib/db/supabase'
-import { migrarEsteiraParaEtapas } from '@/lib/store'
 
 declare global {
   var __NICO_STORE__:
@@ -84,10 +85,21 @@ export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
   if (isDbAvailable()) {
     try {
       return await dbCriarDisparo(disparo)
-    } catch { }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('DUPLICATE_DAXX_CAMPANHA')) throw err
+    }
   }
   getMemStore().disparos[disparo.id] = disparo
   return disparo
+}
+
+export async function getDisparoPorDaxxCampanhaId(daxxCampanhaId: string): Promise<Disparo | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbGetDisparoPorDaxxCampanhaId(daxxCampanhaId)
+    } catch { }
+  }
+  return Object.values(getMemStore().disparos).find((d) => d.daxxCampanhaId === daxxCampanhaId) ?? null
 }
 
 export async function atualizarDisparo(id: string, updates: Partial<Disparo>): Promise<Disparo | null> {
@@ -118,12 +130,20 @@ export async function deletarDisparo(id: string): Promise<boolean> {
       if (filtered.length !== e.etapas.length)
         store.esteiras[esteiraId] = { ...e, etapas: filtered }
     }
-    if (e.disparos.d1 === id || e.disparos.d3 === id || e.disparos.d5 === id || e.disparos.d7 === id) {
-      delete store.esteiras[esteiraId]
-    }
   }
   delete store.disparos[id]
   return true
+}
+
+export async function upsertEtapaDaxx(params: {
+  esteiraId: string
+  chave: string
+  nome: string
+  casas: string[]
+  etapa: { tipo: string; disparoId: string }
+  disparoId: string
+}): Promise<Esteira> {
+  return await dbUpsertEtapaDaxx(params)
 }
 
 // --- Demandas ---
@@ -279,29 +299,22 @@ export async function deletarUsuarioResponsavel(id: string): Promise<boolean> {
 // --- Esteiras ---
 
 export async function listarEsteiras(): Promise<Esteira[]> {
-  let esteiras: Esteira[]
   if (isDbAvailable()) {
     try {
-      esteiras = await dbListarEsteiras()
-    } catch {
-      esteiras = Object.values(getMemStore().esteiras).filter((e) => e.ativa)
-    }
-  } else {
-    esteiras = Object.values(getMemStore().esteiras).filter((e) => e.ativa)
+      return await dbListarEsteiras()
+    } catch { }
   }
-  return esteiras.map((e) => migrarEsteiraParaEtapas(e))
+  return Object.values(getMemStore().esteiras).filter((e) => e.ativa)
 }
 
 export async function getEsteira(id: string): Promise<Esteira | null> {
-  let esteira: Esteira | null = null
   if (isDbAvailable()) {
     try {
-      esteira = await dbGetEsteira(id)
+      const esteira = await dbGetEsteira(id)
+      if (esteira) return esteira
     } catch { }
   }
-  if (!esteira) esteira = getMemStore().esteiras[id] ?? null
-  if (!esteira) return null
-  return migrarEsteiraParaEtapas(esteira)
+  return getMemStore().esteiras[id] ?? null
 }
 
 export async function criarEsteira(esteira: Esteira): Promise<Esteira> {

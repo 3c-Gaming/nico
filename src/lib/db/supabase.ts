@@ -21,6 +21,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   cpaPainelId: 'cpa_painel_id',
   criadaEm: 'criado_em',
   criadoEm: 'criado_em',
+  daxxCampanhaId: 'daxx_campanha_id',
   dataConclusao: 'data_conclusao',
   dataCriacao: 'data_criacao',
   dataDisparo: 'data_disparo',
@@ -80,6 +81,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   discord_id: 'discordId',
   criado_em: 'criadoEm',
   atualizado_em: 'atualizadoEm',
+  daxx_campanha_id: 'daxxCampanhaId',
   casa_id: 'casaId',
   url_template: 'urlTemplate',
   flow_id: 'flowId',
@@ -187,8 +189,17 @@ export async function getDisparo(id: string): Promise<Disparo | null> {
 }
 
 export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
-  const { data } = await tb('disparos').insert(toSnakeCase(disparo as any)).select().single()
+  const { data, error } = await tb('disparos').insert(toSnakeCase(disparo as any)).select().single()
+  if (error) {
+    if (error.code === '23505') throw new Error(`DUPLICATE_DAXX_CAMPANHA:${disparo.daxxCampanhaId ?? ''}`)
+    throw new Error(`Erro ao criar disparo: ${error.message}`)
+  }
   return row<Disparo>(data)!
+}
+
+export async function getDisparoPorDaxxCampanhaId(daxxCampanhaId: string): Promise<Disparo | null> {
+  const { data } = await tb('disparos').select('*').eq('daxx_campanha_id', daxxCampanhaId).maybeSingle()
+  return row<Disparo>(data)
 }
 
 export async function atualizarDisparo(id: string, updates: Partial<Disparo>): Promise<Disparo | null> {
@@ -223,7 +234,30 @@ export async function getEsteira(id: string): Promise<Esteira | null> {
 }
 
 export async function criarEsteira(esteira: Esteira): Promise<Esteira> {
-  const { data } = await tb('esteiras').insert(toSnakeCase(esteira as any)).select().single()
+  const { data, error } = await tb('esteiras').insert(toSnakeCase(esteira as any)).select().single()
+  if (error) throw new Error(`Erro ao criar esteira: ${error.message}`)
+  return row<Esteira>(data)!
+}
+
+export async function upsertEtapaDaxx(params: {
+  esteiraId: string
+  chave: string
+  nome: string
+  casas: string[]
+  etapa: { tipo: string; disparoId: string }
+  disparoId: string
+}): Promise<Esteira> {
+  const sb = getSupabase() as any
+  if (!sb) throw new Error('Supabase não disponível')
+  const { data, error } = await sb.rpc('fn_cadastrar_etapa_daxx', {
+    p_esteira_id: params.esteiraId,
+    p_chave: params.chave,
+    p_nome: params.nome,
+    p_casas: params.casas,
+    p_etapa: params.etapa,
+    p_disparo_id: params.disparoId,
+  })
+  if (error) throw new Error(`Erro ao upsert etapa: ${error.message}`)
   return row<Esteira>(data)!
 }
 

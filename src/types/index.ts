@@ -104,6 +104,7 @@ export interface DistribuicaoDdd {
   ddd: string
   uf: string
   total: number
+  pctLeitura: number
 }
 
 export interface FalhaBase {
@@ -111,8 +112,22 @@ export interface FalhaBase {
   erroDescricao: string | null
 }
 
+export interface DestinatarioBase {
+  numero: string
+  status: string
+  enviadoEm: string
+  entregueEm: string | null
+  lidoEm: string | null
+  erroDescricao: string | null
+  optOut: boolean
+  tempoLeituraSeg: number | null
+  ddd: string | null
+  uf: string | null
+}
+
 export interface AnaliseBaseDaxx {
   total: number
+  dataDisparo: string | null
   entregues: number
   lidos: number
   falhas: number
@@ -122,6 +137,7 @@ export interface AnaliseBaseDaxx {
   pctFalhas: number
   pctPendentes: number
   taxaEntregaTotal: number
+  taxaLeituraSobreEntregues: number
   optOuts: number
   pctOptOuts: number
   tempoEntregaMedioSeg: number
@@ -130,7 +146,9 @@ export interface AnaliseBaseDaxx {
   tempoLeituraMedianaSeg: number
   faixasLeitura: FaixaLeitura[]
   distribuicaoDdd: DistribuicaoDdd[]
+  distribuicaoDddPorLeitura: DistribuicaoDdd[]
   falhasLista: FalhaBase[]
+  destinatarios: DestinatarioBase[]
   optOutsLista: string[]
 }
 
@@ -221,6 +239,7 @@ export interface Disparo {
   horarioDisparo: string
   base: BaseCSV
   templateDaxx?: TemplateDaxx
+  daxxCampanhaId?: string
   numeroSendpulse?: NumeroSendpulse
   esteiraPaiId?: string
   numerosSendpulse?: NumeroSendpulse[]
@@ -242,14 +261,8 @@ export interface Disparo {
 export interface Esteira {
   id: string
   nome: string
+  chave?: string
   casasAposta: string[]
-  disparos: {
-    d1: string
-    d3?: string
-    d5?: string
-    d7?: string
-  }
-  /** @deprecated Use `etapas` */
   etapas: EsteiraEtapa[]
   criadoEm: string
   atualizadoEm: string

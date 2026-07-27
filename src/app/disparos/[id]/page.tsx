@@ -14,8 +14,9 @@ import { StatusDot } from '@/components/ui/StatusDot'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Dropdown } from '@/components/ui/Dropdown'
+import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { useToast } from '@/components/ui/Toast'
-import { criarEsteira, calcularDataFilho } from '@/lib/esteira'
+import { calcularDataFilho } from '@/lib/esteira'
 import { getState } from '@/lib/store'
 import { ArrowLeft, Trash2, Pencil, X, Check, Copy, Link as LinkIcon, Play, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
@@ -338,11 +339,7 @@ export default function DetalheDisparoPage() {
       createDisparo(novoDisparo)
 
       const novasEtapas = [...esteira.etapas, { tipo: proximoTipo, disparoId: novoDisparo.id }]
-      const chave = proximoTipo.toLowerCase() as 'd3' | 'd5' | 'd7'
-      updateEsteira(esteira.id, {
-        disparos: { ...esteira.disparos, [chave]: novoDisparo.id },
-        etapas: novasEtapas,
-      })
+      updateEsteira(esteira.id, { etapas: novasEtapas })
 
       addToast('success', `${proximoTipo} criado a partir deste disparo`)
     } catch {
@@ -556,29 +553,23 @@ export default function DetalheDisparoPage() {
               <span className="text-xs text-[var(--text-muted)] font-medium block">Tracking / CPA</span>
               <div>
                 <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
-                <select
+                <UtmComboBox
                   value={formData.utm}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, utm: e.target.value }))}
-                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-                >
-                  <option value="">Nenhum (UTM livre)</option>
-                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
-                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-                  ))}
-                </select>
+                  onChange={(v) => setFormData((prev) => ({ ...prev, utm: v }))}
+                  casa="superbet"
+                  size="md"
+                  placeholder="selecione ou digite e Enter para cadastrar"
+                />
               </div>
               <div>
                 <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
-                <select
+                <UtmComboBox
                   value={formData.betmgmPid}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, betmgmPid: e.target.value }))}
-                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-                >
-                  <option value="">Nenhum (PID livre)</option>
-                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
-                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-                  ))}
-                </select>
+                  onChange={(v) => setFormData((prev) => ({ ...prev, betmgmPid: v }))}
+                  casa="betmgm"
+                  size="md"
+                  placeholder="selecione ou digite e Enter para cadastrar"
+                />
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-[var(--text-secondary)] font-medium">Painel CPA</span>
@@ -996,8 +987,7 @@ export default function DetalheDisparoPage() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   {['D1', 'D3', 'D5', 'D7'].map((tipo, i) => {
-                    const chave = tipo.toLowerCase() as 'd1' | 'd3' | 'd5' | 'd7'
-                    const disparoId = esteira.disparos[chave]
+                    const disparoId = esteira.etapas.find((e) => e.tipo === tipo)?.disparoId
                     const isAtual = disparoId === disparo.id
                     const cores: Record<string, string> = { D1: 'var(--d1)', D3: 'var(--d3)', D5: 'var(--d5)', D7: 'var(--d7)' }
                     return (

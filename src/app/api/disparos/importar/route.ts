@@ -105,12 +105,6 @@ export async function POST(request: NextRequest) {
             id: crypto.randomUUID(),
             nome: `Retro: ${d1.data}`,
             casasAposta: casasUnicas,
-            disparos: {
-              d1: disD1.id,
-              ...(d3 ? { d3: disparosDoGrupo.get('D3')!.id } : {}),
-              ...(d5 ? { d5: disparosDoGrupo.get('D5')!.id } : {}),
-              ...(d7 ? { d7: disparosDoGrupo.get('D7')!.id } : {}),
-            },
             etapas,
             criadoEm: agora,
             atualizadoEm: agora,

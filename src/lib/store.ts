@@ -182,12 +182,6 @@ export function deletarDisparo(id: string): void {
       else if (filtered.length !== esteira.etapas.length)
         state.esteiras[esteiraId] = { ...esteira, etapas: filtered }
     }
-    if (esteira.disparos.d1 === id) delete state.esteiras[esteiraId]
-    else {
-      if (esteira.disparos.d3 === id) esteira.disparos.d3 = undefined
-      if (esteira.disparos.d5 === id) esteira.disparos.d5 = undefined
-      if (esteira.disparos.d7 === id) esteira.disparos.d7 = undefined
-    }
   }
   setState(state)
   syncToApi(`/api/disparos/${id}`, 'DELETE')
@@ -331,13 +325,3 @@ export function setEtapaConfigs(configs: EsteiraEtapaConfig[]): void {
   syncToApi('/api/etapa-configs', 'PUT', { configs })
 }
 
-/** Migrates legacy esteiras (with `disparos.d1/d3/d5/d7`) to the new `etapas` format */
-export function migrarEsteiraParaEtapas(esteira: Esteira, estado?: AppState): Esteira {
-  if (esteira.etapas && esteira.etapas.length > 0) return esteira
-  const etapas: { tipo: string; disparoId: string }[] = []
-  if (esteira.disparos.d1) etapas.push({ tipo: 'D1', disparoId: esteira.disparos.d1 })
-  if (esteira.disparos.d3) etapas.push({ tipo: 'D3', disparoId: esteira.disparos.d3 })
-  if (esteira.disparos.d5) etapas.push({ tipo: 'D5', disparoId: esteira.disparos.d5 })
-  if (esteira.disparos.d7) etapas.push({ tipo: 'D7', disparoId: esteira.disparos.d7 })
-  return { ...esteira, etapas }
-}

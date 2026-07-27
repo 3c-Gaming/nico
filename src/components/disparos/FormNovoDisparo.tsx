@@ -3,17 +3,18 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getState } from '@/lib/store'
-import type { TipoDisparo, Disparo, BaseCSV, NumeroSendpulse, FluxoSendpulse, DisparoDaxx, CasaAposta, EsteiraEtapaConfig } from '@/types'
+import type { TipoDisparo, Disparo, BaseCSV, NumeroSendpulse, FluxoSendpulse, DisparoDaxx } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useEsteiras } from '@/hooks/useEsteiras'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
-import { criarEsteira } from '@/lib/esteira'
+import { parsearNomeCampanhaDaxx, casaPadraoPorTipo } from '@/lib/daxx-parser'
 import { gerarNomenclatura } from '@/lib/nomenclatura'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { TimePicker } from '../ui/TimePicker'
 import { useToast } from '../ui/Toast'
 import { TagInput } from '../ui/TagInput'
+import { UtmComboBox } from '../ui/UtmComboBox'
 import { StepDaxxCampanha } from './StepDaxxCampanha'
 import { StepNumero } from './StepNumero'
 import { PreviewNomenclatura } from './PreviewNomenclatura'
@@ -21,32 +22,11 @@ import { EsteiraPreview } from './EsteiraPreview'
 
 const STEPS = ['Campanha DAXX', 'Configuração']
 
-function fireAndForget(url: string, opts: RequestInit) {
-  fetch(url, opts).catch(() => {})
-}
-
-function detectCasa(nome: string, casas: Record<string, CasaAposta>): string | undefined {
-  const slug = nome
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .split(/\s+/)
-    .find((w) => {
-      const lower = w.toLowerCase()
-      return Object.values(casas).some((c) =>
-        c.slug.toLowerCase().includes(lower) || lower.includes(c.slug.toLowerCase())
-      )
-    })
-  if (!slug) return
-  const found = Object.values(casas).find((c) =>
-    c.slug.toLowerCase().includes(slug.toLowerCase()) || slug.toLowerCase().includes(c.slug.toLowerCase())
-  )
-  return found?.id
-}
-
 export function FormNovoDisparo() {
   const router = useRouter()
   const { create: createDisparo } = useDisparos()
   const { create: createEsteira } = useEsteiras()
-  const { casas: casasDisponiveis, add: addCasa } = useCasasAposta()
+  const { casas: casasDisponiveis, list: casasList, add: addCasa } = useCasasAposta()
   const { addToast } = useToast()
 
   const [step, setStep] = useState(1)
@@ -89,11 +69,11 @@ export function FormNovoDisparo() {
   }, [campanha])
 
   useEffect(() => {
-    if (campanha && casasSelecionadas.length === 0) {
-      const casaId = detectCasa(campanha.nome, casasDisponiveis)
-      if (casaId) setCasasSelecionadas([casaId])
+    if (tipo && casasSelecionadas.length === 0) {
+      setCasasSelecionadas(casaPadraoPorTipo(tipo, casasList))
     }
-  }, [campanha, casasDisponiveis])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, casasList])
 
   const podeAvancar = useMemo(() => {
     switch (step) {
@@ -147,6 +127,7 @@ export function FormNovoDisparo() {
           url: campanha.linkTemplate,
           descricao: `Base: ${campanha.totalBase} | Entregues: ${campanha.entregues} | Lidas: ${campanha.lidas}`,
         },
+        daxxCampanhaId: campanha.id,
         numerosSendpulse: numeros.length > 0 ? numeros : undefined,
         utm: utm || undefined,
         betmgmPid: betmgmPid || undefined,
@@ -162,25 +143,26 @@ export function FormNovoDisparo() {
         },
       }
 
-      if (tipo === 'D1') {
-        const etapaConfigs: EsteiraEtapaConfig[] = getState().etapaConfigs
-        const { esteira, filhos } = criarEsteira(disparoData, Object.values(casasDisponiveis), etapaConfigs)
-        createDisparo(disparoData)
-        for (const f of filhos) createDisparo(f)
-        createEsteira(esteira)
-        fireAndForget('/api/disparos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disparo: disparoData, esteira, filhos }),
-        })
-      } else {
-        createDisparo(disparoData)
-        fireAndForget('/api/disparos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disparo: disparoData }),
-        })
+      const cicloChave = tipo !== 'PONTUAL' ? parsearNomeCampanhaDaxx(campanha.nome).esteiraKey : null
+
+      const res = await fetch('/api/disparos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disparo: disparoData, cicloChave }),
+      })
+
+      if (res.status === 409) {
+        addToast('error', 'Essa campanha da DAXX já foi cadastrada')
+        return
       }
+      if (!res.ok) {
+        addToast('error', 'Erro ao criar disparo — tente novamente')
+        return
+      }
+
+      const resultado = await res.json()
+      createDisparo(resultado.disparo)
+      if (resultado.esteira) createEsteira(resultado.esteira)
 
       addToast('success', `${tipo} criado com sucesso!`)
       router.push('/calendario')
@@ -355,29 +337,11 @@ export function FormNovoDisparo() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
-                <select
-                  value={utm}
-                  onChange={(e) => setUtm(e.target.value)}
-                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-                >
-                  <option value="">Nenhum (UTM livre)</option>
-                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
-                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-                  ))}
-                </select>
+                <UtmComboBox value={utm} onChange={setUtm} casa="superbet" size="md" placeholder="selecione ou digite e Enter para cadastrar" />
               </div>
               <div>
                 <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
-                <select
-                  value={betmgmPid}
-                  onChange={(e) => setBetmgmPid(e.target.value)}
-                  className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-                >
-                  <option value="">Nenhum (PID livre)</option>
-                  {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
-                    <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-                  ))}
-                </select>
+                <UtmComboBox value={betmgmPid} onChange={setBetmgmPid} casa="betmgm" size="md" placeholder="selecione ou digite e Enter para cadastrar" />
               </div>
             </div>
 

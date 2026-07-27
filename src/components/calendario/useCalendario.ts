@@ -5,7 +5,7 @@ import type { Disparo, TipoDisparo, StatusDisparo, ItemCalendario, DisparoDaxx, 
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { gerarRangeDias, isMesmaData, adicionarDias } from '@/lib/datas'
-import { parsearNomeCampanhaDaxx } from '@/lib/daxx-parser'
+import { parsearNomeCampanhaDaxx, casaPadraoPorTipo } from '@/lib/daxx-parser'
 
 export interface FiltrosCalendario {
   casas: string[]
@@ -65,7 +65,7 @@ export function useCalendario() {
   }))
 
   const { list: todosDisparos } = useDisparos()
-  const { casas } = useCasasAposta()
+  const { casas, list: casasList } = useCasasAposta()
 
   const [campanhasDaxx, setCampanhasDaxx] = useState<DisparoDaxx[]>([])
   const [agendadosDaxx, setAgendadosDaxx] = useState<DisparoAgendadoDaxx[]>([])
@@ -133,8 +133,8 @@ export function useCalendario() {
         let rejeitados: number | undefined
         let statusDaxx: string | undefined
 
-        if (d.templateDaxx?.id) {
-          const campanha = daxxPorTemplateId.get(d.templateDaxx.id)
+        if (d.daxxCampanhaId) {
+          const campanha = daxxPorTemplateId.get(d.daxxCampanhaId)
           if (campanha) {
             entregues = campanha.entregues
             lidas = campanha.lidas
@@ -164,7 +164,7 @@ export function useCalendario() {
       if (filtros.mostrarDaxx) {
         const vinculados = new Set<string>()
         for (const d of todosDisparos) {
-          if (d.templateDaxx?.id) vinculados.add(d.templateDaxx.id)
+          if (d.daxxCampanhaId) vinculados.add(d.daxxCampanhaId)
         }
 
         for (const campanha of campanhasDaxx) {
@@ -175,8 +175,10 @@ export function useCalendario() {
           if (parsed.dataDisparo !== key) continue
           if (!parsed.tipo) continue
 
+          const casasAposta = casaPadraoPorTipo(parsed.tipo, casasList)
+
           if (filtros.tipos.length > 0 && !filtros.tipos.includes(parsed.tipo)) continue
-          if (filtros.casas.length > 0 && parsed.casaSlug && !filtros.casas.includes(parsed.casaSlug)) continue
+          if (filtros.casas.length > 0 && !casasAposta.some((c) => filtros.casas.includes(c))) continue
 
           itens.push({
             id: `daxx_${campanha.id}`,
@@ -184,7 +186,7 @@ export function useCalendario() {
             nome: campanha.nome,
             nomenclatura: campanha.nome,
             dataDisparo: key,
-            casasAposta: parsed.casaSlug ? [parsed.casaSlug] : [],
+            casasAposta,
             status: campanha.status,
             fonte: 'daxx',
             entregues: campanha.entregues,
@@ -225,7 +227,7 @@ export function useCalendario() {
     }
 
     return map
-  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas])
+  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas, casasList])
 
   const setFiltros = useCallback((f: Partial<FiltrosCalendario>) => {
     setFiltrosState((prev) => {

@@ -1,13 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ItemCalendario, StatusDisparo, Disparo } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEsteiras } from '@/hooks/useEsteiras'
-import { getState } from '@/lib/store'
-import { criarEsteira } from '@/lib/esteira'
-import { parsearNomeCampanhaDaxx } from '@/lib/daxx-parser'
+import { parsearNomeCampanhaDaxx, casaPadraoPorTipo } from '@/lib/daxx-parser'
 import { useUtmConfigs } from '@/hooks/useUtmConfigs'
 import { Badge } from '../ui/Badge'
 import { Chip } from '../ui/Chip'
@@ -15,13 +13,10 @@ import { Button } from '../ui/Button'
 import { StatusDot } from '../ui/StatusDot'
 import { Modal } from '../ui/Modal'
 import { Dropdown } from '../ui/Dropdown'
+import { TagInput } from '../ui/TagInput'
 import { useToast } from '../ui/Toast'
 import { ExternalLink, Trash2, Play, Check, Clock, Database } from 'lucide-react'
 import Link from 'next/link'
-
-function fireAndForget(url: string, opts: RequestInit) {
-  fetch(url, opts).catch(() => {})
-}
 
 const TIPO_CORES: Record<string, string> = {
   D1: 'var(--d1)',
@@ -50,14 +45,26 @@ function formatNumero(n: number): string {
 export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [open, setOpen] = useState(false)
   const [cadastrando, setCadastrando] = useState(false)
+  const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
+  const [utmEscolhida, setUtmEscolhida] = useState('')
+  const [pidEscolhido, setPidEscolhido] = useState('')
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
-  const { casas, list: casasList } = useCasasAposta()
+  const { casas, list: casasList, add: addCasa } = useCasasAposta()
   const { list: utmConfigs } = useUtmConfigs()
   const { addToast } = useToast()
 
   const cor = TIPO_CORES[item.tipo] ?? 'var(--text-secondary)'
   const esteira = item.disparoLocal?.esteiraPaiId ? getById(item.disparoLocal.esteiraPaiId) : null
+
+  useEffect(() => {
+    if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
+      setCasasSelecionadas(casaPadraoPorTipo(item.tipo, casasList))
+      setUtmEscolhida('')
+      setPidEscolhido('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function handleStatusChange(status: StatusDisparo) {
     if (!item.disparoLocal) return
@@ -81,26 +88,23 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     }
   }
 
-  function handleCadastrar() {
+  async function handleCadastrar() {
     const campanha = item.campanhaDaxx
     if (!campanha || !item.tipo || cadastrando) return
     setCadastrando(true)
 
     try {
       const now = new Date().toISOString()
-      const baseNome = parsearNomeCampanhaDaxx(campanha.nome).baseNome?.toLowerCase()
-      const casasAposta = baseNome
-        ? casasList
-            .filter((c) => baseNome.includes(c.slug.toLowerCase()) || c.slug.toLowerCase().includes(baseNome) || baseNome.includes(c.nome.toLowerCase()))
-            .map((c) => c.id)
-        : []
+      const parsed = parsearNomeCampanhaDaxx(campanha.nome)
+      const utmSel = utmConfigs.find((u) => u.valor === utmEscolhida)
+      const pidSel = utmConfigs.find((u) => u.valor === pidEscolhido)
 
       const disparoData: Disparo = {
         id: crypto.randomUUID(),
         tipo: item.tipo,
         nomenclatura: campanha.nome,
         status: 'rascunho',
-        casasAposta,
+        casasAposta: casasSelecionadas,
         dataDisparo: item.dataDisparo,
         horarioDisparo: '09:30',
         base: {
@@ -114,6 +118,9 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           url: campanha.linkTemplate,
           descricao: `Base: ${campanha.totalBase} | Entregues: ${campanha.entregues} | Lidas: ${campanha.lidas}`,
         },
+        daxxCampanhaId: campanha.id,
+        utm: utmSel?.valor,
+        betmgmPid: pidSel?.valor,
         criadoEm: now,
         atualizadoEm: now,
         valorTotalBase: campanha.totalBase,
@@ -124,28 +131,32 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
         },
       }
 
-      if (item.tipo === 'D1') {
-        const etapaConfigs = getState().etapaConfigs
-        const { esteira, filhos } = criarEsteira(disparoData, casasList, etapaConfigs)
-        create(disparoData)
-        for (const f of filhos) create(f)
-        createEsteira(esteira)
-        fireAndForget('/api/disparos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disparo: disparoData, esteira, filhos }),
-        })
-      } else {
-        create(disparoData)
-        fireAndForget('/api/disparos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disparo: disparoData }),
-        })
+      const cicloChave = item.tipo !== 'PONTUAL' ? parsed.esteiraKey : null
+
+      const res = await fetch('/api/disparos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disparo: disparoData, cicloChave }),
+      })
+
+      if (res.status === 409) {
+        addToast('error', 'Essa campanha da DAXX já foi cadastrada')
+        setOpen(false)
+        return
       }
+      if (!res.ok) {
+        addToast('error', 'Erro ao cadastrar disparo — tente novamente')
+        return
+      }
+
+      const resultado = await res.json()
+      create(resultado.disparo)
+      if (resultado.esteira) createEsteira(resultado.esteira)
 
       addToast('success', `${item.tipo} cadastrado a partir da DAXX`)
       setOpen(false)
+    } catch {
+      addToast('error', 'Erro de rede ao cadastrar disparo')
     } finally {
       setCadastrando(false)
     }
@@ -243,6 +254,85 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                 <span className="text-[var(--text-primary)]">{item.campanhaDaxx.responsavel}</span>
               </div>
             )}
+
+            <div className="pt-2 border-t border-[var(--border)] space-y-3">
+              <div>
+                <span className="text-[var(--text-muted)] block text-xs mb-1">Casas de Aposta (confirme antes de cadastrar)</span>
+                <TagInput
+                  tags={casasSelecionadas}
+                  casasDisponiveis={casasList.map((c) => ({ id: c.id, nome: c.nome, cor: c.cor }))}
+                  onAdd={(nome) => {
+                    const casa = addCasa(nome)
+                    setCasasSelecionadas((prev) => prev.includes(casa.id) ? prev : [...prev, casa.id])
+                    return { id: casa.id, nome: casa.nome, cor: casa.cor }
+                  }}
+                  onRemove={(id) => setCasasSelecionadas((prev) => prev.filter((c) => c !== id))}
+                  placeholder="Digite o nome da casa..."
+                />
+              </div>
+
+              {casasSelecionadas.some((id) => /super/i.test(casasList.find((c) => c.id === id)?.slug ?? '')) && (
+                <div>
+                  <span className="text-[var(--text-muted)] block text-xs mb-1">UTM (Superbet)</span>
+                  <Dropdown label={utmConfigs.find((u) => u.valor === utmEscolhida)?.nome ?? 'Nenhum'}>
+                    <div className="p-1 min-w-[200px] max-h-[240px] overflow-y-auto">
+                      {utmEscolhida && (
+                        <button
+                          onClick={() => setUtmEscolhida('')}
+                          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded text-red-400 hover:bg-red-400/10 transition-colors"
+                        >
+                          Remover
+                        </button>
+                      )}
+                      {utmConfigs.filter((u) => u.casa === 'superbet').map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => setUtmEscolhida(u.valor)}
+                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                        >
+                          <span>{u.nome}</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[90px]">{u.valor}</span>
+                        </button>
+                      ))}
+                      {utmConfigs.filter((u) => u.casa === 'superbet').length === 0 && (
+                        <p className="px-2 py-1.5 text-xs text-[var(--text-muted)]">Nenhum UTM cadastrado em /utms</p>
+                      )}
+                    </div>
+                  </Dropdown>
+                </div>
+              )}
+
+              {casasSelecionadas.some((id) => /mgm/i.test(casasList.find((c) => c.id === id)?.slug ?? '')) && (
+                <div>
+                  <span className="text-[var(--text-muted)] block text-xs mb-1">PID (BetMGM)</span>
+                  <Dropdown label={utmConfigs.find((u) => u.valor === pidEscolhido)?.nome ?? 'Nenhum'}>
+                    <div className="p-1 min-w-[200px] max-h-[240px] overflow-y-auto">
+                      {pidEscolhido && (
+                        <button
+                          onClick={() => setPidEscolhido('')}
+                          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded text-red-400 hover:bg-red-400/10 transition-colors"
+                        >
+                          Remover
+                        </button>
+                      )}
+                      {utmConfigs.filter((u) => u.casa === 'betmgm').map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => setPidEscolhido(u.valor)}
+                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                        >
+                          <span>{u.nome}</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[90px]">{u.valor}</span>
+                        </button>
+                      ))}
+                      {utmConfigs.filter((u) => u.casa === 'betmgm').length === 0 && (
+                        <p className="px-2 py-1.5 text-xs text-[var(--text-muted)]">Nenhum PID cadastrado em /utms</p>
+                      )}
+                    </div>
+                  </Dropdown>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--border)]">
