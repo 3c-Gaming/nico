@@ -274,14 +274,30 @@ export default function DaxxPage() {
         titulo="Campanhas DAXX"
         descricao="Disparos reais na plataforma DisparosSimples"
         acoes={
-          <button
-            onClick={() => fetchData(true)}
-            disabled={refreshing || loading}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Atualizando...' : 'Atualizar'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/daxx/analise')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <BarChart3 size={14} />
+              Analisar CSV avulso
+            </button>
+            <button
+              onClick={() => router.push('/daxx/comparar')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <BarChart3 size={14} />
+              Comparar bases (VS)
+            </button>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing || loading}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </div>
         }
       />
 
@@ -413,7 +429,7 @@ export default function DaxxPage() {
                             {loadingLink === c.id ? <Spinner size={14} /> : <ExternalLink size={14} />}
                           </button>
                           <button
-                            onClick={() => router.push(`/daxx/analise/${c.id}?nome=${encodeURIComponent(c.nome)}`)}
+                            onClick={() => router.push(`/daxx/analise?nome=${encodeURIComponent(c.nome)}`)}
                             className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                             title="Analisar base"
                           >

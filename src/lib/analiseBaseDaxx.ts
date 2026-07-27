@@ -1,4 +1,4 @@
-import type { AnaliseBaseDaxx } from '@/types'
+import type { AnaliseBaseDaxx, DestinatarioBase } from '@/types'
 
 const DDD_PARA_UF: Record<string, string> = {
   '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
@@ -94,6 +94,8 @@ function mediana(valores: number[]): number {
   return ordenado[Math.floor(ordenado.length / 2)]
 }
 
+const DDD_MIN_AMOSTRA = 5
+
 export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
   const linhas = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0)
   const corpo = linhas.slice(1)
@@ -107,9 +109,11 @@ export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
   const temposEntrega: number[] = []
   const temposLeitura: number[] = []
   const faixasLeituraCount = FAIXAS_LEITURA.map((f) => ({ label: f.label, total: 0 }))
-  const dddCount = new Map<string, number>()
+  const dddStats = new Map<string, { total: number; lidos: number }>()
   const falhasLista: { numero: string; erroDescricao: string | null }[] = []
   const optOutsLista: string[] = []
+  const destinatarios: AnaliseBaseDaxx['destinatarios'] = []
+  let dataDisparo: string | null = null
 
   for (const linha of corpo) {
     const c = parseCsvLine(linha)
@@ -120,18 +124,20 @@ export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
     const lidoStr = (c[4] ?? '').trim()
     const erroDescStr = (c[6] ?? '').trim()
     const optOutStr = (c[7] ?? '').trim()
+    const optOut = optOutStr === 'Sim'
 
     if (status === 'Entregue') entregues++
     else if (status === 'Lido') lidos++
     else if (status === 'Falha') falhas++
     else if (status === 'Pendente') pendentes++
 
+    const erroDescricao = erroDescStr && erroDescStr !== '—' ? erroDescStr : null
+
     if (status === 'Falha') {
-      const erroDescricao = erroDescStr && erroDescStr !== '—' ? erroDescStr : null
       falhasLista.push({ numero, erroDescricao })
     }
 
-    if (optOutStr === 'Sim') {
+    if (optOut) {
       optOuts++
       optOutsLista.push(numero)
     }
@@ -140,30 +146,65 @@ export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
     const entregue = entregueStr !== '—' ? parseDataDaxxCompleta(entregueStr) : null
     const lido = lidoStr !== '—' ? parseDataDaxxCompleta(lidoStr) : null
 
+    if (enviado && !dataDisparo) {
+      const yyyy = enviado.getFullYear()
+      const mm = String(enviado.getMonth() + 1).padStart(2, '0')
+      const dd = String(enviado.getDate()).padStart(2, '0')
+      dataDisparo = `${yyyy}-${mm}-${dd}`
+    }
+
+    let tempoLeituraSeg: number | null = null
+
     if (enviado && entregue) {
       temposEntrega.push((entregue.getTime() - enviado.getTime()) / 1000)
     }
     if (enviado && lido) {
-      const segundos = (lido.getTime() - enviado.getTime()) / 1000
-      temposLeitura.push(segundos)
-      const faixaIdx = FAIXAS_LEITURA.findIndex((f) => segundos <= f.maxSegundos)
+      tempoLeituraSeg = Math.round((lido.getTime() - enviado.getTime()) / 1000)
+      temposLeitura.push(tempoLeituraSeg)
+      const faixaIdx = FAIXAS_LEITURA.findIndex((f) => tempoLeituraSeg! <= f.maxSegundos)
       if (faixaIdx >= 0) faixasLeituraCount[faixaIdx].total++
     }
 
     const ddd = extrairDDD(numero)
-    if (ddd) dddCount.set(ddd, (dddCount.get(ddd) ?? 0) + 1)
+    const uf = ddd ? DDD_PARA_UF[ddd] : null
+    if (ddd) {
+      const atual = dddStats.get(ddd) ?? { total: 0, lidos: 0 }
+      atual.total++
+      if (status === 'Lido') atual.lidos++
+      dddStats.set(ddd, atual)
+    }
+
+    destinatarios.push({
+      numero,
+      status,
+      enviadoEm: enviadoStr,
+      entregueEm: entregueStr !== '—' ? entregueStr : null,
+      lidoEm: lidoStr !== '—' ? lidoStr : null,
+      erroDescricao,
+      optOut,
+      tempoLeituraSeg,
+      ddd,
+      uf,
+    })
   }
 
   const total = corpo.length
-  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0)
+  const pct = (n: number, base: number = total) => (base > 0 ? Math.round((n / base) * 1000) / 10 : 0)
 
-  const distribuicaoDdd = [...dddCount.entries()]
-    .map(([ddd, total]) => ({ ddd, uf: DDD_PARA_UF[ddd], total }))
+  const distribuicaoDdd = [...dddStats.entries()]
+    .map(([ddd, s]) => ({ ddd, uf: DDD_PARA_UF[ddd], total: s.total, pctLeitura: pct(s.lidos, s.total) }))
     .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+
+  const distribuicaoDddPorLeitura = [...dddStats.entries()]
+    .filter(([, s]) => s.total >= DDD_MIN_AMOSTRA)
+    .map(([ddd, s]) => ({ ddd, uf: DDD_PARA_UF[ddd], total: s.total, pctLeitura: pct(s.lidos, s.total) }))
+    .sort((a, b) => b.pctLeitura - a.pctLeitura)
     .slice(0, 10)
 
   return {
     total,
+    dataDisparo,
     entregues,
     lidos,
     falhas,
@@ -173,6 +214,7 @@ export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
     pctFalhas: pct(falhas),
     pctPendentes: pct(pendentes),
     taxaEntregaTotal: pct(entregues + lidos),
+    taxaLeituraSobreEntregues: pct(lidos, entregues + lidos),
     optOuts,
     pctOptOuts: pct(optOuts),
     tempoEntregaMedioSeg: Math.round(media(temposEntrega)),
@@ -181,7 +223,31 @@ export function analisarBaseCsv(csvText: string): AnaliseBaseDaxx {
     tempoLeituraMedianaSeg: Math.round(mediana(temposLeitura)),
     faixasLeitura: faixasLeituraCount,
     distribuicaoDdd,
+    distribuicaoDddPorLeitura,
     falhasLista,
     optOutsLista,
+    destinatarios,
   }
+}
+
+function csvCampo(valor: string): string {
+  if (valor.includes(',') || valor.includes('"') || valor.includes('\n')) {
+    return `"${valor.replace(/"/g, '""')}"`
+  }
+  return valor
+}
+
+export function gerarCsvDestinatarios(destinatarios: DestinatarioBase[]): string {
+  const header = ['Número', 'Enviado em', 'Status', 'Entregue em', 'Lido em', 'Erro código', 'Erro descrição', 'Opt-out']
+  const linhas = destinatarios.map((d) => [
+    d.numero,
+    d.enviadoEm,
+    d.status,
+    d.entregueEm ?? '—',
+    d.lidoEm ?? '—',
+    '—',
+    d.erroDescricao ?? '—',
+    d.optOut ? 'Sim' : 'Não',
+  ].map(csvCampo).join(','))
+  return [header.join(','), ...linhas].join('\n')
 }
