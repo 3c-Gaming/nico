@@ -18,7 +18,7 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
   return (
     <div
       data-dia-index={index}
-      className={`flex-shrink-0 w-[160px] border-r border-[var(--border)] ${
+      className={`flex-shrink-0 w-[260px] border-r border-[var(--border)] ${
         isHoje ? 'bg-[var(--d1)]/5' : ''
       } ${isFimDeSemana && !isHoje ? 'bg-black/10' : ''}`}
       style={isHoje ? { borderTop: '2px solid var(--d1)' } : undefined}
@@ -44,7 +44,7 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
         </div>
       </div>
 
-      <div className="p-2 space-y-2 min-h-[200px]">
+      <div className="p-4 space-y-2 min-h-[200px]">
         {disparos.map((item) => (
           <div key={item.id} className="relative">
             <CardItemCalendario item={item} />

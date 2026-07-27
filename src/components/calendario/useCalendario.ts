@@ -15,6 +15,8 @@ export interface FiltrosCalendario {
   mostrarDaxx: boolean
 }
 
+const ORDEM_TIPO: Record<string, number> = { D1: 0, D3: 1, D5: 2, D7: 3, PONTUAL: 4 }
+
 const DIAS_ANTES = 3
 const DIAS_DEPOIS = 14
 const DAXX_CACHE_KEY = 'daxx-campanhas-calendar'
@@ -223,7 +225,10 @@ export function useCalendario() {
         }
       }
 
-      if (itens.length > 0) map.set(key, itens)
+      if (itens.length > 0) {
+        itens.sort((a, b) => (ORDEM_TIPO[a.tipo] ?? 99) - (ORDEM_TIPO[b.tipo] ?? 99))
+        map.set(key, itens)
+      }
     }
 
     return map

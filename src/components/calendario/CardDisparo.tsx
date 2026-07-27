@@ -42,6 +42,18 @@ function formatNumero(n: number): string {
   return n.toLocaleString('pt-BR')
 }
 
+const CUSTO_POR_ENTREGUE = 0.13
+
+function formatMoeda(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
+function nomeCurto(nome: string): string {
+  const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
+  return cortado || nome
+}
+
 export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [open, setOpen] = useState(false)
   const [cadastrando, setCadastrando] = useState(false)
@@ -183,16 +195,14 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
               DAXX
             </span>
           </div>
-          <div className="flex flex-wrap gap-1 mb-1">
-            {item.casasAposta.map((casaId) => {
-              const casa = casas[casaId]
-              if (!casa) return null
-              return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
-            })}
-          </div>
           <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
-            {item.nome}
+            {nomeCurto(item.nome)}
           </p>
+          {item.entregues != null && (
+            <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
+              {formatMoeda(item.entregues * CUSTO_POR_ENTREGUE)}
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
             <span className="capitalize">{item.status}</span>
             {item.totalBase != null && (
@@ -372,13 +382,6 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
               Agendado
             </span>
           </div>
-          <div className="flex flex-wrap gap-1 mb-1">
-            {item.casasAposta.map((casaId) => {
-              const casa = casas[casaId]
-              if (!casa) return null
-              return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
-            })}
-          </div>
           <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
             {item.nome}
           </p>
@@ -461,21 +464,25 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1 mb-1">
-          {item.casasAposta.map((casaId) => {
-            const casa = casas[casaId]
-            if (!casa) return null
-            return <Chip key={casaId} label={casa.nome} cor={casa.cor} size="sm" />
-          })}
-        </div>
-
         <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
-          {item.nomenclatura}
+          {nomeCurto(item.nomenclatura)}
         </p>
+
+        {item.entregues != null && (
+          <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
+            {formatMoeda(item.entregues * CUSTO_POR_ENTREGUE)}
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
           <span>{item.horarioDisparo}</span>
           <span>·</span>
+          {item.totalBase != null && (
+            <>
+              <span>{formatNumero(item.totalBase)} base</span>
+              <span>·</span>
+            </>
+          )}
           {item.fonte === 'local' ? (
             <StatusDot status={item.status as StatusDisparo} size={6} />
           ) : (
