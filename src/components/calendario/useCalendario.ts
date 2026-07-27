@@ -4,8 +4,10 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import type { Disparo, TipoDisparo, StatusDisparo, ItemCalendario, DisparoDaxx, DisparoAgendadoDaxx } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
+import { useEtapaConfigs } from '@/hooks/useEtapaConfigs'
 import { gerarRangeDias, isMesmaData, adicionarDias } from '@/lib/datas'
 import { parsearNomeCampanhaDaxx, casaPadraoPorTipo } from '@/lib/daxx-parser'
+import { DEFAULT_CONFIGS } from '@/lib/esteira'
 
 export interface FiltrosCalendario {
   casas: string[]
@@ -68,6 +70,7 @@ export function useCalendario() {
 
   const { list: todosDisparos } = useDisparos()
   const { casas, list: casasList } = useCasasAposta()
+  const { configs: etapaConfigsRaw } = useEtapaConfigs()
 
   const [campanhasDaxx, setCampanhasDaxx] = useState<DisparoDaxx[]>([])
   const [agendadosDaxx, setAgendadosDaxx] = useState<DisparoAgendadoDaxx[]>([])
@@ -231,8 +234,80 @@ export function useCalendario() {
       }
     }
 
+    // Projeta D3/D5/D7 futuros a partir de disparos reais já visíveis (D1, ou qualquer
+    // etapa conhecida), usando os mesmos offsets da esteira. Some sozinho quando a
+    // campanha real correspondente aparecer na DAXX (mesmo dia + tipo + rótulo da base).
+    if (filtros.mostrarDaxx) {
+      const configs = (etapaConfigsRaw && etapaConfigsRaw.length > 0) ? etapaConfigsRaw : DEFAULT_CONFIGS
+      const offsetPorTipo: Record<string, number> = {}
+      for (const c of configs) offsetPorTipo[c.tipo] = c.offsetDias
+
+      const rotuloBase = (nome: string): string | null => {
+        const baseNome = parsearNomeCampanhaDaxx(nome).baseNome
+        return baseNome ? baseNome.trim().toLowerCase() : null
+      }
+
+      const jaProjetado = new Set<string>()
+
+      for (const [, itensDoDia] of map) {
+        for (const item of [...itensDoDia]) {
+          if (item.fonte !== 'daxx' && item.fonte !== 'local') continue
+          const offsetAtual = offsetPorTipo[item.tipo]
+          if (offsetAtual == null) continue
+
+          const label = rotuloBase(item.nome)
+          if (!label) continue
+
+          const dataAtual = new Date(item.dataDisparo + 'T00:00:00')
+          const dataAncora = adicionarDias(dataAtual, -offsetAtual)
+
+          for (const [tipoFuturo, offsetFuturo] of Object.entries(offsetPorTipo)) {
+            if (offsetFuturo <= offsetAtual) continue
+
+            const dataProjetada = adicionarDias(dataAncora, offsetFuturo)
+            if (!diasVisiveis.some((d) => isMesmaData(d, dataProjetada))) continue
+            const keyProjetada = dataProjetada.toISOString().split('T')[0]
+
+            const dedupKey = `${keyProjetada}::${tipoFuturo}::${label}`
+            if (jaProjetado.has(dedupKey)) continue
+
+            const itensDoDiaAlvo = map.get(keyProjetada) ?? []
+            const jaExisteReal = itensDoDiaAlvo.some((it) =>
+              (it.fonte === 'daxx' || it.fonte === 'local') && it.tipo === tipoFuturo && rotuloBase(it.nome) === label,
+            )
+            if (jaExisteReal) continue
+
+            const casasProjetadas = casaPadraoPorTipo(tipoFuturo as TipoDisparo, casasList)
+            if (filtros.tipos.length > 0 && !filtros.tipos.includes(tipoFuturo as TipoDisparo)) continue
+            if (filtros.casas.length > 0 && !casasProjetadas.some((c) => filtros.casas.includes(c))) continue
+
+            jaProjetado.add(dedupKey)
+
+            const itemProjetado: ItemCalendario = {
+              id: `projetado_${label.replace(/\s+/g, '_')}_${tipoFuturo}_${keyProjetada}`,
+              tipo: tipoFuturo as TipoDisparo,
+              nome: label.toUpperCase(),
+              nomenclatura: label.toUpperCase(),
+              dataDisparo: keyProjetada,
+              casasAposta: casasProjetadas,
+              status: 'projetado',
+              fonte: 'projetado',
+            }
+
+            const listaAlvo = map.get(keyProjetada)
+            if (listaAlvo) listaAlvo.push(itemProjetado)
+            else map.set(keyProjetada, [itemProjetado])
+          }
+        }
+      }
+
+      for (const [, lista] of map) {
+        lista.sort((a, b) => (ORDEM_TIPO[a.tipo] ?? 99) - (ORDEM_TIPO[b.tipo] ?? 99))
+      }
+    }
+
     return map
-  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas, casasList])
+  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas, casasList, etapaConfigsRaw])
 
   const setFiltros = useCallback((f: Partial<FiltrosCalendario>) => {
     setFiltrosState((prev) => {

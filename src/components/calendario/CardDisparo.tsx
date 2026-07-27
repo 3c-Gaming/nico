@@ -54,12 +54,58 @@ function nomeCurto(nome: string): string {
   return cortado || nome
 }
 
+interface BlocoResultadoFinanceiroProps {
+  carregando: boolean
+  resultado: { registros: number; ftds: number; cpas: number } | null
+  roi: number | null
+}
+
+function BlocoResultadoFinanceiro({ carregando, resultado, roi }: BlocoResultadoFinanceiroProps) {
+  if (carregando) return <p className="text-xs text-[var(--text-muted)]">Carregando...</p>
+  if (!resultado) return <p className="text-xs text-[var(--text-muted)]">Sem dados de resultado pra essa UTM/data ainda</p>
+
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-2">
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
+        </div>
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
+        </div>
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
+        </div>
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div
+            className="text-lg font-semibold"
+            style={{ color: roi == null ? 'var(--text-primary)' : roi >= 0 ? 'var(--success)' : 'var(--error)' }}
+          >
+            {roi != null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(0)}%` : '—'}
+          </div>
+          <div className="text-[10px] text-[var(--text-muted)]">ROI</div>
+        </div>
+      </div>
+      {roi == null && (
+        <p className="text-[10px] text-[var(--text-muted)] mt-1">
+          Defina o painel de CPA no disparo (em /disparos) pra calcular o ROI
+        </p>
+      )}
+    </>
+  )
+}
+
 export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [open, setOpen] = useState(false)
   const [cadastrando, setCadastrando] = useState(false)
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
+  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number } | null>(null)
+  const [carregandoResultado, setCarregandoResultado] = useState(false)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
   const { casas, list: casasList, add: addCasa } = useCasasAposta()
@@ -68,6 +114,45 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
 
   const cor = TIPO_CORES[item.tipo] ?? 'var(--text-secondary)'
   const esteira = item.disparoLocal?.esteiraPaiId ? getById(item.disparoLocal.esteiraPaiId) : null
+
+  const disparoLocal = item.disparoLocal
+  const utmDoDisparo = disparoLocal?.utm
+  const pidDoDisparo = disparoLocal?.betmgmPid
+  const dataDoDisparo = disparoLocal?.dataDisparo
+
+  // No disparo já cadastrado, usa a UTM/PID salva. No cadastro (ainda não salvo),
+  // usa o que está selecionado nos dropdowns em tempo real.
+  const utmValorAtivo = disparoLocal ? (utmDoDisparo || pidDoDisparo) : (utmEscolhida || pidEscolhido)
+  const casaAtiva: 'superbet' | 'betmgm' | null = disparoLocal
+    ? (utmDoDisparo ? 'superbet' : pidDoDisparo ? 'betmgm' : null)
+    : (utmEscolhida ? 'superbet' : pidEscolhido ? 'betmgm' : null)
+  const dataAtiva = disparoLocal ? dataDoDisparo : item.dataDisparo
+
+  useEffect(() => {
+    // No disparo já cadastrado, busca sempre que houver UTM/PID (aparece direto no card,
+    // sem precisar abrir o modal). No cadastro (ainda sem disparoLocal), só busca com o
+    // modal aberto, a partir do que está selecionado nos dropdowns.
+    const podeBuscar = disparoLocal ? true : open
+    if (!podeBuscar || !utmValorAtivo || !casaAtiva || !dataAtiva) { setResultadoFinanceiro(null); return }
+
+    setCarregandoResultado(true)
+    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+      })
+      .catch(() => setResultadoFinanceiro(null))
+      .finally(() => setCarregandoResultado(false))
+  }, [open, disparoLocal, utmValorAtivo, casaAtiva, dataAtiva])
+
+  const painelCPA = resultadoFinanceiro
+    ? casasList.find((c) => c.nome.toLowerCase() === resultadoFinanceiro.casa)?.paineisCPA.find((p) => p.id === disparoLocal?.cpaPainelId)
+    : undefined
+  const custoEstimado = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : null
+  const receitaEstimada = painelCPA && resultadoFinanceiro ? resultadoFinanceiro.cpas * painelCPA.valorCPA : null
+  const roi = custoEstimado && custoEstimado > 0 && receitaEstimada != null
+    ? ((receitaEstimada - custoEstimado) / custoEstimado) * 100
+    : null
 
   useEffect(() => {
     if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
@@ -172,6 +257,28 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     } finally {
       setCadastrando(false)
     }
+  }
+
+  if (item.fonte === 'projetado') {
+    return (
+      <div
+        className="w-full text-left rounded p-2.5 opacity-60"
+        style={{
+          backgroundColor: 'transparent',
+          border: '1px dashed var(--border)',
+          borderLeft: `3px dashed ${cor}`,
+        }}
+        title="Projeção — some quando a campanha real aparecer na DAXX"
+      >
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-xs font-semibold" style={{ color: cor }}>{item.tipo}</span>
+          <span className="ml-auto text-[10px] font-medium text-[var(--text-muted)]">projetado</span>
+        </div>
+        <p className="font-mono text-[11px] text-[var(--text-muted)] truncate">
+          {item.nome}
+        </p>
+      </div>
+    )
   }
 
   if (item.fonte === 'daxx') {
@@ -281,7 +388,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                 />
               </div>
 
-              {casasSelecionadas.some((id) => /super/i.test(casasList.find((c) => c.id === id)?.slug ?? '')) && (
+              {casasSelecionadas.some((id) => /super/i.test(casasList.find((c) => c.id === id)?.nome ?? '')) && (
                 <div>
                   <span className="text-[var(--text-muted)] block text-xs mb-1">UTM (Superbet)</span>
                   <Dropdown label={utmConfigs.find((u) => u.valor === utmEscolhida)?.nome ?? 'Nenhum'}>
@@ -312,7 +419,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                 </div>
               )}
 
-              {casasSelecionadas.some((id) => /mgm/i.test(casasList.find((c) => c.id === id)?.slug ?? '')) && (
+              {casasSelecionadas.some((id) => /mgm/i.test(casasList.find((c) => c.id === id)?.nome ?? '')) && (
                 <div>
                   <span className="text-[var(--text-muted)] block text-xs mb-1">PID (BetMGM)</span>
                   <Dropdown label={utmConfigs.find((u) => u.valor === pidEscolhido)?.nome ?? 'Nenhum'}>
@@ -340,6 +447,13 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                       )}
                     </div>
                   </Dropdown>
+                </div>
+              )}
+
+              {(utmEscolhida || pidEscolhido) && (
+                <div>
+                  <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
+                  <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} roi={roi} />
                 </div>
               )}
             </div>
@@ -471,6 +585,24 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
         {item.entregues != null && (
           <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
             {formatMoeda(item.entregues * CUSTO_POR_ENTREGUE)}
+          </div>
+        )}
+
+        {resultadoFinanceiro && (
+          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mb-1">
+            <span>Reg {formatNumero(resultadoFinanceiro.registros)}</span>
+            <span>·</span>
+            <span>FTD {formatNumero(resultadoFinanceiro.ftds)}</span>
+            <span>·</span>
+            <span>CPA {formatNumero(resultadoFinanceiro.cpas)}</span>
+            {roi != null && (
+              <>
+                <span>·</span>
+                <span style={{ color: roi >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+                </span>
+              </>
+            )}
           </div>
         )}
 
@@ -638,6 +770,13 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                   <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {(utmDoDisparo || pidDoDisparo) && (
+            <div>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
+              <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} roi={roi} />
             </div>
           )}
 

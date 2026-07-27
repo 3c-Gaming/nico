@@ -460,7 +460,7 @@ export interface ItemCalendario {
   horarioDisparo?: string
   casasAposta: string[]
   status: string
-  fonte: 'local' | 'daxx' | 'agendado'
+  fonte: 'local' | 'daxx' | 'agendado' | 'projetado'
   entregues?: number
   lidas?: number
   rejeitados?: number

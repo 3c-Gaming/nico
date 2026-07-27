@@ -17,16 +17,30 @@ function normalizarTexto(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+function adicionarDiasIso(iso: string, dias: number): string {
+  const [ano, mes, dia] = iso.split('-').map(Number)
+  const d = new Date(ano, mes - 1, dia)
+  d.setDate(d.getDate() + dias)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /**
- * Regra fixa do negócio: D1/D5 sempre saem pela Superbet (UTM), D3/D7 sempre pela BetMGM (PID).
- * O nome da "BASE X" na DAXX é só o rótulo do CSV escolhido por quem sobe a base — não indica a casa.
+ * Regra fixa do negócio: D1/D5 sempre saem pela Superbet (UTM), D3 sempre pela BetMGM (PID).
+ * Por hora não consideramos D7 no ciclo. O nome da "BASE X" na DAXX é só o rótulo do CSV
+ * escolhido por quem sobe a base — não indica a casa.
  */
 const CASA_PADRAO_POR_TIPO: Record<string, 'superbet' | 'betmgm'> = {
   D1: 'superbet',
   D3: 'betmgm',
   D5: 'superbet',
-  D7: 'betmgm',
 }
+
+/**
+ * Deslocamento fixo (em dias) de cada etapa em relação ao D1 do mesmo ciclo — convenção
+ * da própria DAXX, não a configuração ajustável do usuário em /esteiras. Usado só pra
+ * calcular uma chave de ciclo estável (não pra prever data de disparo futura).
+ */
+const OFFSET_CICLO: Record<string, number> = { D1: 0, D3: 2, D5: 4 }
 
 /** Palpite inicial de casa a partir do tipo (D1/D3/D5/D7) — sempre editável pelo usuário antes de confirmar, nunca a decisão final. */
 export function casaPadraoPorTipo(tipo: TipoDisparo | null, casasList: CasaAposta[]): string[] {
@@ -69,8 +83,12 @@ export function parsearNomeCampanhaDaxx(nome: string): CampanhaDaxxParsed {
     resultado.dataDisparo = resultado.dataCriacao
   }
 
-  if (resultado.tipo && resultado.dataCriacao && resultado.baseNome) {
-    resultado.esteiraKey = `${resultado.dataCriacao}::${normalizarTexto(resultado.baseNome)}`
+  if (resultado.tipo && resultado.dataDisparo && resultado.baseNome) {
+    const offset = OFFSET_CICLO[resultado.tipo]
+    if (offset != null) {
+      const ancora = adicionarDiasIso(resultado.dataDisparo, -offset)
+      resultado.esteiraKey = `${ancora}::${normalizarTexto(resultado.baseNome)}`
+    }
   }
 
   return resultado
