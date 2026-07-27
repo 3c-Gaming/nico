@@ -364,7 +364,11 @@ export default function HomePage() {
 
       const disparos = todosDisparos
       const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
-      const disparosDoFunil = disparos.filter((d) => d.utm && funilUtms.has(d.utm))
+      // D1/D5 (Superbet) guardam o valor de rastreio em `utm`; D3/D7 (BetMGM) guardam em
+      // `betmgmPid` — precisa checar os dois, senão disparos BetMGM nunca cruzam com o funil.
+      const valorTrackingDoDisparo = (d: Disparo): string | undefined =>
+        (d.utm && funilUtms.has(d.utm)) ? d.utm : (d.betmgmPid && funilUtms.has(d.betmgmPid)) ? d.betmgmPid : undefined
+      const disparosDoFunil = disparos.filter((d) => valorTrackingDoDisparo(d) !== undefined)
 
       const baseCustoPorBot = new Map<string, number>()
       const baseLinhasPorBot = new Map<string, number>()
@@ -374,14 +378,15 @@ export default function HomePage() {
       }
 
       for (const d of disparosDoFunil) {
+        const valorTracking = valorTrackingDoDisparo(d)!
         const baseLinhas = d.base?.totalRegistros ?? 0
         const custoTotal = baseLinhas * 0.13
-        const numFunis = utmParaFunis.get(d.utm!)?.size ?? 1
+        const numFunis = utmParaFunis.get(valorTracking)?.size ?? 1
         const custoPorFunil = custoTotal / numFunis
         const linhasPorFunil = baseLinhas / numFunis
 
         const matchingBots = [...porBot.entries()]
-          .filter(([_, data]) => data.utms.has(d.utm!))
+          .filter(([_, data]) => data.utms.has(valorTracking))
           .map(([botId]) => botId)
         if (matchingBots.length > 0) {
           const shareCusto = custoPorFunil / matchingBots.length
@@ -408,11 +413,12 @@ export default function HomePage() {
         if (d.templateDaxx?.id) {
           const daxx = daxxPorId.get(d.templateDaxx.id)
           if (daxx) {
-            const numFunis = utmParaFunis.get(d.utm!)?.size ?? 1
+            const valorTracking = valorTrackingDoDisparo(d)!
+            const numFunis = utmParaFunis.get(valorTracking)?.size ?? 1
             const entPorFunil = daxx.entregues / numFunis
             const lidPorFunil = daxx.lidas / numFunis
             const matchingBots = [...porBot.entries()]
-              .filter(([_, data]) => data.utms.has(d.utm!))
+              .filter(([_, data]) => data.utms.has(valorTracking))
               .map(([botId]) => botId)
             if (matchingBots.length > 0) {
               const shareEnt = entPorFunil / matchingBots.length

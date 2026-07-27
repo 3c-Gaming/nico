@@ -96,7 +96,7 @@ export default function UtmsPage() {
   return (
     <>
       <PageHeader titulo="UTMs / PIDs" descricao="Cadastro de UTMs (Superbet) e PIDs (BetMGM)" />
-      <div className="p-6 max-w-4xl">
+      <div className="p-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative flex-1 min-w-[220px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />

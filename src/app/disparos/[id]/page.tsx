@@ -418,7 +418,7 @@ export default function DetalheDisparoPage() {
           </div>
         }
       />
-      <div className="p-6 max-w-2xl">
+      <div className="p-6">
         {modoEdicao ? (
           <div className="space-y-5">
             <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded-md p-4 space-y-4">
