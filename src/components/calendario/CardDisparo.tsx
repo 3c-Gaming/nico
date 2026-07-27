@@ -128,22 +128,44 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     : (utmEscolhida ? 'superbet' : pidEscolhido ? 'betmgm' : null)
   const dataAtiva = disparoLocal ? dataDoDisparo : item.dataDisparo
 
+  // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
+  // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
   useEffect(() => {
-    // No disparo já cadastrado, busca sempre que houver UTM/PID (aparece direto no card,
-    // sem precisar abrir o modal). No cadastro (ainda sem disparoLocal), só busca com o
-    // modal aberto, a partir do que está selecionado nos dropdowns.
-    const podeBuscar = disparoLocal ? true : open
-    if (!podeBuscar || !utmValorAtivo || !casaAtiva || !dataAtiva) { setResultadoFinanceiro(null); return }
+    if (!disparoLocal || !utmValorAtivo || !casaAtiva || !dataAtiva) return
+    let cancelado = false
 
     setCarregandoResultado(true)
     fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
+        if (cancelado) return
         setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
       })
-      .catch(() => setResultadoFinanceiro(null))
-      .finally(() => setCarregandoResultado(false))
-  }, [open, disparoLocal, utmValorAtivo, casaAtiva, dataAtiva])
+      .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
+      .finally(() => { if (!cancelado) setCarregandoResultado(false) })
+
+    return () => { cancelado = true }
+  }, [disparoLocal, utmValorAtivo, casaAtiva, dataAtiva])
+
+  // Cadastro (ainda sem disparo salvo): preview ao vivo enquanto o modal estiver aberto,
+  // a partir do que está selecionado nos dropdowns.
+  useEffect(() => {
+    if (disparoLocal) return
+    if (!open || !utmValorAtivo || !casaAtiva || !dataAtiva) { setResultadoFinanceiro(null); return }
+    let cancelado = false
+
+    setCarregandoResultado(true)
+    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelado) return
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+      })
+      .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
+      .finally(() => { if (!cancelado) setCarregandoResultado(false) })
+
+    return () => { cancelado = true }
+  }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva])
 
   const painelCPA = resultadoFinanceiro
     ? casasList.find((c) => c.nome.toLowerCase() === resultadoFinanceiro.casa)?.paineisCPA.find((p) => p.id === disparoLocal?.cpaPainelId)
@@ -185,7 +207,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     }
   }
 
-  async function handleCadastrar() {
+  async function handleCadastrar(overrides?: { utm?: string; pid?: string }) {
     const campanha = item.campanhaDaxx
     if (!campanha || !item.tipo || cadastrando) return
     setCadastrando(true)
@@ -193,8 +215,8 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     try {
       const now = new Date().toISOString()
       const parsed = parsearNomeCampanhaDaxx(campanha.nome)
-      const utmSel = utmConfigs.find((u) => u.valor === utmEscolhida)
-      const pidSel = utmConfigs.find((u) => u.valor === pidEscolhido)
+      const utmSel = utmConfigs.find((u) => u.valor === (overrides?.utm ?? utmEscolhida))
+      const pidSel = utmConfigs.find((u) => u.valor === (overrides?.pid ?? pidEscolhido))
 
       const disparoData: Disparo = {
         id: crypto.randomUUID(),
@@ -374,7 +396,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
 
             <div className="pt-2 border-t border-[var(--border)] space-y-3">
               <div>
-                <span className="text-[var(--text-muted)] block text-xs mb-1">Casas de Aposta (confirme antes de cadastrar)</span>
+                <span className="text-[var(--text-muted)] block text-xs mb-1">Casas de Aposta (confirme antes de escolher a UTM/PID — escolher já cadastra e vincula)</span>
                 <TagInput
                   tags={casasSelecionadas}
                   casasDisponiveis={casasList.map((c) => ({ id: c.id, nome: c.nome, cor: c.cor }))}
@@ -404,8 +426,9 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                       {utmConfigs.filter((u) => u.casa === 'superbet').map((u) => (
                         <button
                           key={u.id}
-                          onClick={() => setUtmEscolhida(u.valor)}
-                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                          onClick={() => { setUtmEscolhida(u.valor); handleCadastrar({ utm: u.valor }) }}
+                          disabled={cadastrando}
+                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors disabled:opacity-50"
                         >
                           <span>{u.nome}</span>
                           <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[90px]">{u.valor}</span>
@@ -435,8 +458,9 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                       {utmConfigs.filter((u) => u.casa === 'betmgm').map((u) => (
                         <button
                           key={u.id}
-                          onClick={() => setPidEscolhido(u.valor)}
-                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                          onClick={() => { setPidEscolhido(u.valor); handleCadastrar({ pid: u.valor }) }}
+                          disabled={cadastrando}
+                          className="flex items-center justify-between gap-2 w-full px-2 py-1.5 text-sm rounded text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors disabled:opacity-50"
                         >
                           <span>{u.nome}</span>
                           <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[90px]">{u.valor}</span>
@@ -464,7 +488,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
               variant="primary"
               size="sm"
               icon={<Check size={14} />}
-              onClick={handleCadastrar}
+              onClick={() => handleCadastrar()}
               disabled={cadastrando}
             >
               {cadastrando ? 'Cadastrando...' : 'Cadastrar disparo'}

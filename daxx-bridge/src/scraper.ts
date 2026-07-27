@@ -36,7 +36,7 @@ const CACHE_TTL = 5 * 60 * 1000
 
 let loginPromise: Promise<Page> | null = null
 
-async function getBrowser(): Promise<Browser> {
+export async function getBrowser(): Promise<Browser> {
   if (!browser || !browser.isConnected()) {
     browser = await chromium.launch({
       headless: true,

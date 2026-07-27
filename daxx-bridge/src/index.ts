@@ -1,5 +1,6 @@
 import express from 'express'
 import { listarCampanhas, getTemplateLink, baixarBaseCSV, invalidateCache, close } from './scraper.js'
+import { buscarResultadoAcid, closeSuperbet } from './superbetScraper.js'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3334', 10)
@@ -51,14 +52,41 @@ app.all('/campanhas/refresh', async (_req, res) => {
   }
 })
 
+app.get('/superbet/acid', async (req, res) => {
+  try {
+    const acid = String(req.query.acid ?? '')
+    const startDate = String(req.query.startDate ?? '')
+    const endDate = String(req.query.endDate ?? startDate)
+    if (!acid || !startDate) {
+      res.status(400).json({ error: 'Parametros obrigatorios: acid, startDate (endDate opcional)' })
+      return
+    }
+    const linhas = await buscarResultadoAcid(acid, startDate, endDate)
+    const totais = linhas.reduce(
+      (acc, l) => ({
+        registrations: acc.registrations + l.registrations,
+        firstDepositCount: acc.firstDepositCount + l.firstDepositCount,
+        cpaCount: acc.cpaCount + l.cpaCount,
+      }),
+      { registrations: 0, firstDepositCount: 0, cpaCount: 0 },
+    )
+    res.json({ acid, startDate, endDate, ...totais, linhas })
+  } catch (err) {
+    console.error('[superbet] /superbet/acid error:', (err as Error).message)
+    res.status(502).json({ error: (err as Error).message })
+  }
+})
+
 process.on('SIGTERM', async () => {
   console.log('[daxx] SIGTERM received, closing browser')
+  await closeSuperbet()
   await close()
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
   console.log('[daxx] SIGINT received, closing browser')
+  await closeSuperbet()
   await close()
   process.exit(0)
 })
