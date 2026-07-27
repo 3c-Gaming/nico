@@ -62,7 +62,6 @@ export default function DetalheDisparoPage() {
   const { addToast } = useToast()
 
   const [modoEdicao, setModoEdicao] = useState(false)
-  const [executando, setExecutando] = useState(false)
   const [avancando, setAvancando] = useState(false)
   const [editandoResultados, setEditandoResultados] = useState(false)
   const [resForm, setResForm] = useState<Partial<ResultadoDisparo> & { valorTotalBase?: number }>({})
@@ -296,13 +295,6 @@ export default function DetalheDisparoPage() {
     }
   }
 
-  function handleExecutar() {
-    setExecutando(true)
-    update(id, { status: 'executado' })
-    addToast('success', `${disparo.tipo} executado com sucesso`)
-    setExecutando(false)
-  }
-
   function handleAvancarEsteira() {
     if (!podeAvancar || !proximoTipo || !esteira) return
     setAvancando(true)
@@ -373,17 +365,6 @@ export default function DetalheDisparoPage() {
                 Voltar
               </Button>
             </Link>
-            {!modoEdicao && disparo.status !== 'executado' && disparo.status !== 'cancelado' && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Play size={16} />}
-                onClick={handleExecutar}
-                loading={executando}
-              >
-                Executar
-              </Button>
-            )}
             {modoEdicao ? (
               <>
                 <Button variant="ghost" size="sm" onClick={toggleEdicao} icon={<X size={16} />}>

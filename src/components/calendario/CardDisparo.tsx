@@ -10,12 +10,11 @@ import { useUtmConfigs } from '@/hooks/useUtmConfigs'
 import { Badge } from '../ui/Badge'
 import { Chip } from '../ui/Chip'
 import { Button } from '../ui/Button'
-import { StatusDot } from '../ui/StatusDot'
 import { Modal } from '../ui/Modal'
 import { Dropdown } from '../ui/Dropdown'
 import { TagInput } from '../ui/TagInput'
 import { useToast } from '../ui/Toast'
-import { ExternalLink, Trash2, Play, Check, Clock, Database } from 'lucide-react'
+import { ExternalLink, Trash2, Check, Clock, Database } from 'lucide-react'
 import Link from 'next/link'
 
 const TIPO_CORES: Record<string, string> = {
@@ -56,17 +55,16 @@ function nomeCurto(nome: string): string {
 
 interface BlocoResultadoFinanceiroProps {
   carregando: boolean
-  resultado: { registros: number; ftds: number; cpas: number } | null
-  roi: number | null
+  resultado: { registros: number; ftds: number } | null
 }
 
-function BlocoResultadoFinanceiro({ carregando, resultado, roi }: BlocoResultadoFinanceiroProps) {
+function BlocoResultadoFinanceiro({ carregando, resultado }: BlocoResultadoFinanceiroProps) {
   if (carregando) return <p className="text-xs text-[var(--text-muted)]">Carregando...</p>
   if (!resultado) return <p className="text-xs text-[var(--text-muted)]">Sem dados de resultado pra essa UTM/data ainda</p>
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
           <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
           <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
@@ -75,25 +73,8 @@ function BlocoResultadoFinanceiro({ carregando, resultado, roi }: BlocoResultado
           <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
           <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
         </div>
-        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
-          <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
-        </div>
-        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div
-            className="text-lg font-semibold"
-            style={{ color: roi == null ? 'var(--text-primary)' : roi >= 0 ? 'var(--success)' : 'var(--error)' }}
-          >
-            {roi != null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(0)}%` : '—'}
-          </div>
-          <div className="text-[10px] text-[var(--text-muted)]">ROI</div>
-        </div>
       </div>
-      {roi == null && (
-        <p className="text-[10px] text-[var(--text-muted)] mt-1">
-          Defina o painel de CPA no disparo (em /disparos) pra calcular o ROI
-        </p>
-      )}
+      <p className="text-[10px] text-[var(--text-muted)] mt-1">CPAs indisponível no momento (fonte fora do ar)</p>
     </>
   )
 }
@@ -104,7 +85,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
-  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number } | null>(null)
+  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number } | null>(null)
   const [carregandoResultado, setCarregandoResultado] = useState(false)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
@@ -135,11 +116,11 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     let cancelado = false
 
     setCarregandoResultado(true)
-    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(`/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0 } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
@@ -155,11 +136,11 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     let cancelado = false
 
     setCarregandoResultado(true)
-    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(`/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0 } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
@@ -167,14 +148,8 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     return () => { cancelado = true }
   }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva])
 
-  const painelCPA = resultadoFinanceiro
-    ? casasList.find((c) => c.nome.toLowerCase() === resultadoFinanceiro.casa)?.paineisCPA.find((p) => p.id === disparoLocal?.cpaPainelId)
-    : undefined
-  const custoEstimado = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : null
-  const receitaEstimada = painelCPA && resultadoFinanceiro ? resultadoFinanceiro.cpas * painelCPA.valorCPA : null
-  const roi = custoEstimado && custoEstimado > 0 && receitaEstimada != null
-    ? ((receitaEstimada - custoEstimado) / custoEstimado) * 100
-    : null
+  // CPA/ROI ficam fora por enquanto — a fonte que tinha CPA (3cgg-api-server) está fora do
+  // ar; esse endpoint (3cgg-tracking-system) só traz registros/FTDs, mas está no ar de verdade.
 
   useEffect(() => {
     if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
@@ -189,13 +164,6 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     if (!item.disparoLocal) return
     update(item.disparoLocal.id, { status })
     addToast('success', `Status alterado para ${status.replace('_', ' ')}`)
-  }
-
-  function handleExecutar() {
-    if (!item.disparoLocal) return
-    update(item.disparoLocal.id, { status: 'executado' })
-    addToast('success', `${item.tipo} marcado como executado`)
-    setOpen(false)
   }
 
   function handleDelete() {
@@ -308,14 +276,12 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
       <>
         <button
           onClick={() => setOpen(true)}
-          className="w-full text-left rounded p-2.5 transition-all duration-150 group"
+          className="w-full text-left rounded p-2.5 cursor-pointer"
           style={{
             backgroundColor: 'var(--bg-surface)',
             border: '1px dashed var(--border-strong)',
             borderLeft: `3px solid ${cor}`,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-elevated)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-surface)' }}
         >
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-xs font-semibold" style={{ color: cor }}>{item.tipo}</span>
@@ -477,7 +443,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
               {(utmEscolhida || pidEscolhido) && (
                 <div>
                   <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
-                  <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} roi={roi} />
+                  <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} />
                 </div>
               )}
             </div>
@@ -504,14 +470,12 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
       <>
         <button
           onClick={() => setOpen(true)}
-          className="w-full text-left rounded p-2.5 transition-all duration-150 group"
+          className="w-full text-left rounded p-2.5 cursor-pointer"
           style={{
             backgroundColor: 'var(--bg-surface)',
             border: '1px solid var(--info)',
             borderLeft: '3px solid var(--info)',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-elevated)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-surface)' }}
         >
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-xs font-semibold text-[var(--info)]">{item.tipo}</span>
@@ -560,46 +524,17 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="w-full text-left rounded p-2.5 transition-all duration-150 group"
+        className="w-full text-left rounded p-2.5 cursor-pointer"
         style={{
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           borderLeft: `3px solid ${cor}`,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--bg-elevated)'
-          e.currentTarget.style.borderColor = 'var(--border-strong)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--bg-surface)'
-          e.currentTarget.style.borderColor = 'var(--border)'
         }}
       >
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-xs font-semibold" style={{ color: cor }}>
             {item.tipo}
           </span>
-          {item.status !== 'executado' && item.status !== 'cancelado' && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleExecutar()
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation()
-                  handleExecutar()
-                }
-              }}
-              className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity border border-[var(--border)] text-[var(--d1)] hover:bg-[var(--d1)]/10 cursor-pointer"
-              title="Executar agora"
-            >
-              <Play size={10} />
-              Executar
-            </span>
-          )}
         </div>
 
         <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
@@ -613,42 +548,25 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
         )}
 
         {resultadoFinanceiro && (
-          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mb-1">
-            <span>Reg {formatNumero(resultadoFinanceiro.registros)}</span>
+          <div className="flex items-center gap-1 text-sm text-text-primary my-2">
+            <span className="font-semibold">{formatNumero(resultadoFinanceiro.registros)} REG</span>
             <span>·</span>
-            <span>FTD {formatNumero(resultadoFinanceiro.ftds)}</span>
-            <span>·</span>
-            <span>CPA {formatNumero(resultadoFinanceiro.cpas)}</span>
-            {roi != null && (
-              <>
-                <span>·</span>
-                <span style={{ color: roi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
-                </span>
-              </>
-            )}
+            <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+        <div className="flex items-center gap-1.5 text-[12px] text-text-primary">
           <span>{item.horarioDisparo}</span>
           <span>·</span>
           {item.totalBase != null && (
             <>
-              <span>{formatNumero(item.totalBase)} base</span>
+              <span>Base {formatNumero(item.totalBase)}</span>
               <span>·</span>
             </>
           )}
-          {item.fonte === 'local' ? (
-            <StatusDot status={item.status as StatusDisparo} size={6} />
-          ) : (
-            <span className="inline-block rounded-full" style={{ width: 6, height: 6, backgroundColor: 'var(--text-muted)' }} />
-          )}
-          <span className="capitalize">{item.status.replace('_', ' ')}</span>
           {item.entregues != null && (
             <>
-              <span>·</span>
-              <span className="text-[var(--success)]">{formatNumero(item.entregues)} env.</span>
+              <span className="">{formatNumero(item.entregues)} Entregues.</span>
             </>
           )}
         </div>
@@ -672,11 +590,10 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
                         handleStatusChange(opt.value)
                         setOpen(false)
                       }}
-                      className={`flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded transition-colors ${
-                        opt.value === item.status
-                          ? 'text-[var(--d1)] bg-[var(--d1)]/10'
-                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
-                      }`}
+                      className={`flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded transition-colors ${opt.value === item.status
+                        ? 'text-[var(--d1)] bg-[var(--d1)]/10'
+                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
+                        }`}
                     >
                       {opt.value === item.status && <Check size={14} className="text-[var(--d1)]" />}
                       <span className={opt.value === item.status ? '' : 'ml-6'}>{opt.label}</span>
@@ -717,11 +634,11 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           )}
 
           {item.disparoLocal && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 w-full">
               <div>
                 <span className="text-[var(--text-muted)] block text-xs mb-1">UTM (Superbet)</span>
                 <Dropdown label={item.disparoLocal.utm || 'Nenhum'}>
-                  <div className="p-1 min-w-[200px] max-h-[240px] overflow-y-auto">
+                  <div className="p-1 w-full overflow-y-auto">
                     {item.disparoLocal.utm && (
                       <button
                         onClick={() => update(item.disparoLocal!.id, { utm: undefined })}
@@ -800,7 +717,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           {(utmDoDisparo || pidDoDisparo) && (
             <div>
               <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
-              <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} roi={roi} />
+              <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} />
             </div>
           )}
 
@@ -822,11 +739,6 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-[var(--border)]">
-          {item.status !== 'executado' && item.status !== 'cancelado' && (
-            <Button variant="primary" size="sm" icon={<Play size={14} />} onClick={handleExecutar}>
-              Executar
-            </Button>
-          )}
           {item.disparoLocal && (
             <Link href={`/disparos/${item.disparoLocal.id}`}>
               <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />}>
