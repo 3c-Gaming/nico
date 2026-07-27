@@ -74,8 +74,9 @@ export function embedRelatorio(numeros: { id: string; nome: string; numero: stri
   const ativos = numeros.filter(n => n.status === 'ativo').length
   const inativos = numeros.filter(n => n.status === 'inativo').length
   const agora = new Date()
-  const horas = agora.getHours().toString().padStart(2, '0')
-  const minutos = agora.getMinutes().toString().padStart(2, '0')
+  const horarioBrasilia = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  const horas = horarioBrasilia.getHours().toString().padStart(2, '0')
+  const minutos = horarioBrasilia.getMinutes().toString().padStart(2, '0')
 
   const embed: DiscordEmbed = {
     title: `📋 Relatório Geral — ${horas}:${minutos}`,

@@ -23,8 +23,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         ) : (
           <div className="flex h-full">
             <Sidebar />
-            <main className="flex-1 flex flex-col overflow-y-auto bg-[var(--bg-base)] lg:ml-0">
+            <main className="flex justify-center w-full overflow-y-auto bg-[var(--bg-base)] lg:ml-0">
+             <div className='w-full p-4'>
               {children}
+              </div>
             </main>
           </div>
         )}

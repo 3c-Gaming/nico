@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
@@ -148,12 +149,10 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-16">UTM/PID:</span>
-        <input
-          type="text"
+        <UtmComboBox
           value={utm}
-          onChange={(e) => setUtm(e.target.value)}
-          placeholder="ex: pilhado-disp-traf-odm ou 13382"
-          className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
+          onChange={setUtm}
+          placeholder="selecione ou digite e Enter para cadastrar"
         />
       </div>
       <div className="flex items-center gap-2">

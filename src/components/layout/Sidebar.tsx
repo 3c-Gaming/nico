@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash } from 'lucide-react'
+import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 
@@ -17,7 +17,7 @@ const LINKS = [
   { href: '/testes', label: 'Testes', icon: Smartphone },
   { href: '/funis', label: 'Funis', icon: Layers },
   { href: '/paginas', label: 'Páginas', icon: FileText },
-  { href: '/copa-2026', label: 'Copa 2026', icon: null },
+  { href: '/copa-2026', label: 'Jogos', icon: LandPlot },
   { href: '/casas', label: 'Casas', icon: Dices },
   { href: '/bases', label: 'Bases', icon: null },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
@@ -137,7 +137,7 @@ export function Sidebar() {
             title={collapsed ? 'Novo D1' : undefined}
           >
             <Plus size={18} />
-            {!collapsed && <span>Novo D1</span>}
+            {!collapsed && <span>Novo </span>}
           </Link>
         </div>
       </aside>

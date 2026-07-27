@@ -3,9 +3,9 @@
 import type { TipoDisparo, CasaAposta, BaseCSV, TemplateDaxx, NumeroSendpulse } from '@/types'
 import { Input } from '../ui/Input'
 import { TimePicker } from '../ui/TimePicker'
+import { UtmComboBox } from '../ui/UtmComboBox'
 import { PreviewNomenclatura } from './PreviewNomenclatura'
 import { EsteiraPreview } from './EsteiraPreview'
-import { getState } from '@/lib/store'
 
 interface StepAgendamentoProps {
   tipo: TipoDisparo
@@ -85,29 +85,11 @@ export function StepAgendamento({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">UTM (Superbet)</span>
-          <select
-            value={utm}
-            onChange={(e) => onChangeUtm(e.target.value)}
-            className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-          >
-            <option value="">Nenhum (UTM livre)</option>
-            {Object.values(getState().utmConfigs).filter((u) => u.casa === 'superbet').map((u) => (
-              <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-            ))}
-          </select>
+          <UtmComboBox value={utm} onChange={onChangeUtm} casa="superbet" size="md" placeholder="selecione ou digite e Enter para cadastrar" />
         </div>
         <div>
           <span className="text-xs text-[var(--text-secondary)] font-medium block mb-1">PID (BetMGM)</span>
-          <select
-            value={betmgmPid}
-            onChange={(e) => onChangeBetmgmPid(e.target.value)}
-            className="h-9 w-full px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-          >
-            <option value="">Nenhum (PID livre)</option>
-            {Object.values(getState().utmConfigs).filter((u) => u.casa === 'betmgm').map((u) => (
-              <option key={u.id} value={u.valor}>{u.nome} ({u.valor})</option>
-            ))}
-          </select>
+          <UtmComboBox value={betmgmPid} onChange={onChangeBetmgmPid} casa="betmgm" size="md" placeholder="selecione ou digite e Enter para cadastrar" />
         </div>
       </div>
 

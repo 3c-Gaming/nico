@@ -2,140 +2,276 @@
 
 import { useState, useMemo } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Chip } from '@/components/ui/Chip'
+import { useToast } from '@/components/ui/Toast'
 import { useUtmConfigs } from '@/hooks/useUtmConfigs'
-import { useCasasAposta } from '@/hooks/useCasasAposta'
-import { Plus, Trash2, Pencil, X, Check } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Check, Copy, Search } from 'lucide-react'
+import type { UtmConfig } from '@/types'
+
+const CASA_INFO = {
+  superbet: { label: 'Superbet', short: 'UTM', cor: '#22c55e' },
+  betmgm: { label: 'BetMGM', short: 'PID', cor: '#6366f1' },
+} as const
+
+type Casa = keyof typeof CASA_INFO
 
 export default function UtmsPage() {
   const { list, add, update, remove } = useUtmConfigs()
-  const { casas } = useCasasAposta()
-  const [nome, setNome] = useState('')
-  const [valor, setValor] = useState('')
-  const [casa, setCasa] = useState<'superbet' | 'betmgm'>('superbet')
+  const { addToast } = useToast()
+
+  const [busca, setBusca] = useState('')
+  const [filtroCasa, setFiltroCasa] = useState<'all' | Casa>('all')
+
+  const [novoAberto, setNovoAberto] = useState(false)
+  const [novoNome, setNovoNome] = useState('')
+  const [novoValor, setNovoValor] = useState('')
+  const [novoCasa, setNovoCasa] = useState<Casa>('superbet')
+
   const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [editNome, setEditNome] = useState('')
+  const [editValor, setEditValor] = useState('')
+  const [editCasa, setEditCasa] = useState<Casa>('superbet')
 
-  const superbetList = useMemo(() => list.filter((u) => u.casa === 'superbet'), [list])
-  const betmgmList = useMemo(() => list.filter((u) => u.casa === 'betmgm'), [list])
+  const itensFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return list
+      .filter((item) => filtroCasa === 'all' || item.casa === filtroCasa)
+      .filter(
+        (item) =>
+          !termo || item.nome.toLowerCase().includes(termo) || item.valor.toLowerCase().includes(termo)
+      )
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [list, busca, filtroCasa])
 
-  function handleAdd() {
-    if (!nome.trim() || !valor.trim()) return
-    add({ nome: nome.trim(), valor: valor.trim(), casa })
-    setNome('')
-    setValor('')
+  function handleCopy(item: UtmConfig) {
+    navigator.clipboard.writeText(item.valor)
+    addToast('success', `${CASA_INFO[item.casa].short} copiado`)
   }
 
-  function handleSaveEdit(id: string) {
-    if (!nome.trim() || !valor.trim()) return
-    update(id, { nome: nome.trim(), valor: valor.trim(), casa })
-    setEditandoId(null)
-    setNome('')
-    setValor('')
+  function handleStartNovo() {
+    setNovoAberto(true)
+    setNovoNome('')
+    setNovoValor('')
+    setNovoCasa(filtroCasa === 'all' ? 'superbet' : filtroCasa)
   }
 
-  function handleEdit(item: { id: string; nome: string; valor: string; casa: 'superbet' | 'betmgm' }) {
+  function handleCancelNovo() {
+    setNovoAberto(false)
+    setNovoNome('')
+    setNovoValor('')
+  }
+
+  function handleSaveNovo() {
+    if (!novoNome.trim() || !novoValor.trim()) return
+    add({ nome: novoNome.trim(), valor: novoValor.trim(), casa: novoCasa })
+    addToast('success', 'Cadastrado com sucesso')
+    handleCancelNovo()
+  }
+
+  function handleStartEdit(item: UtmConfig) {
     setEditandoId(item.id)
-    setNome(item.nome)
-    setValor(item.valor)
-    setCasa(item.casa)
+    setEditNome(item.nome)
+    setEditValor(item.valor)
+    setEditCasa(item.casa)
   }
 
   function handleCancelEdit() {
     setEditandoId(null)
-    setNome('')
-    setValor('')
-    setCasa('superbet')
   }
 
-  function renderList(items: { id: string; nome: string; valor: string; casa: 'superbet' | 'betmgm' }[], label: string, cor: string) {
-    return (
-      <div>
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{label}</h3>
-        <div className="space-y-2">
-          {items.length === 0 && (
-            <p className="text-xs text-[var(--text-muted)]">Nenhum cadastrado</p>
-          )}
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2">
-              <div className="flex items-center gap-3">
-                <Chip label={item.casa === 'superbet' ? 'SB' : 'MGM'} cor={cor} size="sm" />
-                <div>
-                  <span className="text-sm text-[var(--text-primary)]">{item.nome}</span>
-                  <span className="text-xs text-[var(--text-muted)] ml-2 font-mono">{item.valor}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => handleEdit(item)} className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]">
-                  <Pencil size={14} />
-                </button>
-                <button onClick={() => remove(item.id)} className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
+  function handleSaveEdit(id: string) {
+    if (!editNome.trim() || !editValor.trim()) return
+    update(id, { nome: editNome.trim(), valor: editValor.trim(), casa: editCasa })
+    setEditandoId(null)
+  }
+
+  function handleRemove(item: UtmConfig) {
+    if (!confirm(`Remover "${item.nome}"?`)) return
+    remove(item.id)
+    addToast('success', 'Removido')
   }
 
   return (
     <>
       <PageHeader titulo="UTMs / PIDs" descricao="Cadastro de UTMs (Superbet) e PIDs (BetMGM)" />
-      <div className="p-6 max-w-2xl">
-        <div className="glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] rounded-md p-5 mb-6">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">
-            {editandoId ? 'Editar' : 'Nova'} Configuração
-          </h3>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <Input
-                label="Nome"
-                placeholder="ex: superbet_junho_d1"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-              />
-              <Input
-                label="Valor"
-                placeholder={casa === 'superbet' ? 'ex: superbet_junho_d1' : 'ex: 13382'}
-                value={valor}
-                onChange={(e) => setValor(e.target.value)}
-              />
-              <Select
-                label="Casa"
-                value={casa}
-                options={[
-                  { value: 'superbet', label: 'Superbet (UTM)' },
-                  { value: 'betmgm', label: 'BetMGM (PID)' },
-                ]}
-                onChange={(e) => setCasa(e.target.value as 'superbet' | 'betmgm')}
-              />
-            </div>
-            <div className="flex gap-2">
-              {editandoId ? (
-                <>
-                  <Button size="sm" icon={<Check size={14} />} onClick={() => handleSaveEdit(editandoId)}>
-                    Salvar
-                  </Button>
-                  <Button size="sm" variant="ghost" icon={<X size={14} />} onClick={handleCancelEdit}>
-                    Cancelar
-                  </Button>
-                </>
-              ) : (
-                <Button size="sm" icon={<Plus size={14} />} onClick={handleAdd}>
-                  Adicionar
-                </Button>
-              )}
-            </div>
+      <div className="p-6 max-w-4xl">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome ou valor..."
+              className="w-full h-9 pl-9 pr-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
           </div>
+          <div className="flex items-center gap-1 p-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)]">
+            {(['all', 'superbet', 'betmgm'] as const).map((opcao) => (
+              <button
+                key={opcao}
+                onClick={() => setFiltroCasa(opcao)}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                  filtroCasa === opcao
+                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {opcao === 'all' ? 'Todos' : CASA_INFO[opcao].label}
+              </button>
+            ))}
+          </div>
+          <Button size="sm" icon={<Plus size={14} />} onClick={handleStartNovo} disabled={novoAberto}>
+            Nova
+          </Button>
         </div>
 
-        <div className="grid gap-6">
-          {renderList(superbetList, 'UTMs — Superbet', '#22c55e')}
-          {renderList(betmgmList, 'PIDs — BetMGM', '#6366f1')}
+        <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
+          <div className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
+            <span>Casa</span>
+            <span>Nome</span>
+            <span>Valor</span>
+            <span className="text-right">Ações</span>
+          </div>
+
+          {novoAberto && (
+            <div className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] items-center">
+              <Select
+                value={novoCasa}
+                options={[
+                  { value: 'superbet', label: 'Superbet' },
+                  { value: 'betmgm', label: 'BetMGM' },
+                ]}
+                onChange={(e) => setNovoCasa(e.target.value as Casa)}
+              />
+              <input
+                autoFocus
+                value={novoNome}
+                onChange={(e) => setNovoNome(e.target.value)}
+                placeholder="ex: superbet_junho_d1"
+                className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-strong)]"
+              />
+              <input
+                value={novoValor}
+                onChange={(e) => setNovoValor(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveNovo()}
+                placeholder={novoCasa === 'superbet' ? 'ex: superbet_junho_d1' : 'ex: 13382'}
+                className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono focus:outline-none focus:border-[var(--border-strong)]"
+              />
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={handleSaveNovo}
+                  className="flex items-center justify-center w-7 h-7 rounded text-[var(--success)] hover:bg-[var(--success)]/10"
+                  title="Salvar"
+                >
+                  <Check size={15} />
+                </button>
+                <button
+                  onClick={handleCancelNovo}
+                  className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                  title="Cancelar"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {itensFiltrados.length === 0 && !novoAberto && (
+            <p className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">
+              {list.length === 0 ? 'Nenhum cadastrado' : 'Nenhum resultado para o filtro atual'}
+            </p>
+          )}
+
+          {itensFiltrados.map((item) => {
+            const info = CASA_INFO[item.casa]
+            const editando = editandoId === item.id
+
+            if (editando) {
+              return (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 bg-[var(--bg-elevated)] items-center"
+                >
+                  <Select
+                    value={editCasa}
+                    options={[
+                      { value: 'superbet', label: 'Superbet' },
+                      { value: 'betmgm', label: 'BetMGM' },
+                    ]}
+                    onChange={(e) => setEditCasa(e.target.value as Casa)}
+                  />
+                  <input
+                    autoFocus
+                    value={editNome}
+                    onChange={(e) => setEditNome(e.target.value)}
+                    className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-strong)]"
+                  />
+                  <input
+                    value={editValor}
+                    onChange={(e) => setEditValor(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(item.id)}
+                    className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--border-strong)]"
+                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => handleSaveEdit(item.id)}
+                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--success)] hover:bg-[var(--success)]/10"
+                      title="Salvar"
+                    >
+                      <Check size={15} />
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                      title="Cancelar"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div
+                key={item.id}
+                className="group grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
+              >
+                <Chip label={info.short} cor={info.cor} size="sm" />
+                <span className="text-sm text-[var(--text-primary)] truncate" title={item.nome}>
+                  {item.nome}
+                </span>
+                <span className="text-xs text-[var(--text-muted)] font-mono truncate" title={item.valor}>
+                  {item.valor}
+                </span>
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => handleCopy(item)}
+                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                    title={`Copiar ${info.short}`}
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleStartEdit(item)}
+                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleRemove(item)}
+                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title="Remover"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </>
