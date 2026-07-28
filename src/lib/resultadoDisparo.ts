@@ -20,6 +20,12 @@ export function formatRoi(x: number): string {
   return `${x.toFixed(x % 1 === 0 ? 0 : 1)}x`
 }
 
+/** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
+export function nomeCurto(nome: string): string {
+  const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
+  return cortado || nome
+}
+
 export interface ResultadoUtm {
   registros: number
   ftds: number

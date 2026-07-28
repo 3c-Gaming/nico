@@ -17,7 +17,7 @@ import { useToast } from '../ui/Toast'
 import { StatNumber } from '../ui/StatNumber'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
-import { formatNumero, CUSTO_POR_ENTREGUE } from '@/lib/resultadoDisparo'
+import { formatNumero, CUSTO_POR_ENTREGUE, nomeCurto } from '@/lib/resultadoDisparo'
 import { ExternalLink, Trash2, Check, Clock, Database, Pin } from 'lucide-react'
 import Link from 'next/link'
 
@@ -48,12 +48,6 @@ export interface ResultadoContribuicaoDia {
 interface CardItemCalendarioProps {
   item: ItemCalendario
   onResultado?: (id: string, r: ResultadoContribuicaoDia | null) => void
-}
-
-/** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
-function nomeCurto(nome: string): string {
-  const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
-  return cortado || nome
 }
 
 interface BlocoResultadoFinanceiroProps {

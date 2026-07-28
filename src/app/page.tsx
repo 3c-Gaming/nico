@@ -12,6 +12,7 @@ import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
+import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 
@@ -136,7 +137,7 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
             {disparo.tipo}
           </span>
           <span className="font-mono text-xs text-[var(--text-primary)] truncate max-w-[180px]" title={disparo.nomenclatura}>
-            {disparo.nomenclatura}
+            {nomeCurto(disparo.nomenclatura)}
           </span>
         </div>
       </td>
