@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const BRIDGE_URL = process.env.NEXT_PUBLIC_DAXX_BRIDGE_URL || 'http://localhost:3334'
-const EXPORT_API_BASE = 'https://3cgg-api-server-production.up.railway.app'
+const EXPORT_API_BASE = 'https://3cgg-extraction-system.up.railway.app'
 const EXPORT_API_KEY = process.env.EXPORT_API_KEY
 const PROJECT = 'pilhado'
 

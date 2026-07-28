@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const API_BASE = 'https://3cgg-api-server-production.up.railway.app'
+const API_BASE = 'https://3cgg-extraction-system.up.railway.app'
 const API_KEY = process.env.EXPORT_API_KEY
 const PROJECT = 'pilhado'
 
@@ -23,7 +23,8 @@ async function fetchCasa(casa: 'superbet' | 'mgm', date: string): Promise<CasaEx
     return { ok: false, data: [], count: 0, error: 'EXPORT_API_KEY não configurada' }
   }
 
-  const url = `${API_BASE}/export/${casa}?key=${API_KEY}&project=${PROJECT}&date=${date}`
+  const apiCasa = casa === 'mgm' ? 'betmgm' : casa
+  const url = `${API_BASE}/export/${apiCasa}?key=${API_KEY}&project=${PROJECT}&date=${date}`
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) {

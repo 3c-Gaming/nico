@@ -55,7 +55,7 @@ function nomeCurto(nome: string): string {
 
 interface BlocoResultadoFinanceiroProps {
   carregando: boolean
-  resultado: { registros: number; ftds: number } | null
+  resultado: { registros: number; ftds: number; cpas: number } | null
 }
 
 function BlocoResultadoFinanceiro({ carregando, resultado }: BlocoResultadoFinanceiroProps) {
@@ -63,19 +63,20 @@ function BlocoResultadoFinanceiro({ carregando, resultado }: BlocoResultadoFinan
   if (!resultado) return <p className="text-xs text-[var(--text-muted)]">Sem dados de resultado pra essa UTM/data ainda</p>
 
   return (
-    <>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
-          <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
-        </div>
-        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
-          <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
-        </div>
+    <div className="grid grid-cols-3 gap-2">
+      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
+        <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
       </div>
-      <p className="text-[10px] text-[var(--text-muted)] mt-1">CPAs indisponível no momento (fonte fora do ar)</p>
-    </>
+      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
+        <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
+      </div>
+      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
+        <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
+      </div>
+    </div>
   )
 }
 
@@ -85,7 +86,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
-  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number } | null>(null)
+  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number } | null>(null)
   const [carregandoResultado, setCarregandoResultado] = useState(false)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
@@ -116,11 +117,11 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     let cancelado = false
 
     setCarregandoResultado(true)
-    fetch(`/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
@@ -136,20 +137,17 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     let cancelado = false
 
     setCarregandoResultado(true)
-    fetch(`/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
 
     return () => { cancelado = true }
   }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva])
-
-  // CPA/ROI ficam fora por enquanto — a fonte que tinha CPA (3cgg-api-server) está fora do
-  // ar; esse endpoint (3cgg-tracking-system) só traz registros/FTDs, mas está no ar de verdade.
 
   useEffect(() => {
     if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
@@ -552,6 +550,8 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.registros)} REG</span>
             <span>·</span>
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
+            <span>·</span>
+            <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
           </div>
         )}
 
