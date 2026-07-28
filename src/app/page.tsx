@@ -155,6 +155,20 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
         </span>
       </td>
       <td className="py-3 px-3 text-right">
+        {custoPorReg != null ? (
+          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorReg} prefix="R$ " decimals={2} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {custoPorFtd != null ? (
+          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorFtd} prefix="R$ " decimals={2} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
         <span className="font-semibold font-mono text-green-500">
           {entregues != null ? <StatNumber value={entregues} /> : '—'}
         </span>
@@ -176,20 +190,6 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
       <td className="py-3 px-3 text-right">
         {resultado ? (
           <span className="font-semibold font-mono text-[var(--d1)]"><StatNumber value={resultado.ftds} /></span>
-        ) : (
-          <span className="text-xs text-[var(--text-muted)]">—</span>
-        )}
-      </td>
-      <td className="py-3 px-3 text-right">
-        {custoPorReg != null ? (
-          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorReg} prefix="R$ " decimals={2} /></span>
-        ) : (
-          <span className="text-xs text-[var(--text-muted)]">—</span>
-        )}
-      </td>
-      <td className="py-3 px-3 text-right">
-        {custoPorFtd != null ? (
-          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorFtd} prefix="R$ " decimals={2} /></span>
         ) : (
           <span className="text-xs text-[var(--text-muted)]">—</span>
         )}
@@ -1073,12 +1073,12 @@ export default function HomePage() {
                     <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Data</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Reg</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Reg</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">CPAs</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
