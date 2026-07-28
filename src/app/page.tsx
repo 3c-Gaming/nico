@@ -125,6 +125,8 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
   })
 
   const casaPrimaria = disparo.casasAposta[0] ? casas[disparo.casasAposta[0]] : null
+  const custoPorReg = resultado && resultado.registros > 0 ? custo / resultado.registros : null
+  const custoPorFtd = resultado && resultado.ftds > 0 ? custo / resultado.ftds : null
 
   return (
     <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -174,6 +176,20 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
       <td className="py-3 px-3 text-right">
         {resultado ? (
           <span className="font-semibold font-mono text-[var(--d1)]"><StatNumber value={resultado.ftds} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {custoPorReg != null ? (
+          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorReg} prefix="R$ " decimals={2} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {custoPorFtd != null ? (
+          <span className="font-semibold font-mono text-emerald-400"><StatNumber value={custoPorFtd} prefix="R$ " decimals={2} /></span>
         ) : (
           <span className="text-xs text-[var(--text-muted)]">—</span>
         )}
@@ -1061,6 +1077,8 @@ export default function HomePage() {
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Reg</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">CPAs</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
