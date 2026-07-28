@@ -53,30 +53,51 @@ function nomeCurto(nome: string): string {
   return cortado || nome
 }
 
+/** Valor de cada CPA (R$), fixo por casa: Superbet paga R$500/CPA, BetMGM paga R$260/CPA. */
+const VALOR_CPA: Record<'superbet' | 'betmgm', number> = {
+  superbet: 500,
+  betmgm: 260,
+}
+
 interface BlocoResultadoFinanceiroProps {
   carregando: boolean
   resultado: { registros: number; ftds: number; cpas: number } | null
+  custo: number
+  receita: number
+  roi: number | null
 }
 
-function BlocoResultadoFinanceiro({ carregando, resultado }: BlocoResultadoFinanceiroProps) {
+function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }: BlocoResultadoFinanceiroProps) {
   if (carregando) return <p className="text-xs text-[var(--text-muted)]">Carregando...</p>
   if (!resultado) return <p className="text-xs text-[var(--text-muted)]">Sem dados de resultado pra essa UTM/data ainda</p>
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
-        <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
+    <>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
+        </div>
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
+        </div>
+        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
+        </div>
       </div>
-      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
-        <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
-      </div>
-      <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-        <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
-        <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
-      </div>
-    </div>
+      {roi != null ? (
+        <div className="flex items-center justify-between mt-2 p-2 rounded bg-[var(--bg-surface)]">
+          <span className="text-[10px] text-[var(--text-muted)]">Receita {formatMoeda(receita)} · Custo {formatMoeda(custo)}</span>
+          <span className={`text-sm font-semibold ${roi >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+            ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+          </span>
+        </div>
+      ) : (
+        <p className="text-[10px] text-[var(--text-muted)] mt-1">ROI indisponível — sem custo/casa suficiente pra calcular</p>
+      )}
+    </>
   )
 }
 
@@ -109,6 +130,11 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     ? (utmDoDisparo ? 'superbet' : pidDoDisparo ? 'betmgm' : null)
     : (utmEscolhida ? 'superbet' : pidEscolhido ? 'betmgm' : null)
   const dataAtiva = disparoLocal ? dataDoDisparo : item.dataDisparo
+
+  const valorCPA = casaAtiva ? VALOR_CPA[casaAtiva] : 0
+  const custo = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : 0
+  const receita = resultadoFinanceiro ? resultadoFinanceiro.cpas * valorCPA : 0
+  const roi = resultadoFinanceiro && custo > 0 && valorCPA > 0 ? ((receita - custo) / custo) * 100 : null
 
   // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
   // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
@@ -441,7 +467,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
               {(utmEscolhida || pidEscolhido) && (
                 <div>
                   <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
-                  <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} />
+                  <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} custo={custo} receita={receita} roi={roi} />
                 </div>
               )}
             </div>
@@ -552,6 +578,14 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
             <span>·</span>
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
+            {roi != null && (
+              <>
+                <span>·</span>
+                <span className={`font-semibold ${roi >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                  ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+                </span>
+              </>
+            )}
           </div>
         )}
 
@@ -717,7 +751,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           {(utmDoDisparo || pidDoDisparo) && (
             <div>
               <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
-              <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} />
+              <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} custo={custo} receita={receita} roi={roi} />
             </div>
           )}
 
