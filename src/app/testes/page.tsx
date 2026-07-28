@@ -186,11 +186,16 @@ export default function TestesPage() {
     }
   }
 
+  // O backend só devolve em config.bots os números ativos — usa isso como filtro
+  // pra esconder resultados/histórico de números inativos nesta página.
+  const botIdsAtivos = new Set((config?.bots ?? []).map((b) => b.botId))
+  const resultadosAtivos = resultados.filter((r) => botIdsAtivos.has(r.botId))
+
   const stats = {
-    total: resultados.length,
-    ok: resultados.filter((r) => r.status === 'ok').length,
-    erro: resultados.filter((r) => r.status === 'erro').length,
-    outros: resultados.filter((r) => r.status !== 'ok' && r.status !== 'erro').length,
+    total: resultadosAtivos.length,
+    ok: resultadosAtivos.filter((r) => r.status === 'ok').length,
+    erro: resultadosAtivos.filter((r) => r.status === 'erro').length,
+    outros: resultadosAtivos.filter((r) => r.status !== 'ok' && r.status !== 'erro').length,
   }
 
   const proximoTeste = config?.lastRunAt && config?.pollIntervalMs && !config.cronPaused
@@ -328,13 +333,13 @@ export default function TestesPage() {
               <RefreshCw size={12} className="animate-spin" />
               Carregando...
             </div>
-          ) : resultados.length === 0 ? (
+          ) : resultadosAtivos.length === 0 ? (
             <div className="text-xs text-[var(--text-muted)] text-center py-4">
               Nenhum teste realizado ainda. Clique em um bot abaixo para testar.
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-              {resultados.map((r) => {
+              {resultadosAtivos.map((r) => {
                 const st = STATUS_MAP[r.status] || STATUS_MAP.pendente
                 const testandoEste = testando === r.botId
                 return (
@@ -397,13 +402,13 @@ export default function TestesPage() {
             <Clock size={16} className="text-[var(--d1)]" />
             Histórico de Testes
           </h2>
-          {resultados.length === 0 ? (
+          {resultadosAtivos.length === 0 ? (
             <div className="text-xs text-[var(--text-muted)] text-center py-8">
               Nenhum teste realizado ainda.
             </div>
           ) : (
             <div className="space-y-1.5">
-              {resultados.map((r) => {
+              {resultadosAtivos.map((r) => {
                 const st = STATUS_MAP[r.status] || STATUS_MAP.pendente
                 const expandido = expandedId === r.botId
                 return (

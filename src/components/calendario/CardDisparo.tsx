@@ -47,6 +47,10 @@ function formatMoeda(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function formatRoi(x: number): string {
+  return `${x.toFixed(x % 1 === 0 ? 0 : 1)}x`
+}
+
 /** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
 function nomeCurto(nome: string): string {
   const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
@@ -90,8 +94,8 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
       {roi != null ? (
         <div className="flex items-center justify-between mt-2 p-2 rounded bg-[var(--bg-surface)]">
           <span className="text-[10px] text-[var(--text-muted)]">Receita {formatMoeda(receita)} · Custo {formatMoeda(custo)}</span>
-          <span className={`text-sm font-semibold ${roi >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-            ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+          <span className={`text-sm font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+            ROI {formatRoi(roi)}
           </span>
         </div>
       ) : (
@@ -134,7 +138,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const valorCPA = casaAtiva ? VALOR_CPA[casaAtiva] : 0
   const custo = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : 0
   const receita = resultadoFinanceiro ? resultadoFinanceiro.cpas * valorCPA : 0
-  const roi = resultadoFinanceiro && custo > 0 && valorCPA > 0 ? ((receita - custo) / custo) * 100 : null
+  const roi = resultadoFinanceiro && custo > 0 && valorCPA > 0 ? receita / custo : null
 
   // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
   // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
@@ -572,17 +576,14 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
         )}
 
         {resultadoFinanceiro && (
-          <div className="flex items-center gap-1 text-sm text-text-primary my-2">
+          <div className="grid grid-cols-4 items-center text-sm text-text-primary my-2">
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.registros)} REG</span>
-            <span>·</span>
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
-            <span>·</span>
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
             {roi != null && (
               <>
-                <span>·</span>
-                <span className={`font-semibold ${roi >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                  ROI {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+                <span className={`font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                  {formatRoi(roi)}
                 </span>
               </>
             )}

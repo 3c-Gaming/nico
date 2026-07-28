@@ -22,7 +22,9 @@ export async function GET() {
     let bots: { botId: string; nome: string; numero: string }[] = []
     try {
       const botList = await obterBots()
-      bots = botList.map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
+      bots = botList
+        .filter((b) => b.status === 'ativo')
+        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
     } catch {}
 
     return NextResponse.json({
@@ -65,7 +67,9 @@ export async function POST(req: Request) {
     let bots: { botId: string; nome: string; numero: string }[] = []
     try {
       const botList = await obterBots()
-      bots = botList.map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
+      bots = botList
+        .filter((b) => b.status === 'ativo')
+        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
     } catch {}
 
     return NextResponse.json({

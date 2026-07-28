@@ -14,6 +14,7 @@ export async function obterBots(): Promise<BotConfig[]> {
       numero: n.numero,
       botNumero: n.numero,
       nome: n.nome,
+      status: n.status,
     }))
 }
 

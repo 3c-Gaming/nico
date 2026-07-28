@@ -5,6 +5,7 @@ export interface BotConfig {
   numero: string
   botNumero: string
   nome: string
+  status: 'ativo' | 'inativo'
 }
 
 export interface BotTestResult {
