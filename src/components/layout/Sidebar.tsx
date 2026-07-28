@@ -7,21 +7,21 @@ import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 
 const LINKS = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/demandas', label: 'Demandas', icon: ClipboardList },
+  { href: '/', label: 'Geral', icon: Home },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
-  { href: '/disparos', label: 'Disparos', icon: List },
-  { href: '/esteiras', label: 'Esteiras', icon: GitBranch },
+  { href: '/daxx', label: 'Disparos', icon: Send },
+  //{ href: '/disparos', label: 'Disparos', icon: List },
+  //{ href: '/esteiras', label: 'Esteiras', icon: GitBranch },
   { href: '/numeros', label: 'Números', icon: null },
   { href: '/utms', label: 'UTMs/PIDs', icon: Hash },
   { href: '/testes', label: 'Testes', icon: Smartphone },
   { href: '/funis', label: 'Funis', icon: Layers },
   { href: '/paginas', label: 'Páginas', icon: FileText },
-  { href: '/copa-2026', label: 'Jogos', icon: LandPlot },
+  //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
   { href: '/casas', label: 'Casas', icon: Dices },
   { href: '/bases', label: 'Bases', icon: null },
+  { href: '/demandas', label: 'Demandas', icon: ClipboardList },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
-  { href: '/daxx', label: 'daxX', icon: Send },
   { href: '/resultados', label: 'Resultados', icon: Trophy },
 ]
 
@@ -50,9 +50,8 @@ export function Sidebar() {
       </button>
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-[var(--bg-surface)] border-r border-[var(--border)] transition-all duration-200 ${
-          mobileOpen ? 'translate-x-0 w-[240px]' : '-translate-x-full w-[240px]'
-        } lg:translate-x-0 ${collapsed ? 'lg:w-[60px]' : 'lg:w-[240px]'}`}
+        className={`fixed lg:static inset-y-0 left-0 z-40 flex flex-col bg-[var(--bg-surface)] border-r border-[var(--border)] transition-all duration-200 ${mobileOpen ? 'translate-x-0 w-[240px]' : '-translate-x-full w-[240px]'
+          } lg:translate-x-0 ${collapsed ? 'lg:w-[60px]' : 'lg:w-[240px]'}`}
       >
         <div className={`flex items-center h-14 border-b border-[var(--border)] gap-1 ${collapsed ? 'lg:justify-center' : 'px-4'}`}>
           <Link href="/" className="flex items-center gap-2">
@@ -86,11 +85,10 @@ export function Sidebar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex items-center gap-3 h-9 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-l-2 border-[var(--d1)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
-                } ${collapsed ? 'lg:justify-center lg:px-0 lg:border-l-0' : 'px-3'}`}
+                className={`flex items-center gap-3 h-9 rounded-md text-sm transition-colors ${isActive
+                  ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-l-2 border-[var(--d1)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+                  } ${collapsed ? 'lg:justify-center lg:px-0 lg:border-l-0' : 'px-3'}`}
                 title={collapsed ? link.label : undefined}
               >
                 {Icon ? (
@@ -130,9 +128,8 @@ export function Sidebar() {
         <div className={`px-2 pb-4 ${collapsed ? 'lg:px-1' : ''}`}>
           <Link
             href="/disparos/novo"
-            className={`flex items-center gap-2 h-9 rounded-md text-sm font-medium text-white transition-colors hover:brightness-110 ${
-              collapsed ? 'lg:justify-center lg:px-0' : 'px-3'
-            }`}
+            className={`flex items-center gap-2 h-9 rounded-md text-sm font-medium text-white transition-colors hover:brightness-110 ${collapsed ? 'lg:justify-center lg:px-0' : 'px-3'
+              }`}
             style={{ backgroundColor: 'var(--d1)' }}
             title={collapsed ? 'Novo D1' : undefined}
           >
