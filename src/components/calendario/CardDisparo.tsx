@@ -33,21 +33,30 @@ const STATUS_DISPONIVEIS: { value: StatusDisparo; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
-interface CardItemCalendarioProps {
-  item: ItemCalendario
+export interface ResultadoContribuicaoDia {
+  registros: number
+  ftds: number
+  cpas: number | null
+  custo: number
+  receita: number
 }
 
-function formatNumero(n: number): string {
+interface CardItemCalendarioProps {
+  item: ItemCalendario
+  onResultado?: (id: string, r: ResultadoContribuicaoDia | null) => void
+}
+
+export function formatNumero(n: number): string {
   return n.toLocaleString('pt-BR')
 }
 
-const CUSTO_POR_ENTREGUE = 0.13
+export const CUSTO_POR_ENTREGUE = 0.13
 
-function formatMoeda(v: number): string {
+export function formatMoeda(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formatRoi(x: number): string {
+export function formatRoi(x: number): string {
   return `${x.toFixed(x % 1 === 0 ? 0 : 1)}x`
 }
 
@@ -64,7 +73,7 @@ function nomeCurto(nome: string): string {
 }
 
 /** Valor de cada CPA (R$), fixo por casa: Superbet paga R$500/CPA, BetMGM paga R$260/CPA. */
-const VALOR_CPA: Record<'superbet' | 'betmgm', number> = {
+export const VALOR_CPA: Record<'superbet' | 'betmgm', number> = {
   superbet: 500,
   betmgm: 260,
 }
@@ -117,7 +126,7 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
   )
 }
 
-export function CardItemCalendario({ item }: CardItemCalendarioProps) {
+export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProps) {
   const [open, setOpen] = useState(false)
   const [cadastrando, setCadastrando] = useState(false)
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
@@ -152,6 +161,14 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const custo = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : 0
   const receita = resultadoFinanceiro?.cpas != null ? resultadoFinanceiro.cpas * valorCPA : 0
   const roi = resultadoFinanceiro?.cpas != null && custo > 0 && valorCPA > 0 ? receita / custo : null
+
+  // Reporta a contribuição deste disparo pro resumo do dia (só disparos já cadastrados
+  // contam — sem cadastro não existe UTM/PID salva pra saber qual resultado é de fato dele).
+  useEffect(() => {
+    if (!onResultado) return
+    if (!disparoLocal || !resultadoFinanceiro) { onResultado(item.id, null); return }
+    onResultado(item.id, { registros: resultadoFinanceiro.registros, ftds: resultadoFinanceiro.ftds, cpas: resultadoFinanceiro.cpas, custo, receita })
+  }, [onResultado, item.id, disparoLocal, resultadoFinanceiro, custo, receita])
 
   // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
   // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
