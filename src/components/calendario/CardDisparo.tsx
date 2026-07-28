@@ -51,6 +51,12 @@ function formatRoi(x: number): string {
   return `${x.toFixed(x % 1 === 0 ? 0 : 1)}x`
 }
 
+/** Data de hoje no formato YYYY-MM-DD, mesmo formato usado em dataDisparo. */
+function hojeISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
 function nomeCurto(nome: string): string {
   const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
@@ -65,7 +71,7 @@ const VALOR_CPA: Record<'superbet' | 'betmgm', number> = {
 
 interface BlocoResultadoFinanceiroProps {
   carregando: boolean
-  resultado: { registros: number; ftds: number; cpas: number } | null
+  resultado: { registros: number; ftds: number; cpas: number | null } | null
   custo: number
   receita: number
   roi: number | null
@@ -75,9 +81,11 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
   if (carregando) return <p className="text-xs text-[var(--text-muted)]">Carregando...</p>
   if (!resultado) return <p className="text-xs text-[var(--text-muted)]">Sem dados de resultado pra essa UTM/data ainda</p>
 
+  const temCpa = resultado.cpas != null
+
   return (
     <>
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid ${temCpa ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
         <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
           <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
           <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
@@ -86,12 +94,16 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
           <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
           <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
         </div>
-        <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas)}</div>
-          <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
-        </div>
+        {temCpa && (
+          <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
+            <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas!)}</div>
+            <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
+          </div>
+        )}
       </div>
-      {roi != null ? (
+      {!temCpa ? (
+        <p className="text-[10px] text-[var(--text-muted)] mt-1">CPA e ROI só ficam disponíveis depois que o dia fecha — a fonte de CPA não cobre o dia de hoje ainda</p>
+      ) : roi != null ? (
         <div className="flex items-center justify-between mt-2 p-2 rounded bg-[var(--bg-surface)]">
           <span className="text-[10px] text-[var(--text-muted)]">Receita {formatMoeda(receita)} · Custo {formatMoeda(custo)}</span>
           <span className={`text-sm font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
@@ -111,7 +123,7 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
-  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number } | null>(null)
+  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number | null } | null>(null)
   const [carregandoResultado, setCarregandoResultado] = useState(false)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
@@ -134,30 +146,35 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     ? (utmDoDisparo ? 'superbet' : pidDoDisparo ? 'betmgm' : null)
     : (utmEscolhida ? 'superbet' : pidEscolhido ? 'betmgm' : null)
   const dataAtiva = disparoLocal ? dataDoDisparo : item.dataDisparo
+  const dataAindaNaoFechou = !!dataAtiva && dataAtiva >= hojeISO()
 
   const valorCPA = casaAtiva ? VALOR_CPA[casaAtiva] : 0
   const custo = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : 0
-  const receita = resultadoFinanceiro ? resultadoFinanceiro.cpas * valorCPA : 0
-  const roi = resultadoFinanceiro && custo > 0 && valorCPA > 0 ? receita / custo : null
+  const receita = resultadoFinanceiro?.cpas != null ? resultadoFinanceiro.cpas * valorCPA : 0
+  const roi = resultadoFinanceiro?.cpas != null && custo > 0 && valorCPA > 0 ? receita / custo : null
 
   // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
   // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
+  // Hoje ainda não tem CPA na fonte de CPA — usa o endpoint só com registros/FTDs até fechar o dia.
   useEffect(() => {
     if (!disparoLocal || !utmValorAtivo || !casaAtiva || !dataAtiva) return
     let cancelado = false
+    const url = dataAindaNaoFechou
+      ? `/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
+      : `/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
 
     setCarregandoResultado(true)
-    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: dataAindaNaoFechou ? null : (json.cpas ?? 0) } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
 
     return () => { cancelado = true }
-  }, [disparoLocal, utmValorAtivo, casaAtiva, dataAtiva])
+  }, [disparoLocal, utmValorAtivo, casaAtiva, dataAtiva, dataAindaNaoFechou])
 
   // Cadastro (ainda sem disparo salvo): preview ao vivo enquanto o modal estiver aberto,
   // a partir do que está selecionado nos dropdowns.
@@ -165,19 +182,22 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
     if (disparoLocal) return
     if (!open || !utmValorAtivo || !casaAtiva || !dataAtiva) { setResultadoFinanceiro(null); return }
     let cancelado = false
+    const url = dataAindaNaoFechou
+      ? `/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
+      : `/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
 
     setCarregandoResultado(true)
-    fetch(`/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`)
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: json.cpas ?? 0 } : null)
+        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: dataAindaNaoFechou ? null : (json.cpas ?? 0) } : null)
       })
       .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
       .finally(() => { if (!cancelado) setCarregandoResultado(false) })
 
     return () => { cancelado = true }
-  }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva])
+  }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva, dataAindaNaoFechou])
 
   useEffect(() => {
     if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
@@ -579,13 +599,13 @@ export function CardItemCalendario({ item }: CardItemCalendarioProps) {
           <div className="grid grid-cols-4 items-center text-sm text-text-primary my-2">
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.registros)} REG</span>
             <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
-            <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
+            {resultadoFinanceiro.cpas != null && (
+              <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
+            )}
             {roi != null && (
-              <>
-                <span className={`font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                  {formatRoi(roi)}
-                </span>
-              </>
+              <span className={`font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                {formatRoi(roi)}
+              </span>
             )}
           </div>
         )}

@@ -9,7 +9,7 @@ import { useCasasAposta, gerarCor, slugify } from '@/hooks/useCasasAposta'
 import { useToast } from '@/components/ui/Toast'
 import {
   Pencil, Trash2, Plus, Variable, Link as LinkIcon, DollarSign, X, Layers,
-  ImageUp, ImageOff, Loader2, Upload
+  ImageUp, ImageOff, Loader2, Upload, LayoutGrid, List
 } from 'lucide-react'
 import Link from 'next/link'
 import type { CasaAposta, PainelCPA } from '@/types'
@@ -41,6 +41,7 @@ export default function CasasPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [logoHover, setLogoHover] = useState<string | null>(null)
+  const [visao, setVisao] = useState<'grade' | 'tabela'>('grade')
 
   const funilSugestoes = useMemo(() => {
     if (!funilInput.trim()) return []
@@ -232,13 +233,134 @@ export default function CasasPage() {
         titulo="Casas de Aposta"
         descricao="Gerencie as casas de aposta disponíveis nos disparos"
         acoes={
-          <Button size="sm" onClick={openNew} icon={<Plus size={16} />}>
-            Nova Casa
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 p-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)]">
+              <button
+                onClick={() => setVisao('grade')}
+                title="Visão em grade"
+                className={`flex items-center justify-center w-7 h-7 rounded transition-colors ${
+                  visao === 'grade'
+                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                onClick={() => setVisao('tabela')}
+                title="Visão em tabela"
+                className={`flex items-center justify-center w-7 h-7 rounded transition-colors ${
+                  visao === 'tabela'
+                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <List size={14} />
+              </button>
+            </div>
+            <Button size="sm" onClick={openNew} icon={<Plus size={16} />}>
+              Nova Casa
+            </Button>
+          </div>
         }
       />
 
       <div className="p-6">
+        {visao === 'tabela' ? (
+          <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--bg-surface)]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 w-14">Logo</th>
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Nome</th>
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Slug</th>
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Funis</th>
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">CPA</th>
+                  <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Variáveis</th>
+                  <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2.5 w-32">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((casa) => {
+                  const vars = Object.entries(casa.variaveis ?? {})
+                  const totalFunis = casa.funilIds?.length ?? 0
+                  return (
+                    <tr
+                      key={casa.id}
+                      className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-elevated)]/50 transition-colors"
+                    >
+                      <td className="px-3 py-2.5">
+                        <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+                          {casa.logo ? (
+                            <img src={casa.logo} alt={casa.nome} className="w-full h-full object-contain" />
+                          ) : (
+                            <div
+                              className="w-full h-full flex items-center justify-center text-xs font-bold text-white"
+                              style={{ backgroundColor: casa.cor }}
+                            >
+                              {casa.nome.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-[var(--text-primary)] font-medium">{casa.nome}</td>
+                      <td className="px-3 py-2.5 text-[var(--text-muted)] font-mono text-xs">@{casa.slug}</td>
+                      <td className="px-3 py-2.5">
+                        {totalFunis > 0
+                          ? <span className="text-xs font-medium text-[var(--d1)]">{totalFunis} funil{totalFunis > 1 ? 'is' : ''}</span>
+                          : <span className="text-xs text-[var(--text-muted)]">—</span>
+                        }
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {(casa.paineisCPA?.length ?? 0) > 0
+                          ? <span className="text-xs font-medium text-[var(--d7)]">{casa.paineisCPA.length} painel{casa.paineisCPA.length > 1 ? 'is' : ''}</span>
+                          : <span className="text-xs text-[var(--text-muted)]">—</span>
+                        }
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {vars.length > 0
+                          ? <span className="text-xs font-medium text-[var(--d5)]">{vars.length}</span>
+                          : <span className="text-xs text-[var(--text-muted)]">—</span>
+                        }
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link
+                            href="/casas/links"
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title="Links"
+                          >
+                            <LinkIcon size={14} />
+                          </Link>
+                          <button
+                            onClick={() => openEdit(casa)}
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(casa.id)}
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {list.length === 0 && (
+              <div className="text-center py-16 text-[var(--text-muted)] text-sm">
+                Nenhuma casa cadastrada
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {list.map((casa) => {
             const vars = Object.entries(casa.variaveis ?? {})
@@ -366,6 +488,7 @@ export default function CasasPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       <Modal
