@@ -1,6 +1,6 @@
 'use client'
 
-import { StatNumber } from './StatNumber'
+import { StatNumber } from '../ui/StatNumber'
 import { itemVariants } from './SlideShell'
 import { motion } from 'framer-motion'
 

@@ -14,6 +14,7 @@ import { Modal } from '../ui/Modal'
 import { Dropdown } from '../ui/Dropdown'
 import { TagInput } from '../ui/TagInput'
 import { useToast } from '../ui/Toast'
+import { StatNumber } from '../ui/StatNumber'
 import { ExternalLink, Trash2, Check, Clock, Database } from 'lucide-react'
 import Link from 'next/link'
 
@@ -96,16 +97,16 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
     <>
       <div className={`grid ${temCpa ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
         <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.registros)}</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]"><StatNumber value={resultado.registros} /></div>
           <div className="text-[10px] text-[var(--text-muted)]">Registros</div>
         </div>
         <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.ftds)}</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]"><StatNumber value={resultado.ftds} /></div>
           <div className="text-[10px] text-[var(--text-muted)]">FTDs</div>
         </div>
         {temCpa && (
           <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-            <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(resultado.cpas!)}</div>
+            <div className="text-lg font-semibold text-[var(--text-primary)]"><StatNumber value={resultado.cpas!} /></div>
             <div className="text-[10px] text-[var(--text-muted)]">CPAs</div>
           </div>
         )}
@@ -114,9 +115,11 @@ function BlocoResultadoFinanceiro({ carregando, resultado, custo, receita, roi }
         <p className="text-[10px] text-[var(--text-muted)] mt-1">CPA e ROI só ficam disponíveis depois que o dia fecha — a fonte de CPA não cobre o dia de hoje ainda</p>
       ) : roi != null ? (
         <div className="flex items-center justify-between mt-2 p-2 rounded bg-[var(--bg-surface)]">
-          <span className="text-[10px] text-[var(--text-muted)]">Receita {formatMoeda(receita)} · Custo {formatMoeda(custo)}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">
+            Receita <StatNumber value={receita} prefix="R$ " decimals={2} /> · Custo <StatNumber value={custo} prefix="R$ " decimals={2} />
+          </span>
           <span className={`text-sm font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-            ROI {formatRoi(roi)}
+            ROI <StatNumber value={roi} suffix="x" decimals={Number.isInteger(roi) ? 0 : 1} />
           </span>
         </div>
       ) : (
@@ -360,7 +363,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           </p>
           {item.entregues != null && (
             <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
-              {formatMoeda(item.entregues * CUSTO_POR_ENTREGUE)}
+              <StatNumber value={item.entregues * CUSTO_POR_ENTREGUE} prefix="R$ " decimals={2} />
             </div>
           )}
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
@@ -405,15 +408,15 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
               <span className="text-[var(--text-muted)] block text-xs mb-1">Métricas</span>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.entregues != null ? formatNumero(item.entregues) : '—'}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.entregues != null ? <StatNumber value={item.entregues} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? formatNumero(item.lidas) : '—'}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? <StatNumber value={item.lidas} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? formatNumero(item.rejeitados) : '—'}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? <StatNumber value={item.rejeitados} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
                 </div>
               </div>
@@ -608,20 +611,20 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
 
         {item.entregues != null && (
           <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
-            {formatMoeda(item.entregues * CUSTO_POR_ENTREGUE)}
+            <StatNumber value={item.entregues * CUSTO_POR_ENTREGUE} prefix="R$ " decimals={2} />
           </div>
         )}
 
         {resultadoFinanceiro && (
           <div className="grid grid-cols-4 items-center text-sm text-text-primary my-2">
-            <span className="font-semibold">{formatNumero(resultadoFinanceiro.registros)} REG</span>
-            <span className="font-semibold">{formatNumero(resultadoFinanceiro.ftds)} FTD</span>
+            <span className="font-semibold"><StatNumber value={resultadoFinanceiro.registros} /> REG</span>
+            <span className="font-semibold"><StatNumber value={resultadoFinanceiro.ftds} /> FTD</span>
             {resultadoFinanceiro.cpas != null && (
-              <span className="font-semibold">{formatNumero(resultadoFinanceiro.cpas)} CPA</span>
+              <span className="font-semibold"><StatNumber value={resultadoFinanceiro.cpas} /> CPA</span>
             )}
             {roi != null && (
               <span className={`font-semibold ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                {formatRoi(roi)}
+                <StatNumber value={roi} suffix="x" decimals={Number.isInteger(roi) ? 0 : 1} />
               </span>
             )}
           </div>
@@ -771,15 +774,15 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
               <span className="text-[var(--text-muted)] block text-xs mb-1">Métricas DAXX</span>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{formatNumero(item.entregues)}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]"><StatNumber value={item.entregues} /></div>
                   <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? formatNumero(item.lidas) : '—'}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? <StatNumber value={item.lidas} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
-                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? formatNumero(item.rejeitados) : '—'}</div>
+                  <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? <StatNumber value={item.rejeitados} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
                 </div>
               </div>

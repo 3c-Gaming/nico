@@ -3,8 +3,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { ItemCalendario } from '@/types'
 import { isMesmaData, formatarData } from '@/lib/datas'
-import { CardItemCalendario, formatMoeda, formatNumero, formatRoi } from './CardDisparo'
+import { CardItemCalendario } from './CardDisparo'
 import type { ResultadoContribuicaoDia } from './CardDisparo'
+import { StatNumber } from '../ui/StatNumber'
 
 interface ColunaDataProps {
   data: Date
@@ -89,23 +90,27 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
         {resumo.contribuintes > 0 && (
           diaAindaNaoFechou ? (
             <div className="text-right pt-0.5 flex flex-col items-end leading-tight">
-              <span className="text-[10px] text-[var(--text-muted)]">{formatMoeda(resumo.custo)}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">
+                <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
+              </span>
               <span className="text-[11px] font-semibold text-[var(--text-primary)] whitespace-nowrap">
-                {formatNumero(resumo.registros)} REG · {formatNumero(resumo.ftds)} FTD
+                <StatNumber value={resumo.registros} /> REG · <StatNumber value={resumo.ftds} /> FTD
               </span>
             </div>
           ) : (
             <div className="text-right pt-0.5 flex flex-col items-end leading-tight">
-              <span className="text-[10px] text-[var(--text-muted)]">{formatMoeda(resumo.custo)}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">
+                <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
+              </span>
               {resumo.roi != null ? (
                 <span className={`text-sm font-bold ${resumo.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                  {formatRoi(resumo.roi)}
+                  <StatNumber value={resumo.roi} suffix="x" decimals={Number.isInteger(resumo.roi) ? 0 : 1} />
                 </span>
               ) : (
                 <span className="text-sm font-bold text-[var(--text-muted)]">—</span>
               )}
               <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
-                {formatNumero(resumo.registros)} REG · {formatNumero(resumo.ftds)} FTD · {formatNumero(resumo.cpas)} CPA
+                <StatNumber value={resumo.registros} /> REG · <StatNumber value={resumo.ftds} /> FTD · <StatNumber value={resumo.cpas} /> CPA
               </span>
             </div>
           )
