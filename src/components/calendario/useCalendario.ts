@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react'
 import type { Disparo, TipoDisparo, StatusDisparo, ItemCalendario, DisparoDaxx, DisparoAgendadoDaxx } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -21,6 +21,8 @@ const ORDEM_TIPO: Record<string, number> = { D1: 0, D3: 1, D5: 2, D7: 3, PONTUAL
 
 const DIAS_ANTES = 3
 const DIAS_DEPOIS = 14
+const EXPANSAO_HISTORICO = 14
+const LIMIAR_SCROLL_PX = 400
 const DAXX_CACHE_KEY = 'daxx-campanhas-calendar'
 const DAXX_CACHE_TS_KEY = 'daxx-campanhas-calendar-ts'
 const DAXX_CACHE_TTL = 5 * 60 * 1000
@@ -57,8 +59,14 @@ export function useCalendario() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
   })
 
+  // inicioRange e fimRange só crescem pra fora (nunca encolhem) — janela expansível, não
+  // deslizante. Assim os dias já vistos (histórico) nunca somem enquanto o calendário
+  // continua montado, e "hoje" nunca sai da visão só por causa da navegação.
   const [inicioRange, setInicioRange] = useState(() => adicionarDias(hoje, -DIAS_ANTES))
+  const [fimRange, setFimRange] = useState(() => adicionarDias(hoje, DIAS_DEPOIS))
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollWidthAntesExpansaoRef = useRef<number | null>(null)
+  const expandindoRef = useRef(false)
 
   const [filtros, setFiltrosState] = useState<FiltrosCalendario>(() => ({
     casas: [],
@@ -101,8 +109,6 @@ export function useCalendario() {
         .catch(() => {})
     }
   }, [])
-
-  const fimRange = useMemo(() => adicionarDias(inicioRange, DIAS_ANTES + DIAS_DEPOIS), [inicioRange])
 
   const diasVisiveis = useMemo(() => gerarRangeDias(inicioRange, fimRange), [inicioRange, fimRange])
 
@@ -327,13 +333,44 @@ export function useCalendario() {
     }
   }, [diasVisiveis, hoje])
 
+  // Expande a janela pra trás (mais dias de histórico) sem perder a posição visual de
+  // scroll — guarda a largura de antes e compensa depois que as colunas novas entram.
+  const expandirHistorico = useCallback(() => {
+    if (expandindoRef.current) return
+    expandindoRef.current = true
+    if (containerRef.current) {
+      scrollWidthAntesExpansaoRef.current = containerRef.current.scrollWidth
+    }
+    setInicioRange((prev) => adicionarDias(prev, -EXPANSAO_HISTORICO))
+  }, [])
+
+  useLayoutEffect(() => {
+    if (scrollWidthAntesExpansaoRef.current == null || !containerRef.current) return
+    const delta = containerRef.current.scrollWidth - scrollWidthAntesExpansaoRef.current
+    containerRef.current.scrollLeft += delta
+    scrollWidthAntesExpansaoRef.current = null
+    expandindoRef.current = false
+  }, [diasVisiveis])
+
+  // Rola perto do início (esquerda) do calendário → carrega mais dias anteriores sozinho,
+  // tipo scroll infinito. Continua funcionando enquanto o usuário for rolando pra trás.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handleScroll = () => {
+      if (el.scrollLeft < LIMIAR_SCROLL_PX) expandirHistorico()
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [expandirHistorico])
+
   const avancar = useCallback(() => {
-    setInicioRange((prev) => adicionarDias(prev, 7))
+    setFimRange((prev) => adicionarDias(prev, 7))
   }, [])
 
   const recuar = useCallback(() => {
-    setInicioRange((prev) => adicionarDias(prev, -7))
-  }, [])
+    expandirHistorico()
+  }, [expandirHistorico])
 
   return {
     diasVisiveis,
