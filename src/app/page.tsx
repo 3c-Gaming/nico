@@ -2,12 +2,16 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2 } from 'lucide-react'
+import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2, Calendar } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { StatNumber } from '@/components/ui/StatNumber'
 import { ModalLinkDaxx } from '@/components/home/ModalLinkDaxx'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { useDisparos } from '@/hooks/useDisparos'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
+import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 
@@ -98,6 +102,118 @@ function formatarTempoRelativo(iso: string | null): { texto: string; cor: string
   return { texto: `${dd}/${mm} ${hh}:${mi}`, cor: 'text-[var(--text-muted)]/60' }
 }
 
+interface DisparoPinadoRowProps {
+  disparo: Disparo
+  daxxCampanhas: DisparoDaxx[]
+  onUnpin: (id: string) => void
+  onVerDetalhes: (id: string) => void
+}
+
+function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: DisparoPinadoRowProps) {
+  const { casas } = useCasasAposta()
+  const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
+  const utmValor = disparo.utm || disparo.betmgmPid
+  const daxx = daxxCampanhas.find((c) => c.id === (disparo.daxxCampanhaId ?? disparo.templateDaxx?.id))
+  const entregues = daxx?.entregues
+
+  const { resultado, carregando, custo, roi } = useResultadoDisparo({
+    utmValor,
+    casa: casaAtiva,
+    data: disparo.dataDisparo,
+    entregues,
+  })
+
+  const casaPrimaria = disparo.casasAposta[0] ? casas[disparo.casasAposta[0]] : null
+
+  return (
+    <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
+      <td className="py-3 px-3">
+        <div className="flex items-center gap-1.5">
+          {casaPrimaria && (
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: casaPrimaria.cor }} title={casaPrimaria.nome} />
+          )}
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-[var(--d1)]/10 text-[var(--d1)]">
+            {disparo.tipo}
+          </span>
+          <span className="font-mono text-xs text-[var(--text-primary)] truncate max-w-[180px]" title={disparo.nomenclatura}>
+            {disparo.nomenclatura}
+          </span>
+        </div>
+      </td>
+      <td className="py-3 px-3 text-xs text-[var(--text-secondary)]">{disparo.dataDisparo}</td>
+      <td className="py-3 px-3 text-right">
+        <span className="font-semibold font-mono text-[var(--text-primary)]">
+          {disparo.base?.totalRegistros != null ? <StatNumber value={disparo.base.totalRegistros} /> : '—'}
+        </span>
+      </td>
+      <td className="py-3 px-3 text-right">
+        <span className="font-semibold font-mono text-emerald-400">
+          {entregues != null ? <StatNumber value={custo} prefix="R$ " decimals={2} /> : '—'}
+        </span>
+      </td>
+      <td className="py-3 px-3 text-right">
+        <span className="font-semibold font-mono text-green-500">
+          {entregues != null ? <StatNumber value={entregues} /> : '—'}
+        </span>
+      </td>
+      <td className="py-3 px-3 text-right">
+        <span className="font-semibold font-mono text-[var(--d1)]">
+          {daxx?.lidas != null ? <StatNumber value={daxx.lidas} /> : '—'}
+        </span>
+      </td>
+      <td className="py-3 px-3 text-right">
+        {carregando ? (
+          <Spinner size={12} />
+        ) : resultado ? (
+          <span className="font-semibold font-mono text-[var(--text-primary)]"><StatNumber value={resultado.registros} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {resultado ? (
+          <span className="font-semibold font-mono text-[var(--d1)]"><StatNumber value={resultado.ftds} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {resultado?.cpas != null ? (
+          <span className="font-semibold font-mono text-[var(--text-primary)]"><StatNumber value={resultado.cpas} /></span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        {roi != null ? (
+          <span className={`font-semibold font-mono ${roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+            <StatNumber value={roi} suffix="x" decimals={Number.isInteger(roi) ? 0 : 1} />
+          </span>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
+      </td>
+      <td className="py-3 px-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => onVerDetalhes(disparo.id)}
+            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
+          >
+            detalhes
+          </button>
+          <button
+            onClick={() => onUnpin(disparo.id)}
+            className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Desafixar da Home"
+          >
+            <Pin size={12} className="text-amber-400" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 interface FunilBotDetail {
   botId: string
   botNome: string
@@ -141,6 +257,7 @@ export default function HomePage() {
   const router = useRouter()
   const { data: monitoramento, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
   const { list: todosDisparos, update: updateDisparo } = useDisparos()
+  const { pinnedDisparos, toggle: handleTogglePinDisparo } = usePinnedDisparos()
   const [contagens, setContagens] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
@@ -187,6 +304,12 @@ export default function HomePage() {
     if (!monitoramento?.numeros) return []
     return monitoramento.numeros.filter((n) => pinnedNumeros.includes(n.numero.id))
   }, [monitoramento?.numeros, pinnedNumeros, pinVersion])
+
+  const disparosPinados = useMemo(() => {
+    return pinnedDisparos
+      .map((id) => todosDisparos.find((d) => d.id === id))
+      .filter((d): d is Disparo => !!d)
+  }, [pinnedDisparos, todosDisparos])
 
   useEffect(() => {
     if (!pinnedFunis.length) return
@@ -483,7 +606,7 @@ export default function HomePage() {
     })
   }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
 
-  const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0
+  const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
 
   const disparoRows = funilRows.filter((r) => r.tipo === 'disparo')
   const trafficRows = funilRows.filter((r) => r.tipo === 'traffic')
@@ -810,13 +933,19 @@ export default function HomePage() {
               Nenhum item fixado ainda.
             </p>
             <p className="text-xs text-[var(--text-muted)]/60 mb-6">
-              Fixe números e funis para monitorar em tempo real.
+              Fixe números, disparos e funis para monitorar em tempo real.
             </p>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => router.push('/numeros')}
+                onClick={() => router.push('/calendario')}
                 className="px-4 h-9 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90"
                 style={{ backgroundColor: 'var(--d1)' }}
+              >
+                Ir para o Calendário
+              </button>
+              <button
+                onClick={() => router.push('/numeros')}
+                className="px-4 h-9 rounded-md text-xs font-medium border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
               >
                 Ir para Números
               </button>
@@ -829,6 +958,7 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
 
         {pinnedNumeros.length > 0 && (
           <section>
@@ -904,6 +1034,49 @@ export default function HomePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {disparosPinados.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Calendar size={16} className="text-[var(--d1)]" />
+                Disparos Fixados
+                <span className="text-xs font-normal text-[var(--text-muted)]">{disparosPinados.length}</span>
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--glass-border)]">
+                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Disparo</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Data</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">CPAs</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {disparosPinados.map((disparo) => (
+                    <DisparoPinadoRow
+                      key={disparo.id}
+                      disparo={disparo}
+                      daxxCampanhas={daxxCampanhas}
+                      onUnpin={handleTogglePinDisparo}
+                      onVerDetalhes={(id) => router.push(`/disparos/${id}`)}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         )}

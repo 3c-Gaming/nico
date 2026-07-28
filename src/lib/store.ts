@@ -12,6 +12,7 @@ const ESTADO_INICIAL: AppState = {
   flowTagConfigs: {},
   pinnedNumeros: [],
   pinnedFunis: [],
+  pinnedDisparos: [],
   numerosNaoMonitorados: [],
   cacheMetricas: {},
   demandas: {},
@@ -226,8 +227,8 @@ export function deletarUsuarioResponsavel(id: string): void {
   syncToApi(`/api/usuarios-responsaveis/${id}`, 'DELETE')
 }
 
-function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[]) {
-  syncToApi('/api/preferencias', 'PUT', { pinnedNumeros, pinnedFunis, numerosNaoMonitorados })
+function syncPreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[], pinnedDisparos: string[]) {
+  syncToApi('/api/preferencias', 'PUT', { pinnedNumeros, pinnedFunis, numerosNaoMonitorados, pinnedDisparos })
 }
 
 export function togglePinNumero(id: string): void {
@@ -239,7 +240,7 @@ export function togglePinNumero(id: string): void {
     state.pinnedNumeros.push(id)
   }
   setState(state)
-  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados, state.pinnedDisparos)
 }
 
 export function togglePinFunil(nome: string): void {
@@ -251,7 +252,19 @@ export function togglePinFunil(nome: string): void {
     state.pinnedFunis.push(nome)
   }
   setState(state)
-  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados, state.pinnedDisparos)
+}
+
+export function togglePinDisparo(id: string): void {
+  const state = getState()
+  const idx = state.pinnedDisparos.indexOf(id)
+  if (idx >= 0) {
+    state.pinnedDisparos.splice(idx, 1)
+  } else {
+    state.pinnedDisparos.push(id)
+  }
+  setState(state)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados, state.pinnedDisparos)
 }
 
 export function toggleMonitorarNumero(id: string): void {
@@ -263,7 +276,7 @@ export function toggleMonitorarNumero(id: string): void {
     state.numerosNaoMonitorados.push(id)
   }
   setState(state)
-  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados)
+  syncPreferencias(state.pinnedNumeros, state.pinnedFunis, state.numerosNaoMonitorados, state.pinnedDisparos)
 }
 
 export function updateCacheMetricas(metricas: CacheMetrica[]): void {

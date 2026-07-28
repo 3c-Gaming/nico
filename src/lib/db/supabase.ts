@@ -42,6 +42,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   periodoFim: 'periodo_fim',
   pinnedFunis: 'pinned_funis',
   pinnedNumeros: 'pinned_numeros',
+  pinnedDisparos: 'pinned_disparos',
   publicToken: 'public_token',
   responsavelId: 'responsavel_id',
   templateDaxx: 'template_daxx',
@@ -92,6 +93,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   bot_id: 'botId',
   pinned_numeros: 'pinnedNumeros',
   pinned_funis: 'pinnedFunis',
+  pinned_disparos: 'pinnedDisparos',
   updated_at: 'updatedAt',
   esteira_pai_id: 'esteiraPaiId',
   template_daxx: 'templateDaxx',
@@ -136,7 +138,7 @@ function tb(name: string) {
 
 // --- Preferências (pins) ---
 
-export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[]; numerosNaoMonitorados: string[] }> {
+export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[]; pinnedDisparos: string[]; numerosNaoMonitorados: string[] }> {
   try {
     const { data } = await tb('user_preferences').select('*').eq('id', 'global').single()
     const raw = data as any
@@ -148,19 +150,21 @@ export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinn
     return {
       pinnedNumeros: parse(raw?.pinned_numeros),
       pinnedFunis: parse(raw?.pinned_funis),
+      pinnedDisparos: parse(raw?.pinned_disparos),
       numerosNaoMonitorados: parse(raw?.numeros_nao_monitorados),
     }
   } catch {
-    return { pinnedNumeros: [], pinnedFunis: [], numerosNaoMonitorados: [] }
+    return { pinnedNumeros: [], pinnedFunis: [], pinnedDisparos: [], numerosNaoMonitorados: [] }
   }
 }
 
-export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[]): Promise<void> {
+export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[], pinnedDisparos: string[]): Promise<void> {
   await tb('user_preferences')
     .upsert({
       id: 'global',
       pinned_numeros: pinnedNumeros,
       pinned_funis: pinnedFunis,
+      pinned_disparos: pinnedDisparos,
       numeros_nao_monitorados: numerosNaoMonitorados,
       updated_at: new Date().toISOString(),
     })

@@ -480,6 +480,7 @@ export interface AppState {
   flowTagConfigs: Record<string, FlowTagConfig>
   pinnedNumeros: string[]
   pinnedFunis: string[]
+  pinnedDisparos: string[]
   numerosNaoMonitorados: string[]
   cacheMetricas: Record<string, CacheMetrica>
   demandas: Record<string, Demanda>

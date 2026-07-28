@@ -15,7 +15,10 @@ import { Dropdown } from '../ui/Dropdown'
 import { TagInput } from '../ui/TagInput'
 import { useToast } from '../ui/Toast'
 import { StatNumber } from '../ui/StatNumber'
-import { ExternalLink, Trash2, Check, Clock, Database } from 'lucide-react'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
+import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
+import { formatNumero, CUSTO_POR_ENTREGUE } from '@/lib/resultadoDisparo'
+import { ExternalLink, Trash2, Check, Clock, Database, Pin } from 'lucide-react'
 import Link from 'next/link'
 
 const TIPO_CORES: Record<string, string> = {
@@ -47,36 +50,10 @@ interface CardItemCalendarioProps {
   onResultado?: (id: string, r: ResultadoContribuicaoDia | null) => void
 }
 
-export function formatNumero(n: number): string {
-  return n.toLocaleString('pt-BR')
-}
-
-export const CUSTO_POR_ENTREGUE = 0.13
-
-export function formatMoeda(v: number): string {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-export function formatRoi(x: number): string {
-  return `${x.toFixed(x % 1 === 0 ? 0 : 1)}x`
-}
-
-/** Data de hoje no formato YYYY-MM-DD, mesmo formato usado em dataDisparo. */
-function hojeISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /** Corta o prefixo padrão da DAXX ("[dd/mm] DISP TOTAL dd/mm BASE ") e deixa só o rótulo da base. */
 function nomeCurto(nome: string): string {
   const cortado = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s+TOTAL\s+\d{2}\/\d{2}\s+BASE\s+/i, '').trim()
   return cortado || nome
-}
-
-/** Valor de cada CPA (R$), fixo por casa: Superbet paga R$500/CPA, BetMGM paga R$260/CPA. */
-export const VALOR_CPA: Record<'superbet' | 'betmgm', number> = {
-  superbet: 500,
-  betmgm: 260,
 }
 
 interface BlocoResultadoFinanceiroProps {
@@ -135,13 +112,12 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
-  const [resultadoFinanceiro, setResultadoFinanceiro] = useState<{ casa: 'superbet' | 'betmgm'; registros: number; ftds: number; cpas: number | null } | null>(null)
-  const [carregandoResultado, setCarregandoResultado] = useState(false)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
   const { casas, list: casasList, add: addCasa } = useCasasAposta()
   const { list: utmConfigs } = useUtmConfigs()
   const { addToast } = useToast()
+  const { isPinned, toggle: togglePin } = usePinnedDisparos()
 
   const cor = TIPO_CORES[item.tipo] ?? 'var(--text-secondary)'
   const esteira = item.disparoLocal?.esteiraPaiId ? getById(item.disparoLocal.esteiraPaiId) : null
@@ -152,18 +128,21 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   const dataDoDisparo = disparoLocal?.dataDisparo
 
   // No disparo já cadastrado, usa a UTM/PID salva. No cadastro (ainda não salvo),
-  // usa o que está selecionado nos dropdowns em tempo real.
+  // usa o que está selecionado nos dropdowns em tempo real — só busca enquanto o modal
+  // estiver aberto, pra não disparar fetch de preview pra todo card DAXX ainda não vinculado.
   const utmValorAtivo = disparoLocal ? (utmDoDisparo || pidDoDisparo) : (utmEscolhida || pidEscolhido)
   const casaAtiva: 'superbet' | 'betmgm' | null = disparoLocal
     ? (utmDoDisparo ? 'superbet' : pidDoDisparo ? 'betmgm' : null)
     : (utmEscolhida ? 'superbet' : pidEscolhido ? 'betmgm' : null)
   const dataAtiva = disparoLocal ? dataDoDisparo : item.dataDisparo
-  const dataAindaNaoFechou = !!dataAtiva && dataAtiva >= hojeISO()
+  const ativo = !!disparoLocal || open
 
-  const valorCPA = casaAtiva ? VALOR_CPA[casaAtiva] : 0
-  const custo = item.entregues != null ? item.entregues * CUSTO_POR_ENTREGUE : 0
-  const receita = resultadoFinanceiro?.cpas != null ? resultadoFinanceiro.cpas * valorCPA : 0
-  const roi = resultadoFinanceiro?.cpas != null && custo > 0 && valorCPA > 0 ? receita / custo : null
+  const { resultado: resultadoFinanceiro, carregando: carregandoResultado, custo, receita, roi } = useResultadoDisparo({
+    utmValor: ativo ? utmValorAtivo : undefined,
+    casa: ativo ? casaAtiva : null,
+    data: ativo ? dataAtiva : undefined,
+    entregues: item.entregues,
+  })
 
   // Reporta a contribuição deste disparo pro resumo do dia (só disparos já cadastrados
   // contam — sem cadastro não existe UTM/PID salva pra saber qual resultado é de fato dele).
@@ -172,52 +151,6 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     if (!disparoLocal || !resultadoFinanceiro) { onResultado(item.id, null); return }
     onResultado(item.id, { registros: resultadoFinanceiro.registros, ftds: resultadoFinanceiro.ftds, cpas: resultadoFinanceiro.cpas, custo, receita })
   }, [onResultado, item.id, disparoLocal, resultadoFinanceiro, custo, receita])
-
-  // Disparo já cadastrado: busca sempre que a UTM/PID salva existir, independente do
-  // modal estar aberto ou fechado — é o que faz o resultado aparecer direto no card.
-  // Hoje ainda não tem CPA na fonte de CPA — usa o endpoint só com registros/FTDs até fechar o dia.
-  useEffect(() => {
-    if (!disparoLocal || !utmValorAtivo || !casaAtiva || !dataAtiva) return
-    let cancelado = false
-    const url = dataAindaNaoFechou
-      ? `/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
-      : `/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
-
-    setCarregandoResultado(true)
-    fetch(url)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: dataAindaNaoFechou ? null : (json.cpas ?? 0) } : null)
-      })
-      .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
-      .finally(() => { if (!cancelado) setCarregandoResultado(false) })
-
-    return () => { cancelado = true }
-  }, [disparoLocal, utmValorAtivo, casaAtiva, dataAtiva, dataAindaNaoFechou])
-
-  // Cadastro (ainda sem disparo salvo): preview ao vivo enquanto o modal estiver aberto,
-  // a partir do que está selecionado nos dropdowns.
-  useEffect(() => {
-    if (disparoLocal) return
-    if (!open || !utmValorAtivo || !casaAtiva || !dataAtiva) { setResultadoFinanceiro(null); return }
-    let cancelado = false
-    const url = dataAindaNaoFechou
-      ? `/api/tracking/export/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
-      : `/api/campanhas/relatorio/utm?utm=${encodeURIComponent(utmValorAtivo)}&casa=${casaAtiva}&date=${encodeURIComponent(dataAtiva)}`
-
-    setCarregandoResultado(true)
-    fetch(url)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (cancelado) return
-        setResultadoFinanceiro(json ? { casa: casaAtiva, registros: json.registros ?? 0, ftds: json.ftds ?? 0, cpas: dataAindaNaoFechou ? null : (json.cpas ?? 0) } : null)
-      })
-      .catch(() => { if (!cancelado) setResultadoFinanceiro(null) })
-      .finally(() => { if (!cancelado) setCarregandoResultado(false) })
-
-    return () => { cancelado = true }
-  }, [disparoLocal, open, utmValorAtivo, casaAtiva, dataAtiva, dataAindaNaoFechou])
 
   useEffect(() => {
     if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
@@ -590,8 +523,11 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
 
   return (
     <>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true) } }}
         className="w-full text-left rounded p-2.5 cursor-pointer"
         style={{
           backgroundColor: 'var(--bg-surface)',
@@ -603,6 +539,15 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           <span className="text-xs font-semibold" style={{ color: cor }}>
             {item.tipo}
           </span>
+          {disparoLocal && (
+            <button
+              onClick={(e) => { e.stopPropagation(); togglePin(disparoLocal.id) }}
+              className="ml-auto flex items-center justify-center w-6 h-6 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+              title={isPinned(disparoLocal.id) ? 'Desafixar da Home' : 'Fixar na Home'}
+            >
+              <Pin size={12} className={isPinned(disparoLocal.id) ? 'text-amber-400' : 'text-[var(--text-muted)]/40'} />
+            </button>
+          )}
         </div>
 
         <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1">
@@ -645,7 +590,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
             </>
           )}
         </div>
-      </button>
+      </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title={item.nomenclatura}>
         <div className="space-y-4 text-sm">
