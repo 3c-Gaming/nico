@@ -124,6 +124,29 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
     entregues,
   })
 
+  // Leads hoje: mesma tag do fluxo(s) vinculado(s) ao disparo (se houver), via LeadHub —
+  // é um estágio anterior ao Registro (lead do bot antes de virar cadastro na casa).
+  const [leadsHoje, setLeadsHoje] = useState<number | null>(null)
+  useEffect(() => {
+    const configs = getState().flowTagConfigs
+    const flowIds = disparo.flowIds ?? (disparo.flowId ? [disparo.flowId] : [])
+    const tags = [...new Set(flowIds.flatMap((fid) => configs[fid]?.tags ?? []))]
+    if (!tags.length) { setLeadsHoje(null); return }
+    let cancelado = false
+    fetch('/api/leadhub/contagem-por-tag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelado || !json?.leads) return
+        setLeadsHoje(tags.reduce((acc: number, t: string) => acc + (json.leads[t] ?? 0), 0))
+      })
+      .catch(() => { if (!cancelado) setLeadsHoje(null) })
+    return () => { cancelado = true }
+  }, [disparo.flowIds, disparo.flowId])
+
   const casaPrimaria = disparo.casasAposta[0] ? casas[disparo.casasAposta[0]] : null
   const custoPorReg = resultado && resultado.registros > 0 ? custo / resultado.registros : null
   const custoPorFtd = resultado && resultado.ftds > 0 ? custo / resultado.ftds : null
@@ -176,6 +199,11 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
       <td className="py-3 px-3 text-right">
         <span className="font-semibold font-mono text-[var(--d1)]">
           {daxx?.lidas != null ? <StatNumber value={daxx.lidas} /> : '—'}
+        </span>
+      </td>
+      <td className="py-3 px-3 text-right">
+        <span className={`font-semibold font-mono ${leadsHoje ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+          {leadsHoje != null ? <StatNumber value={leadsHoje} /> : '—'}
         </span>
       </td>
       <td className="py-3 px-3 text-right">
@@ -1077,6 +1105,7 @@ export default function HomePage() {
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                     <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">CPAs</th>
