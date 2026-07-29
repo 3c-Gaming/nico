@@ -1097,7 +1097,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <Activity size={16} className="text-[var(--d1)]" />
-                Números Fixados
+                Números Em Atividade
                 <span className="text-xs font-normal text-[var(--text-muted)]">{pinnedNumeros.length}</span>
               </h2>
               {!loading && (
