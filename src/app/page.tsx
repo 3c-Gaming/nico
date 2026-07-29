@@ -103,21 +103,34 @@ function formatarTempoRelativo(iso: string | null): { texto: string; cor: string
   return { texto: `${dd}/${mm} ${hh}:${mi}`, cor: 'text-[var(--text-muted)]/60' }
 }
 
+export interface ResumoDisparoPinado {
+  baseRegistros: number
+  custo: number
+  entregues: number
+  lidas: number
+  leadsHoje: number
+  registros: number
+  ftds: number
+  cpas: number | null
+  receita: number
+}
+
 interface DisparoPinadoRowProps {
   disparo: Disparo
   daxxCampanhas: DisparoDaxx[]
   onUnpin: (id: string) => void
   onVerDetalhes: (id: string) => void
+  onResultado?: (id: string, r: ResumoDisparoPinado | null) => void
 }
 
-function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: DisparoPinadoRowProps) {
+function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onResultado }: DisparoPinadoRowProps) {
   const { casas } = useCasasAposta()
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   const utmValor = disparo.utm || disparo.betmgmPid
   const daxx = daxxCampanhas.find((c) => c.id === (disparo.daxxCampanhaId ?? disparo.templateDaxx?.id))
   const entregues = daxx?.entregues
 
-  const { resultado, carregando, custo, roi } = useResultadoDisparo({
+  const { resultado, carregando, custo, receita, roi } = useResultadoDisparo({
     utmValor,
     casa: casaAtiva,
     data: disparo.dataDisparo,
@@ -150,6 +163,22 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes }: Di
   const casaPrimaria = disparo.casasAposta[0] ? casas[disparo.casasAposta[0]] : null
   const custoPorReg = resultado && resultado.registros > 0 ? custo / resultado.registros : null
   const custoPorFtd = resultado && resultado.ftds > 0 ? custo / resultado.ftds : null
+
+  // Reporta os números desse disparo pro resumo/totais da tabela de fixados —
+  // mesmo padrão do reportarResultado usado no resumo do dia no calendário (ColunaData/CardDisparo).
+  useEffect(() => {
+    onResultado?.(disparo.id, {
+      baseRegistros: disparo.base?.totalRegistros ?? 0,
+      custo,
+      entregues: entregues ?? 0,
+      lidas: daxx?.lidas ?? 0,
+      leadsHoje: leadsHoje ?? 0,
+      registros: resultado?.registros ?? 0,
+      ftds: resultado?.ftds ?? 0,
+      cpas: resultado?.cpas ?? null,
+      receita,
+    })
+  }, [onResultado, disparo.id, disparo.base?.totalRegistros, custo, entregues, daxx?.lidas, leadsHoje, resultado, receita])
 
   return (
     <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -355,6 +384,53 @@ export default function HomePage() {
       .map((id) => todosDisparos.find((d) => d.id === id))
       .filter((d): d is Disparo => !!d)
   }, [pinnedDisparos, todosDisparos])
+
+  // Números por disparo fixado (reportados por cada DisparoPinadoRow via onResultado),
+  // pra somar na linha de totais da tabela sem re-buscar/re-calcular nada aqui em cima.
+  const [resumosPinados, setResumosPinados] = useState<Map<string, ResumoDisparoPinado>>(new Map())
+  const reportarResumoPinado = useCallback((id: string, r: ResumoDisparoPinado | null) => {
+    setResumosPinados((prev) => {
+      const atual = prev.get(id) ?? null
+      if (JSON.stringify(atual) === JSON.stringify(r)) return prev
+      const proximo = new Map(prev)
+      if (r) proximo.set(id, r)
+      else proximo.delete(id)
+      return proximo
+    })
+  }, [])
+
+  const totalPinados = useMemo(() => {
+    let baseRegistros = 0
+    let custo = 0
+    let entregues = 0
+    let lidas = 0
+    let leadsHoje = 0
+    let registros = 0
+    let ftds = 0
+    let cpas = 0
+    let receita = 0
+    let temCpaFechado = false
+    for (const disparo of disparosPinados) {
+      const r = resumosPinados.get(disparo.id)
+      if (!r) continue
+      baseRegistros += r.baseRegistros
+      custo += r.custo
+      entregues += r.entregues
+      lidas += r.lidas
+      leadsHoje += r.leadsHoje
+      registros += r.registros
+      ftds += r.ftds
+      receita += r.receita
+      if (r.cpas != null) {
+        cpas += r.cpas
+        temCpaFechado = true
+      }
+    }
+    const custoPorReg = registros > 0 ? custo / registros : null
+    const custoPorFtd = ftds > 0 ? custo / ftds : null
+    const roi = custo > 0 && receita > 0 ? receita / custo : null
+    return { baseRegistros, custo, custoPorReg, custoPorFtd, entregues, lidas, leadsHoje, registros, ftds, cpas: temCpaFechado ? cpas : null, roi }
+  }, [disparosPinados, resumosPinados])
 
   useEffect(() => {
     if (!pinnedFunis.length) return
@@ -1121,9 +1197,67 @@ export default function HomePage() {
                       daxxCampanhas={daxxCampanhas}
                       onUnpin={handleTogglePinDisparo}
                       onVerDetalhes={(id) => router.push(`/disparos/${id}`)}
+                      onResultado={reportarResumoPinado}
                     />
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
+                    <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={2}>Total</td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-[var(--text-primary)]"><StatNumber value={totalPinados.baseRegistros} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-emerald-400"><StatNumber value={totalPinados.custo} prefix="R$ " decimals={2} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {totalPinados.custoPorReg != null ? (
+                        <span className="font-bold font-mono text-emerald-400"><StatNumber value={totalPinados.custoPorReg} prefix="R$ " decimals={2} /></span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {totalPinados.custoPorFtd != null ? (
+                        <span className="font-bold font-mono text-emerald-400"><StatNumber value={totalPinados.custoPorFtd} prefix="R$ " decimals={2} /></span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-green-500"><StatNumber value={totalPinados.entregues} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-[var(--d1)]"><StatNumber value={totalPinados.lidas} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`font-bold font-mono ${totalPinados.leadsHoje ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}><StatNumber value={totalPinados.leadsHoje} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-[var(--text-primary)]"><StatNumber value={totalPinados.registros} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-bold font-mono text-[var(--d1)]"><StatNumber value={totalPinados.ftds} /></span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {totalPinados.cpas != null ? (
+                        <span className="font-bold font-mono text-[var(--text-primary)]"><StatNumber value={totalPinados.cpas} /></span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {totalPinados.roi != null ? (
+                        <span className={`font-bold font-mono ${totalPinados.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                          <StatNumber value={totalPinados.roi} suffix="x" decimals={Number.isInteger(totalPinados.roi) ? 0 : 1} />
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3" />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </section>

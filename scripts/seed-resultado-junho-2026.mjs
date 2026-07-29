@@ -1,5 +1,5 @@
-// Script: le um CSV de disparos (por padrao DISP_JUNHO_RESULTADO_OK.csv na raiz
-// do repo, mesma fonte de gerar-resultados-junho-2026.mjs) e insere/atualiza a
+// Script: le um CSV de disparos (por padrao resultados/06-2026/GERAL-JUNHO.csv,
+// mesma fonte de gerar-resultados-junho-2026.mjs) e insere/atualiza a
 // linha "Junho 2026" na tabela `resultados`, preservando o `topicos` ja
 // customizado no editor (so os numeros em `dados` sao recalculados).
 //
@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(__dirname, '..')
-const CSV_PATH = process.argv[2] ? resolve(process.argv[2]) : resolve(REPO_ROOT, 'DISP_JUNHO_RESULTADO_OK.csv')
+const CSV_PATH = process.argv[2] ? resolve(process.argv[2]) : resolve(REPO_ROOT, 'resultados', '06-2026', 'GERAL-JUNHO.csv')
 
 function parseCsvLine(line) {
   const campos = []
@@ -83,7 +83,9 @@ function round2(n) {
 
 const raw = readFileSync(CSV_PATH, 'utf-8')
 const linhas = raw.split(/\r?\n/).filter((l) => l.trim().length > 0)
-const corpo = linhas.slice(1, -1)
+const ultimaLinha = parseCsvLine(linhas[linhas.length - 1])[0]?.trim().toUpperCase() ?? ''
+const temLinhaTotais = ultimaLinha.includes('TOTAL') && !/^\d{2}\/\d{2}$/.test(ultimaLinha)
+const corpo = linhas.slice(1, temLinhaTotais ? -1 : undefined) // remove header e, se existir, a linha TOTAIS
 
 const disparos = corpo.map((linha) => {
   const c = parseCsvLine(linha)

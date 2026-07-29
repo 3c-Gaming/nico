@@ -1,4 +1,4 @@
-// Script one-off: le DISP_JUNHO_RESULTADO_OK.csv da raiz do repo, classifica cada
+// Script one-off: le resultados/06-2026/GERAL-JUNHO.csv, classifica cada
 // disparo por ciclo (D1/D3/D5/D7/TOTAL) e casa, agrega tudo e escreve
 // src/data/resultadosJunho2026.ts com os dados prontos pra pagina /resultados-junho-26.
 //
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(__dirname, '..')
-const CSV_PATH = resolve(REPO_ROOT, 'DISP_JUNHO_RESULTADO_OK.csv')
+const CSV_PATH = resolve(REPO_ROOT, 'resultados', '06-2026', 'GERAL-JUNHO.csv')
 const OUT_PATH = resolve(REPO_ROOT, 'src', 'data', 'resultadosJunho2026.ts')
 
 function parseCsvLine(line) {
@@ -83,7 +83,9 @@ function round2(n) {
 
 const raw = readFileSync(CSV_PATH, 'utf-8')
 const linhas = raw.split(/\r?\n/).filter((l) => l.trim().length > 0)
-const corpo = linhas.slice(1, -1) // remove header e linha TOTAIS
+const ultimaLinha = parseCsvLine(linhas[linhas.length - 1])[0]?.trim().toUpperCase() ?? ''
+const temLinhaTotais = ultimaLinha.includes('TOTAL') && !/^\d{2}\/\d{2}$/.test(ultimaLinha)
+const corpo = linhas.slice(1, temLinhaTotais ? -1 : undefined) // remove header e, se existir, a linha TOTAIS
 
 const disparos = corpo.map((linha) => {
   const c = parseCsvLine(linha)
