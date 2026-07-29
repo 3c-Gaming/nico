@@ -732,6 +732,17 @@ export default function HomePage() {
   const disparoRows = funilRows.filter((r) => r.tipo === 'disparo')
   const trafficRows = funilRows.filter((r) => r.tipo === 'traffic')
 
+  const totalTraffic = useMemo(() => {
+    return trafficRows.reduce(
+      (acc, r) => ({
+        leadsHoje: acc.leadsHoje + r.leadsHoje,
+        registros: acc.registros + r.registros,
+        ftds: acc.ftds + r.ftds,
+      }),
+      { leadsHoje: 0, registros: 0, ftds: 0 },
+    )
+  }, [trafficRows])
+
   const disparosDoModal = useMemo<Disparo[]>(() => {
     if (!modalLinkFunil) return []
     return todosDisparos.filter((d) => d.dataDisparo === getLocalDate())
@@ -1331,6 +1342,24 @@ export default function HomePage() {
                     <tbody>
                       {renderFunilRows(trafficRows, 'traffic')}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
+                        <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={2}>Total</td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-bold ${totalTraffic.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                            {totalTraffic.leadsHoje}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
+                        </td>
+                        <td className="py-3 px-3" />
+                        <td className="py-3 px-3" />
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </section>
