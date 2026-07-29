@@ -61,28 +61,28 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
     <div
       data-dia-index={index}
       className={`flex-shrink-0 w-[260px] border-r border-[var(--border)] ${
-        isHoje ? 'bg-[var(--d1)]/5' : ''
+        isHoje ? 'bg-[var(--success)]/5' : ''
       } ${isFimDeSemana && !isHoje ? 'bg-black/10' : ''}`}
-      style={isHoje ? { borderTop: '2px solid var(--d1)' } : undefined}
+      style={isHoje ? { borderTop: '2px solid var(--success)' } : undefined}
     >
       <div
-        className={`sticky top-0 z-10 px-3 py-2.5 border-b flex items-start justify-between gap-2 ${
-          isHoje ? 'border-[var(--d1)]/30' : 'border-[var(--border)]'
+        className={`sticky top-0 z-10 px-3 py-1.5 border-b flex items-start justify-between gap-2 ${
+          isHoje ? 'border-[var(--success)]/30' : 'border-[var(--border)]'
         } bg-[var(--bg-surface)]`}
         style={isHoje ? { backgroundColor: 'var(--bg-surface)' } : undefined}
       >
         <div>
           <div className={`text-xs font-semibold uppercase ${
-            isHoje ? 'text-[var(--d1)]' : 'text-[var(--text-secondary)]'
+            isHoje ? 'text-[var(--success)]' : 'text-[var(--text-secondary)]'
           }`}>
             {['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'][data.getDay()]}
           </div>
           <div className={`text-lg font-semibold ${
-            isHoje ? 'text-[var(--d1)]' : 'text-[var(--text-primary)]'
+            isHoje ? 'text-[var(--success)]' : 'text-[var(--text-primary)]'
           }`}>
             {data.getDate()}
             {isHoje && (
-              <span className="ml-1.5 text-xs font-normal text-[var(--d1)]/70">hoje</span>
+              <span className="ml-1.5 text-xs font-normal text-[var(--success)]/70">hoje</span>
             )}
           </div>
         </div>
@@ -90,26 +90,27 @@ export function ColunaData({ data, hoje, disparos, index }: ColunaDataProps) {
         {resumo.contribuintes > 0 && (
           diaAindaNaoFechou ? (
             <div className="text-right pt-0.5 flex flex-col items-end leading-tight">
-              <span className="text-[10px] text-[var(--text-muted)]">
-                <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
+              <span className="text-[12px] text-[var(--text-primary)] font-bold whitespace-nowrap">
+               Custo <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
               </span>
-              <span className="text-[11px] font-semibold text-[var(--text-primary)] whitespace-nowrap">
+              <span className="text-sm font-bold text-[var(--text-muted)]">—</span>
+              <span className="text-[10px] font-semibold text-[var(--text-primary)] whitespace-nowrap">
                 <StatNumber value={resumo.registros} /> REG · <StatNumber value={resumo.ftds} /> FTD
               </span>
             </div>
           ) : (
             <div className="text-right pt-0.5 flex flex-col items-end leading-tight">
-              <span className="text-[10px] text-[var(--text-muted)]">
-                <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
+              <span className="text-[12px] font-bold text-[var(--text-primary)]">
+                Custo <StatNumber value={resumo.custo} prefix="R$ " decimals={2} />
               </span>
               {resumo.roi != null ? (
                 <span className={`text-sm font-bold ${resumo.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                  <StatNumber value={resumo.roi} suffix="x" decimals={Number.isInteger(resumo.roi) ? 0 : 1} />
+                 ROI <StatNumber value={resumo.roi} suffix="x" decimals={Number.isInteger(resumo.roi) ? 0 : 1} />
                 </span>
               ) : (
                 <span className="text-sm font-bold text-[var(--text-muted)]">—</span>
               )}
-              <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
+              <span className="text-[10px] text-[var(--text-primary)] whitespace-nowrap">
                 <StatNumber value={resumo.registros} /> REG · <StatNumber value={resumo.ftds} /> FTD · <StatNumber value={resumo.cpas} /> CPA
               </span>
             </div>
