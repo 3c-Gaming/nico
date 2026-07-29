@@ -71,7 +71,7 @@ export async function listarTags(botId: string): Promise<TagInfo[]> {
     return data.map((t: Record<string, unknown>) => ({
       id: String(t.id ?? ''),
       name: String(t.name ?? ''),
-      contactCount: Number(t.contact_count ?? 0),
+      contactCount: Number(t.count ?? t.contact_count ?? 0),
     }))
   } catch {
     return []

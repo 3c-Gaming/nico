@@ -4,8 +4,9 @@ import { useState, useEffect, Fragment } from 'react'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, Plus, X, Check, AlertTriangle, UserPlus, UserX } from 'lucide-react'
+import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, X, Check, AlertTriangle, UserPlus, UserX } from 'lucide-react'
 import { getState, updateFlowTagConfig, addUsuarioResponsavel, deletarUsuarioResponsavel } from '@/lib/store'
+import { TagComboBox } from '@/components/ui/TagComboBox'
 import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig, UsuarioResponsavel } from '@/types'
 
 function TagChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -26,20 +27,8 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const [input, setInput] = useState('')
   const [saving, setSaving] = useState(false)
 
-  function addTag() {
-    const val = input.trim()
-    if (val && !tags.includes(val)) {
-      setTags([...tags, val])
-      setInput('')
-    }
-  }
-
   function removeTag(tag: string) {
     setTags(tags.filter((t) => t !== tag))
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') { e.preventDefault(); addTag() }
   }
 
   async function handleSave() {
@@ -72,17 +61,14 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
       </div>
 
       <div className="flex items-center gap-2">
-        <input
-          type="text"
+        <TagComboBox
+          botId={botId}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="+ adicionar tag…"
-          className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
+          onChange={setInput}
+          onSelect={(tag) => { if (!tags.includes(tag)) setTags([...tags, tag]); setInput('') }}
+          existingTags={tags}
+          placeholder="selecione ou digite uma tag..."
         />
-        <Button size="sm" variant="ghost" onClick={addTag} disabled={!input.trim()}>
-          <Plus size={12} />
-        </Button>
         <Button size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
           <Save size={12} />
           Salvar

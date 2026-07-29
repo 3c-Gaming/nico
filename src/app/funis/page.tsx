@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Plus, Search, Pin, ExternalLink } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
+import { TagComboBox } from '@/components/ui/TagComboBox'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
@@ -101,20 +102,8 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   const casasAposta = Object.values(getState().casasAposta)
 
-  function addTag() {
-    const val = input.trim()
-    if (val && !tags.includes(val)) {
-      setTags([...tags, val])
-      setInput('')
-    }
-  }
-
   function removeTag(tag: string) {
     setTags(tags.filter((t) => t !== tag))
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') { e.preventDefault(); addTag() }
   }
 
   function toggleCasa(casaId: string) {
@@ -197,23 +186,14 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
               ))}
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="+ adicionar tag…"
-              className="flex-1 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
-            />
-            <button
-              onClick={addTag}
-              disabled={!input.trim()}
-              className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] disabled:opacity-30 transition-colors"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
+          <TagComboBox
+            botId={botId}
+            value={input}
+            onChange={setInput}
+            onSelect={(tag) => { if (!tags.includes(tag)) setTags([...tags, tag]); setInput('') }}
+            existingTags={tags}
+            placeholder="selecione ou digite uma tag..."
+          />
         </div>
       </div>
       <div className="flex items-start gap-2">

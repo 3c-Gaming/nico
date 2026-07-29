@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch, invalidate } from '@/lib/cache'
+import { listarNumeros } from '@/lib/integrações/sendpulse'
+import { listarTags } from '@/lib/mcp/sendpulse'
 
 const BASE_URL = 'https://uptntyjjfcbopcxflgnp.supabase.co/functions/v1/leads-export'
 const EXPORT_KEY = '12ec6e8b105c396d3ab940adab51e516'
 const TIMEOUT = 30_000
 const TTL_TODAY = 60_000
-const TTL_TOTAL = 5 * 60_000
+const TTL_BOTS = 5 * 60_000
+const TTL_TAGS_POR_BOT = 5 * 60_000
 
 function hojeISO(): string {
   const d = new Date()
@@ -55,6 +58,33 @@ async function contarTag(
   return { count: leads.length, ultimoLeadAt }
 }
 
+/**
+ * Total (todo o período) direto da SendPulse — a fonte já mantém esse contador nativo por
+ * tag (chatbots_bots_tags_list), então isso substitui o antigo contarTag(tag) sem data, que
+ * baixava o histórico inteiro de leads da tag só pra contar o tamanho do array (bem mais lento
+ * e sem limite, já que esse total só cresce). Busca a lista de tags de cada bot (cacheada) e
+ * soma as contagens por nome de tag entre todos os bots.
+ */
+async function contarTagsSendpulseTotal(tags: string[]): Promise<Record<string, number>> {
+  const bots = await getOrFetch('sendpulse-bots', 'all', TTL_BOTS, () => listarNumeros())
+  const tagsPorBot = await Promise.all(
+    bots.map((bot) =>
+      getOrFetch('sendpulse-tags-por-bot', bot.id, TTL_TAGS_POR_BOT, () => listarTags(bot.id)).catch(() => []),
+    ),
+  )
+
+  const totalPorNome = new Map<string, number>()
+  for (const tagsDoBot of tagsPorBot) {
+    for (const t of tagsDoBot) {
+      totalPorNome.set(t.name, (totalPorNome.get(t.name) ?? 0) + t.contactCount)
+    }
+  }
+
+  const resultado: Record<string, number> = {}
+  for (const tag of tags) resultado[tag] = totalPorNome.get(tag) ?? 0
+  return resultado
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { tags: string[]; data?: string; refresh?: boolean }
@@ -65,29 +95,27 @@ export async function POST(request: NextRequest) {
     if (body.refresh) {
       for (const tag of body.tags) {
         invalidate('leadhub-hoje-v2', tag)
-        invalidate('leadhub-total-v2', tag)
       }
+      invalidate('sendpulse-tags-por-bot')
     }
 
     const hoje = body.data ?? hojeISO()
-    const resultados = await Promise.allSettled(
-      body.tags.map(async (tag) => {
-        const [hojeResult, totalResult] = await Promise.all([
-          getOrFetch('leadhub-hoje-v2', tag, TTL_TODAY, () => contarTag(tag, hoje, hoje)),
-          getOrFetch('leadhub-total-v2', tag, TTL_TOTAL, () => contarTag(tag)),
-        ])
-        return { tag, leads: hojeResult.count, total: totalResult.count, ultimoLead: hojeResult.ultimoLeadAt }
-      })
-    )
+    const [totais, resultadosHoje] = await Promise.all([
+      contarTagsSendpulseTotal(body.tags).catch(() => ({} as Record<string, number>)),
+      Promise.allSettled(
+        body.tags.map(async (tag) => {
+          const hojeResult = await getOrFetch('leadhub-hoje-v2', tag, TTL_TODAY, () => contarTag(tag, hoje, hoje))
+          return { tag, leads: hojeResult.count, ultimoLead: hojeResult.ultimoLeadAt }
+        }),
+      ),
+    ])
 
     const leads: Record<string, number> = {}
-    const totais: Record<string, number> = {}
     const ultimoLead: Record<string, string | null> = {}
 
-    for (const r of resultados) {
+    for (const r of resultadosHoje) {
       if (r.status === 'fulfilled') {
         leads[r.value.tag] = r.value.leads
-        totais[r.value.tag] = r.value.total
         ultimoLead[r.value.tag] = r.value.ultimoLead
       }
     }
