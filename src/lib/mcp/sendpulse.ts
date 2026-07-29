@@ -62,6 +62,14 @@ export async function listarTags(botId: string): Promise<TagInfo[]> {
   })
 
   const texto = extrairTexto(result.content as unknown[])
+
+  // A MCP não lança exceção pra erro de execução da ferramenta — devolve isError:true com o
+  // texto do erro no lugar do conteúdo normal (ex: bot desconectado na SendPulse, erro 400).
+  // Sem checar isso, esse texto de erro cairia no catch do JSON.parse abaixo e voltaria como
+  // "sem tags" silenciosamente, sem dar pra distinguir de um bot que realmente não tem tags.
+  if (result.isError) {
+    throw new Error(texto || 'Tool execution failed')
+  }
   if (!texto) return []
 
   try {

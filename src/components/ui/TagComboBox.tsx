@@ -21,6 +21,7 @@ interface TagComboBoxProps {
 export function TagComboBox({ botId, value, onChange, onSelect, existingTags, placeholder }: TagComboBoxProps) {
   const [sugestoes, setSugestoes] = useState<TagSuggestion[]>([])
   const [carregando, setCarregando] = useState(false)
+  const [desconectado, setDesconectado] = useState(false)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -28,9 +29,14 @@ export function TagComboBox({ botId, value, onChange, onSelect, existingTags, pl
     if (!botId) return
     let cancelado = false
     setCarregando(true)
+    setDesconectado(false)
     fetch(`/api/sendpulse/tags?botId=${encodeURIComponent(botId)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((json) => { if (!cancelado) setSugestoes(json?.tags ?? []) })
+      .then((json) => {
+        if (cancelado) return
+        setSugestoes(json?.tags ?? [])
+        setDesconectado(!!json?.desconectado)
+      })
       .catch(() => { if (!cancelado) setSugestoes([]) })
       .finally(() => { if (!cancelado) setCarregando(false) })
     return () => { cancelado = true }
@@ -77,10 +83,15 @@ export function TagComboBox({ botId, value, onChange, onSelect, existingTags, pl
         placeholder={placeholder}
         className="w-full h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
       />
-      {open && (filtradas.length > 0 || carregando || (value.trim() && !existeExata)) && (
+      {open && (filtradas.length > 0 || carregando || desconectado || (value.trim() && !existeExata)) && (
         <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-md shadow-lg max-h-48 overflow-y-auto">
           {carregando && (
             <div className="px-3 py-1.5 text-xs text-[var(--text-muted)]">Carregando tags da SendPulse...</div>
+          )}
+          {!carregando && desconectado && (
+            <div className="px-3 py-1.5 text-xs text-[var(--text-muted)]">
+              Esse número está desconectado na SendPulse — não dá pra listar as tags dele automaticamente. Pode digitar o nome manualmente.
+            </div>
           )}
           {filtradas.map((t) => (
             <button
