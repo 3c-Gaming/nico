@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { ItemCalendario, StatusDisparo, Disparo } from '@/types'
+import type { ItemCalendario, StatusDisparo, Disparo, NumeroSendpulse, FluxoSendpulse } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEsteiras } from '@/hooks/useEsteiras'
@@ -18,7 +18,9 @@ import { StatNumber } from '../ui/StatNumber'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { formatNumero, CUSTO_POR_ENTREGUE, nomeCurto } from '@/lib/resultadoDisparo'
-import { ExternalLink, Trash2, Check, Clock, Database, Pin } from 'lucide-react'
+import { StepNumero } from '../disparos/StepNumero'
+import { getState } from '@/lib/store'
+import { ExternalLink, Trash2, Check, Clock, Database, Pin, ChevronDown, ChevronUp } from 'lucide-react'
 import Link from 'next/link'
 
 const TIPO_CORES: Record<string, string> = {
@@ -106,6 +108,11 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
+  const [numerosSendpulse, setNumerosSendpulseState] = useState<NumeroSendpulse[]>(item.disparoLocal?.numerosSendpulse ?? [])
+  const [flowIds, setFlowIdsState] = useState<string[]>(item.disparoLocal?.flowIds ?? (item.disparoLocal?.flowId ? [item.disparoLocal.flowId] : []))
+  const [fluxosDisponiveis, setFluxosDisponiveis] = useState<FluxoSendpulse[]>([])
+  const [carregandoFluxos, setCarregandoFluxos] = useState(false)
+  const [mostrarFluxoPicker, setMostrarFluxoPicker] = useState(() => (item.disparoLocal?.numerosSendpulse?.length ?? 0) > 0)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
   const { casas, list: casasList, add: addCasa } = useCasasAposta()
@@ -154,6 +161,38 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  const botIdsSendpulseKey = [...new Set(numerosSendpulse.map((n) => n.id))].join(',')
+
+  // Busca os fluxos dos números escolhidos, pra poder marcar quais têm a tag que a gente
+  // quer acompanhar (mesma tag configurada em /funis pra esse fluxo).
+  useEffect(() => {
+    const botIds = botIdsSendpulseKey ? botIdsSendpulseKey.split(',') : []
+    if (!botIds.length) { setFluxosDisponiveis([]); return }
+    let cancelado = false
+    setCarregandoFluxos(true)
+    Promise.all(
+      botIds.map((botId) =>
+        fetch(`/api/sendpulse/fluxos?bot_id=${encodeURIComponent(botId)}`)
+          .then((r) => (r.ok ? r.json() : { fluxos: [] }))
+          .catch(() => ({ fluxos: [] })),
+      ),
+    )
+      .then((resultados) => { if (!cancelado) setFluxosDisponiveis(resultados.flatMap((r) => r.fluxos ?? [])) })
+      .finally(() => { if (!cancelado) setCarregandoFluxos(false) })
+    return () => { cancelado = true }
+  }, [botIdsSendpulseKey])
+
+  function handleNumerosSendpulseChange(nums: NumeroSendpulse[]) {
+    setNumerosSendpulseState(nums)
+    if (disparoLocal) update(disparoLocal.id, { numerosSendpulse: nums })
+  }
+
+  function toggleFlow(flowId: string) {
+    const proximo = flowIds.includes(flowId) ? flowIds.filter((id) => id !== flowId) : [...flowIds, flowId]
+    setFlowIdsState(proximo)
+    if (disparoLocal) update(disparoLocal.id, { flowIds: proximo })
+  }
 
   function handleStatusChange(status: StatusDisparo) {
     if (!item.disparoLocal) return
@@ -732,6 +771,72 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
             <div>
               <span className="text-[var(--text-muted)] block text-xs mb-1">Resultado (via UTM)</span>
               <BlocoResultadoFinanceiro carregando={carregandoResultado} resultado={resultadoFinanceiro} custo={custo} receita={receita} roi={roi} />
+            </div>
+          )}
+
+          {disparoLocal && (
+            <div>
+              <button
+                onClick={() => setMostrarFluxoPicker((v) => !v)}
+                className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mb-1"
+              >
+                {mostrarFluxoPicker ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                Fluxo / Leads hoje {flowIds.length > 0 && <span className="text-[var(--d1)]">({flowIds.length} vinculado{flowIds.length > 1 ? 's' : ''})</span>}
+              </button>
+              {mostrarFluxoPicker && (
+                <div className="space-y-3 p-3 rounded bg-[var(--bg-surface)] border border-[var(--border)]">
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    Vincule o número e o fluxo da SendPulse desse disparo pra ver os Leads hoje (mesma tag configurada em /funis pra esse fluxo).
+                  </p>
+                  <StepNumero numeros={numerosSendpulse} onChange={handleNumerosSendpulseChange} />
+                  {numerosSendpulse.length > 0 && (
+                    <div>
+                      <span className="text-[var(--text-muted)] block text-xs mb-1">Fluxos</span>
+                      {carregandoFluxos ? (
+                        <span className="text-[10px] text-[var(--text-muted)]">carregando fluxos...</span>
+                      ) : fluxosDisponiveis.length === 0 ? (
+                        <p className="text-[10px] text-[var(--text-muted)]">Nenhum fluxo encontrado pra esse(s) número(s)</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {numerosSendpulse.map((num) => {
+                            const flowsDoNumero = fluxosDisponiveis.filter((f) => f.botId === num.id)
+                            if (!flowsDoNumero.length) return null
+                            return (
+                              <div key={num.id}>
+                                <span className="text-[10px] text-[var(--text-secondary)] font-mono">{num.numero}</span>
+                                <div className="space-y-0.5 mt-0.5">
+                                  {flowsDoNumero.map((flow) => {
+                                    const cfg = getState().flowTagConfigs[flow.id]
+                                    const selected = flowIds.includes(flow.id)
+                                    return (
+                                      <label
+                                        key={flow.id}
+                                        className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded hover:bg-[var(--bg-elevated)] text-xs"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={selected}
+                                          onChange={() => toggleFlow(flow.id)}
+                                          className="accent-[var(--d1)]"
+                                        />
+                                        <span className="text-[var(--text-primary)]">{flow.nome}</span>
+                                        {cfg?.funil && <span className="text-[var(--text-muted)]">({cfg.funil})</span>}
+                                        {(cfg?.tags?.length ?? 0) > 0 && (
+                                          <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">{cfg!.tags.join(', ')}</span>
+                                        )}
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
