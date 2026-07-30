@@ -56,6 +56,13 @@ function classificarCiclo(nome) {
   return m ? `D${m[1]}` : 'TOTAL'
 }
 
+// Mesma casa aparece com grafias diferentes no CSV de origem (ex: "MGMBET" e "MGM") —
+// normaliza pro nome canônico antes de agregar, senão vira duas linhas separadas em "por casa".
+const CASA_CANONICA = { MGMBET: 'MGM' }
+function normalizarCasa(casa) {
+  return CASA_CANONICA[casa] ?? casa
+}
+
 function agregadoVazio() {
   return { disparos: 0, entregues: 0, lidas: 0, custo: 0, faturamento: 0, lucro: 0, registros: 0, ftd: 0, cpas: 0, roas: 0 }
 }
@@ -92,7 +99,7 @@ const disparos = corpo.map((linha) => {
   const nome = (c[3] ?? '').trim()
   return {
     data: (c[0] ?? '').trim(),
-    casa: (c[1] ?? '').trim(),
+    casa: normalizarCasa((c[1] ?? '').trim()),
     utm: (c[2] ?? '').trim(),
     nome,
     ciclo: classificarCiclo(nome),

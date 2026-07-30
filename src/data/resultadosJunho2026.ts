@@ -86,17 +86,17 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     }
   },
   "porCasa": {
-    "MGMBET": {
-      "disparos": 6,
-      "entregues": 44952,
-      "lidas": 0,
-      "custo": 11238,
-      "faturamento": 20800,
-      "lucro": 9562,
-      "registros": 572,
-      "ftd": 303,
-      "cpas": 80,
-      "roas": 1.8508631429079907
+    "MGM": {
+      "disparos": 99,
+      "entregues": 650510,
+      "lidas": 322840,
+      "custo": 89960.54000000001,
+      "faturamento": 141700,
+      "lucro": 51739.46000000002,
+      "registros": 4581,
+      "ftd": 2417,
+      "cpas": 579,
+      "roas": 1.5751350536579702
     },
     "SuperBet": {
       "disparos": 250,
@@ -109,18 +109,6 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
       "ftd": 4662,
       "cpas": 3243,
       "roas": 4.580165873266886
-    },
-    "MGM": {
-      "disparos": 93,
-      "entregues": 605558,
-      "lidas": 322840,
-      "custo": 78722.54000000002,
-      "faturamento": 120900,
-      "lucro": 42177.46000000002,
-      "registros": 4009,
-      "ftd": 2114,
-      "cpas": 499,
-      "roas": 1.535773617060628
     },
     "KingPanda": {
       "disparos": 4,
@@ -500,7 +488,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
   "disparos": [
     {
       "data": "01/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13044",
       "nome": "Odd 100 - Base semana",
       "ciclo": "TOTAL",
@@ -585,7 +573,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     },
     {
       "data": "04/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13396",
       "nome": "ODD 100 - Base MGM - D1 - 03/06",
       "ciclo": "D1",
@@ -602,7 +590,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     },
     {
       "data": "04/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13397",
       "nome": "ODD 100 - Base Esportiva - D1 - 03/06",
       "ciclo": "D1",
@@ -670,7 +658,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     },
     {
       "data": "05/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13396",
       "nome": "ODD 100 - Base MGM - D1 - 04/06",
       "ciclo": "D1",
@@ -687,7 +675,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     },
     {
       "data": "05/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13397",
       "nome": "ODD 100 - Base Esportiva - D1 - 04/06",
       "ciclo": "D1",
@@ -704,7 +692,7 @@ export const resultadosJunho2026: ResultadosJunho2026 = {
     },
     {
       "data": "05/06",
-      "casa": "MGMBET",
+      "casa": "MGM",
       "utm": "13398",
       "nome": "ODD 330 - Base Super - D3 - 04/06",
       "ciclo": "D3",
