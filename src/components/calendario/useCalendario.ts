@@ -17,7 +17,7 @@ export interface FiltrosCalendario {
   mostrarDaxx: boolean
 }
 
-const ORDEM_TIPO: Record<string, number> = { D1: 0, D3: 1, D5: 2, D7: 3, PONTUAL: 4 }
+const ORDEM_TIPO: Record<string, number> = { PONTUAL: 0, D1: 1, D3: 2, D5: 3, D7: 4 }
 
 const DIAS_ANTES = 3
 const DIAS_DEPOIS = 14
