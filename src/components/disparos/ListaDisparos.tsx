@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { getState } from '@/lib/store'
 import { Badge } from '../ui/Badge'
 import { Chip } from '../ui/Chip'
@@ -15,11 +16,147 @@ import Link from 'next/link'
 import { sincronizarResultados } from '@/lib/casas/sync'
 import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
 import type { Disparo, TipoDisparo } from '@/types'
+import type { CasaAposta } from '@/types'
 
 type SortField = 'dataDisparo' | 'status'
 type SortDir = 'asc' | 'desc'
 
 const TIPOS: TipoDisparo[] = ['D1', 'D3', 'D5', 'D7', 'PONTUAL']
+
+interface DisparoRowProps {
+  d: Disparo
+  casas: Record<string, CasaAposta>
+  onNavigate: (id: string) => void
+  onMarcarExecutado: (id: string) => void
+  onClonar: (d: Disparo) => void
+  onExcluir: (id: string) => void
+}
+
+/** Mesmo match casa+utm/pid usado no calendário (CardDisparo/DisparoPinadoRow): busca ao
+ * vivo via useResultadoDisparo em vez de depender do sync em lote (que só roda uma vez
+ * no carregamento da página e não pega disparo cadastrado depois). Só busca disparo já
+ * cadastrado com UTM/PID salvo — sem isso não tem o que casar. */
+function DisparoRow({ d, casas, onNavigate, onMarcarExecutado, onClonar, onExcluir }: DisparoRowProps) {
+  const casaAtiva: 'superbet' | 'betmgm' | null = d.utm ? 'superbet' : d.betmgmPid ? 'betmgm' : null
+  const utmValor = d.utm || d.betmgmPid
+  const { resultado } = useResultadoDisparo({ utmValor, casa: casaAtiva, data: d.dataDisparo })
+
+  return (
+    <tr
+      onClick={() => onNavigate(d.id)}
+      className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] cursor-pointer transition-colors"
+    >
+      <td className="px-3 py-3 text-[var(--text-muted)] text-xs">
+        {d.esteiraPaiId ? <GitBranch size={14} className="text-[var(--d3)]" /> : '-'}
+      </td>
+      <td className="px-3 py-3 font-mono text-xs text-[var(--text-primary)] max-w-[250px] truncate">
+        {d.nomenclatura}
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex flex-wrap gap-1">
+          {d.casasAposta.map((cId) => {
+            const c = casas[cId]
+            if (!c) return null
+            return <Chip key={cId} label={c.nome} cor={c.cor} size="sm" />
+          })}
+        </div>
+      </td>
+      <td className="px-3 py-3 text-[var(--text-primary)] text-xs">{d.dataDisparo}</td>
+      <td className="px-3 py-3 text-[var(--text-secondary)] text-xs">{d.horarioDisparo}</td>
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-1.5">
+          <StatusDot status={d.status} size={6} />
+          <Badge variant="status" value={d.status} />
+        </div>
+      </td>
+      <td className="px-3 py-3">
+        {(() => {
+          const c = d.conversao
+          if (!c || c.entreguesDaxx <= 0) return <span className="text-xs text-[var(--text-muted)]">—</span>
+          const pct = ((c.leadsFluxo / c.entreguesDaxx) * 100).toFixed(2)
+          return (
+            <span className="text-xs font-mono font-medium text-[var(--d1)]">
+              {pct}%
+            </span>
+          )
+        })()}
+      </td>
+      <td className="px-3 py-3">
+        {resultado
+          ? <span className="text-xs font-mono text-[var(--text-primary)]">{resultado.registros}</span>
+          : <span className="text-xs text-[var(--text-muted)]">—</span>
+        }
+      </td>
+      <td className="px-3 py-3">
+        {resultado
+          ? <span className="text-xs font-mono text-[var(--d1)]">{resultado.ftds}</span>
+          : <span className="text-xs text-[var(--text-muted)]">—</span>
+        }
+      </td>
+      <td className="px-3 py-3">
+        {resultado?.cpas != null
+          ? <span className="text-xs font-mono text-[var(--text-primary)]">{resultado.cpas}</span>
+          : <span className="text-xs text-[var(--text-muted)]">—</span>
+        }
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-2">
+          {d.base.totalRegistros != null
+            ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.base.totalRegistros.toLocaleString('pt-BR')}</span>
+            : <span className="text-xs text-[var(--text-muted)]">—</span>
+          }
+          <span className={`text-[10px] ${
+            d.base.status === 'disponivel' ? 'text-[var(--success)]' :
+            d.base.status === 'erro' ? 'text-[var(--error)]' :
+            'text-[var(--text-muted)]'
+          }`}>
+            {d.base.status}
+          </span>
+        </div>
+      </td>
+      <td className="px-3 py-3 text-right">
+        {d.base.totalRegistros != null
+          ? <span className="text-xs font-mono text-[var(--text-primary)]">{(d.base.totalRegistros * 0.13).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          : <span className="text-xs text-[var(--text-muted)]">—</span>
+        }
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/disparos/${d.id}`}
+            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Ver detalhes"
+          >
+            <ExternalLink size={14} />
+          </Link>
+          {d.status !== 'executado' && (
+            <button
+              onClick={() => onMarcarExecutado(d.id)}
+              className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--success)] hover:bg-[var(--bg-elevated)] transition-colors"
+              title="Marcar como executado"
+            >
+              <CheckCircle size={14} />
+            </button>
+          )}
+          <button
+            onClick={() => onClonar(d)}
+            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Clonar disparo"
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            onClick={() => onExcluir(d.id)}
+            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Excluir"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
 
 export function ListaDisparos() {
   const router = useRouter()
@@ -293,123 +430,18 @@ export function ListaDisparos() {
           </thead>
           <tbody>
             {filtered.map((d) => (
-              <tr
+              <DisparoRow
                 key={d.id}
-                onClick={() => router.push(`/disparos/${d.id}`)}
-                className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] cursor-pointer transition-colors"
-              >
-                <td className="px-3 py-3 text-[var(--text-muted)] text-xs">
-                  {d.esteiraPaiId ? <GitBranch size={14} className="text-[var(--d3)]" /> : '-'}
-                </td>
-                <td className="px-3 py-3 font-mono text-xs text-[var(--text-primary)] max-w-[250px] truncate">
-                  {d.nomenclatura}
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {d.casasAposta.map((cId) => {
-                      const c = casas[cId]
-                      if (!c) return null
-                      return <Chip key={cId} label={c.nome} cor={c.cor} size="sm" />
-                    })}
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-[var(--text-primary)] text-xs">{d.dataDisparo}</td>
-                <td className="px-3 py-3 text-[var(--text-secondary)] text-xs">{d.horarioDisparo}</td>
-                <td className="px-3 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <StatusDot status={d.status} size={6} />
-                    <Badge variant="status" value={d.status} />
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  {(() => {
-                    const c = d.conversao
-                    if (!c || c.entreguesDaxx <= 0) return <span className="text-xs text-[var(--text-muted)]">—</span>
-                    const pct = ((c.leadsFluxo / c.entreguesDaxx) * 100).toFixed(2)
-                    return (
-                      <span className="text-xs font-mono font-medium text-[var(--d1)]">
-                        {pct}%
-                      </span>
-                    )
-                  })()}
-                </td>
-                <td className="px-3 py-3">
-                  {d.resultados?.registros != null
-                    ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.resultados.registros}</span>
-                    : <span className="text-xs text-[var(--text-muted)]">—</span>
-                  }
-                </td>
-                <td className="px-3 py-3">
-                  {d.resultados?.ftds != null
-                    ? <span className="text-xs font-mono text-[var(--d1)]">{d.resultados.ftds}</span>
-                    : <span className="text-xs text-[var(--text-muted)]">—</span>
-                  }
-                </td>
-                <td className="px-3 py-3">
-                  {d.resultados?.cpas != null
-                    ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.resultados.cpas}</span>
-                    : <span className="text-xs text-[var(--text-muted)]">—</span>
-                  }
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    {d.base.totalRegistros != null
-                      ? <span className="text-xs font-mono text-[var(--text-primary)]">{d.base.totalRegistros.toLocaleString('pt-BR')}</span>
-                      : <span className="text-xs text-[var(--text-muted)]">—</span>
-                    }
-                    <span className={`text-[10px] ${
-                      d.base.status === 'disponivel' ? 'text-[var(--success)]' :
-                      d.base.status === 'erro' ? 'text-[var(--error)]' :
-                      'text-[var(--text-muted)]'
-                    }`}>
-                      {d.base.status}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-right">
-                  {d.base.totalRegistros != null
-                    ? <span className="text-xs font-mono text-[var(--text-primary)]">{(d.base.totalRegistros * 0.13).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                    : <span className="text-xs text-[var(--text-muted)]">—</span>
-                  }
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Link
-                      href={`/disparos/${d.id}`}
-                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-                      title="Ver detalhes"
-                    >
-                      <ExternalLink size={14} />
-                    </Link>
-                    {d.status !== 'executado' && (
-                      <button
-                        onClick={() => {
-                          update(d.id, { status: 'executado' })
-                          addToast('success', 'Disparo marcado como executado')
-                        }}
-                        className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--success)] hover:bg-[var(--bg-elevated)] transition-colors"
-                        title="Marcar como executado"
-                      >
-                        <CheckCircle size={14} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleClone(d)}
-                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-elevated)] transition-colors"
-                      title="Clonar disparo"
-                    >
-                      <Copy size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(d.id)}
-                      className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                d={d}
+                casas={casas}
+                onNavigate={(id) => router.push(`/disparos/${id}`)}
+                onMarcarExecutado={(id) => {
+                  update(id, { status: 'executado' })
+                  addToast('success', 'Disparo marcado como executado')
+                }}
+                onClonar={handleClone}
+                onExcluir={handleDelete}
+              />
             ))}
           </tbody>
         </table>
