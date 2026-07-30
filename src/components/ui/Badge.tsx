@@ -31,13 +31,17 @@ const STATUS_LABELS: Record<string, string> = {
   cancelado: 'Cancelado',
 }
 
+const TIPO_LABELS: Record<string, string> = {
+  PONTUAL: 'Avulso/Pontual',
+}
+
 export function Badge({ variant = 'status', value }: BadgeProps) {
   const cor = variant === 'tipo'
     ? TIPO_CORES[value] ?? 'var(--text-secondary)'
     : STATUS_CORES[value] ?? 'var(--text-secondary)'
   const label = variant === 'status'
     ? STATUS_LABELS[value] ?? value
-    : value
+    : TIPO_LABELS[value] ?? value
 
   return (
     <span

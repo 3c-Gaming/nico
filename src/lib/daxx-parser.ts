@@ -3,7 +3,8 @@ import type { TipoDisparo, CasaAposta } from '@/types'
 export interface CampanhaDaxxParsed {
   dataCriacao: string | null
   dataDisparo: string | null
-  tipo: TipoDisparo | null
+  /** Nunca fica null — sem D1/D3/D5/D7 no nome, cai em PONTUAL (disparo avulso, sem esteira). */
+  tipo: TipoDisparo
   baseNome: string | null
   esteiraKey: string | null
 }
@@ -55,7 +56,7 @@ export function parsearNomeCampanhaDaxx(nome: string): CampanhaDaxxParsed {
   const resultado: CampanhaDaxxParsed = {
     dataCriacao: null,
     dataDisparo: null,
-    tipo: null,
+    tipo: 'PONTUAL',
     baseNome: null,
     esteiraKey: null,
   }
@@ -65,6 +66,8 @@ export function parsearNomeCampanhaDaxx(nome: string): CampanhaDaxxParsed {
     resultado.dataCriacao = ddmmParaIso(criacaoMatch[1], criacaoMatch[2])
   }
 
+  // Sem D1/D3/D5/D7 no nome: não é ciclo, então é disparo avulso/pontual (fica com o
+  // default acima) — não descarta o item, só não agrupa em esteira.
   const tipoMatch = nome.match(/\bD([1357])\b/)
   if (tipoMatch) {
     resultado.tipo = `D${tipoMatch[1]}` as TipoDisparo

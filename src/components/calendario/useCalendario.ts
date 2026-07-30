@@ -184,7 +184,6 @@ export function useCalendario() {
           const parsed = parsearNomeCampanhaDaxx(campanha.nome)
           if (!parsed.dataDisparo) continue
           if (parsed.dataDisparo !== key) continue
-          if (!parsed.tipo) continue
 
           const casasAposta = casaPadraoPorTipo(parsed.tipo, casasList)
 
