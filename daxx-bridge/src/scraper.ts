@@ -258,29 +258,26 @@ async function setDateFilter(p: Page, startDate?: string, endDate?: string): Pro
 
   const before = await getTableSnapshot(p)
 
+  // Os campos #cliInicio/#cliFim são <input type="date"> nativos com
+  // onchange="loadClienteDisparos()". Setar os dois valores e disparar
+  // 'change' em cada um (e depois ainda clicar no botão ↻) faz a função
+  // ser chamada VÁRIAS vezes em sequência — uma com cliFim ainda com o
+  // valor antigo (troca de cliInicio dispara antes de cliFim ser setado),
+  // outra com os valores finais, e mais uma pelo clique do botão. Essas
+  // chamadas AJAX concorrentes podem responder fora de ordem e a errada
+  // (com data antiga) acaba sendo a última a preencher a tabela.
+  // Corrigido chamando a função de carregamento uma única vez, direto,
+  // já com os dois valores certos — sem eventos, sem clique redundante.
   await p.evaluate(({ i, f }) => {
     const elInicio = document.getElementById('cliInicio') as HTMLInputElement | null
     const elFim = document.getElementById('cliFim') as HTMLInputElement | null
-    for (const [el, val] of [[elInicio, i], [elFim, f]] as const) {
-      if (!el) continue
-      el.value = val
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-      el.dispatchEvent(new Event('change', { bubbles: true }))
-    }
+    if (elInicio) elInicio.value = i
+    if (elFim) elFim.value = f
+    const loader = (window as unknown as { loadClienteDisparos?: () => void }).loadClienteDisparos
+    if (typeof loader === 'function') loader()
   }, { i: fmtInicio, f: fmtFim })
 
-  await p.evaluate(() => {
-    const btns = document.querySelectorAll<HTMLButtonElement>('.btn')
-    for (const btn of btns) {
-      if (btn.textContent?.includes('↻')) { btn.click(); break }
-    }
-  })
-
-  // datas mais antigas parecem levar mais tempo pro backend do DAXX responder,
-  // e nesse meio tempo a tabela mostra um estado intermediário que pode
-  // ficar "parado" por um instante — por isso um timeout maior e mais
-  // checagens de estabilidade aqui do que na paginação.
-  await waitForTableChange(p, before, 30000, 4, 500)
+  await waitForTableChange(p, before, 15000, 2, 300)
 }
 
 export async function listarCampanhas(startDate?: string, endDate?: string): Promise<DaxxCampaign[]> {
