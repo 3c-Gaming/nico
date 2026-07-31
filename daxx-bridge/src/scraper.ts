@@ -135,10 +135,14 @@ async function getTableSnapshot(p: Page): Promise<string> {
 
 // #cliDisparosTbody sempre tem <tr> presentes antes de um refresh/paginação
 // (as linhas antigas continuam no DOM até o AJAX trocar o conteúdo), então
-// esperar apenas "existe uma <tr>" resolve na hora e lê dado velho. Em vez
-// disso comparamos um snapshot do conteúdo antes/depois e só seguimos
-// quando ele realmente mudar.
+// esperar apenas "existe uma <tr>" resolve na hora e lê dado velho. Comparar
+// com um snapshot anterior e esperar "mudou uma vez" também não basta: o
+// site passa por um estado intermediário (parece re-renderizar uma prévia)
+// antes de assentar no resultado final do filtro. Por isso esperamos a
+// tabela mudar E DEPOIS ficar estável (sem mais mudanças) por um tempo.
 async function waitForTableChange(p: Page, previousSnapshot: string, timeout = 15000): Promise<void> {
+  const deadline = Date.now() + timeout
+
   try {
     await p.waitForFunction(
       (prev) => {
@@ -147,13 +151,21 @@ async function waitForTableChange(p: Page, previousSnapshot: string, timeout = 1
         return `${rows.length}|${first}` !== prev
       },
       previousSnapshot,
-      { timeout },
+      { timeout: Math.max(1000, deadline - Date.now()) },
     )
   } catch {
     console.warn('[daxx] tabela nao mudou dentro do timeout — seguindo com o conteudo atual')
+    return
   }
-  // pequena folga para o restante das linhas terminar de renderizar
-  await p.waitForTimeout(300)
+
+  let last = await getTableSnapshot(p)
+  while (Date.now() < deadline) {
+    await p.waitForTimeout(400)
+    const current = await getTableSnapshot(p)
+    if (current === last) return
+    last = current
+  }
+  console.warn('[daxx] tabela nao estabilizou dentro do timeout — seguindo com o conteudo atual')
 }
 
 async function lerTabela(p: Page): Promise<DaxxCampaign[]> {
