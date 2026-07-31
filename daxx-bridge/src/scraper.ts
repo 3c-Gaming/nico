@@ -36,6 +36,21 @@ const CACHE_TTL = 5 * 60 * 1000
 
 let loginPromise: Promise<Page> | null = null
 
+// Garante que só uma operação de scraping (filtro de data + leitura de tabela)
+// rode por vez na página compartilhada do Playwright. Sem isso, chamadas
+// concorrentes (ex: dashboard sem filtro de data rodando junto com uma
+// consulta filtrada) pisam uma na filtragem da outra e corrompem o resultado.
+let scrapeQueue: Promise<void> = Promise.resolve()
+
+function withScrapeLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = scrapeQueue.then(fn, fn)
+  scrapeQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
 export async function getBrowser(): Promise<Browser> {
   if (!browser || !browser.isConnected()) {
     browser = await chromium.launch({
@@ -110,6 +125,37 @@ export async function ensureLoggedIn(): Promise<Page> {
   }
 }
 
+async function getTableSnapshot(p: Page): Promise<string> {
+  return p.evaluate(() => {
+    const rows = document.querySelectorAll('#cliDisparosTbody tr')
+    const first = rows[0]?.textContent?.trim().slice(0, 80) ?? ''
+    return `${rows.length}|${first}`
+  })
+}
+
+// #cliDisparosTbody sempre tem <tr> presentes antes de um refresh/paginação
+// (as linhas antigas continuam no DOM até o AJAX trocar o conteúdo), então
+// esperar apenas "existe uma <tr>" resolve na hora e lê dado velho. Em vez
+// disso comparamos um snapshot do conteúdo antes/depois e só seguimos
+// quando ele realmente mudar.
+async function waitForTableChange(p: Page, previousSnapshot: string, timeout = 15000): Promise<void> {
+  try {
+    await p.waitForFunction(
+      (prev) => {
+        const rows = document.querySelectorAll('#cliDisparosTbody tr')
+        const first = rows[0]?.textContent?.trim().slice(0, 80) ?? ''
+        return `${rows.length}|${first}` !== prev
+      },
+      previousSnapshot,
+      { timeout },
+    )
+  } catch {
+    console.warn('[daxx] tabela nao mudou dentro do timeout — seguindo com o conteudo atual')
+  }
+  // pequena folga para o restante das linhas terminar de renderizar
+  await p.waitForTimeout(300)
+}
+
 async function lerTabela(p: Page): Promise<DaxxCampaign[]> {
   return await p.evaluate(() => {
     const rows = document.querySelectorAll('#cliDisparosTbody tr')
@@ -163,11 +209,12 @@ async function temProximaPagina(p: Page): Promise<boolean> {
 }
 
 async function clicarProxima(p: Page): Promise<void> {
+  const before = await getTableSnapshot(p)
   await p.evaluate(() => {
     const btn = document.getElementById('cliPagProximo') as HTMLButtonElement | null
     btn?.click()
   })
-  await p.waitForSelector('#cliDisparosTbody tr', { timeout: 10000 })
+  await waitForTableChange(p, before, 10000)
 }
 
 async function setDateFilter(p: Page, startDate?: string, endDate?: string): Promise<void> {
@@ -185,11 +232,17 @@ async function setDateFilter(p: Page, startDate?: string, endDate?: string): Pro
   }
   console.log('[daxx] applying date filter:', fmtInicio, '->', fmtFim)
 
+  const before = await getTableSnapshot(p)
+
   await p.evaluate(({ i, f }) => {
     const elInicio = document.getElementById('cliInicio') as HTMLInputElement | null
     const elFim = document.getElementById('cliFim') as HTMLInputElement | null
-    if (elInicio) elInicio.value = i
-    if (elFim) elFim.value = f
+    for (const [el, val] of [[elInicio, i], [elFim, f]] as const) {
+      if (!el) continue
+      el.value = val
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    }
   }, { i: fmtInicio, f: fmtFim })
 
   await p.evaluate(() => {
@@ -199,7 +252,7 @@ async function setDateFilter(p: Page, startDate?: string, endDate?: string): Pro
     }
   })
 
-  await p.waitForSelector('#cliDisparosTbody tr', { timeout: 15000 })
+  await waitForTableChange(p, before, 15000)
 }
 
 export async function listarCampanhas(startDate?: string, endDate?: string): Promise<DaxxCampaign[]> {
@@ -211,27 +264,36 @@ export async function listarCampanhas(startDate?: string, endDate?: string): Pro
     return cached.data
   }
 
-  const p = await ensureLoggedIn()
-  await setDateFilter(p, startDate, endDate)
+  return withScrapeLock(async () => {
+    // outra chamada concorrente pode ter preenchido o cache enquanto esperávamos a vez
+    const cachedAfterLock = cacheCampanhas.get(cacheKey)
+    if (cachedAfterLock && Date.now() - cachedAfterLock.timestamp < CACHE_TTL) {
+      console.log('[daxx] returning cached campanhas (pós-lock) for', cacheKey)
+      return cachedAfterLock.data
+    }
 
-  const todas: DaxxCampaign[] = []
-  let pagina = 0
-  const MAX_PAGINAS = 100
+    const p = await ensureLoggedIn()
+    await setDateFilter(p, startDate, endDate)
 
-  while (pagina < MAX_PAGINAS) {
-    const campanhas = await lerTabela(p)
-    todas.push(...campanhas)
-    console.log(`[daxx] pagina ${pagina + 1}: ${campanhas.length} campanhas (total: ${todas.length})`)
+    const todas: DaxxCampaign[] = []
+    let pagina = 0
+    const MAX_PAGINAS = 100
 
-    if (!(await temProximaPagina(p))) break
-    await clicarProxima(p)
-    pagina++
-  }
+    while (pagina < MAX_PAGINAS) {
+      const campanhas = await lerTabela(p)
+      todas.push(...campanhas)
+      console.log(`[daxx] pagina ${pagina + 1}: ${campanhas.length} campanhas (total: ${todas.length})`)
 
-  console.log(`[daxx] total: ${todas.length} campanhas`)
+      if (!(await temProximaPagina(p))) break
+      await clicarProxima(p)
+      pagina++
+    }
 
-  cacheCampanhas.set(cacheKey, { data: todas, timestamp: Date.now() })
-  return todas
+    console.log(`[daxx] total: ${todas.length} campanhas`)
+
+    cacheCampanhas.set(cacheKey, { data: todas, timestamp: Date.now() })
+    return todas
+  })
 }
 
 export async function getTemplateLink(id: string): Promise<string> {
