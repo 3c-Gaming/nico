@@ -140,7 +140,13 @@ async function getTableSnapshot(p: Page): Promise<string> {
 // site passa por um estado intermediário (parece re-renderizar uma prévia)
 // antes de assentar no resultado final do filtro. Por isso esperamos a
 // tabela mudar E DEPOIS ficar estável (sem mais mudanças) por um tempo.
-async function waitForTableChange(p: Page, previousSnapshot: string, timeout = 15000): Promise<void> {
+async function waitForTableChange(
+  p: Page,
+  previousSnapshot: string,
+  timeout = 15000,
+  stableChecks = 3,
+  interval = 500,
+): Promise<void> {
   const deadline = Date.now() + timeout
 
   try {
@@ -158,12 +164,18 @@ async function waitForTableChange(p: Page, previousSnapshot: string, timeout = 1
     return
   }
 
+  let consecutive = 0
   let last = await getTableSnapshot(p)
   while (Date.now() < deadline) {
-    await p.waitForTimeout(400)
+    await p.waitForTimeout(interval)
     const current = await getTableSnapshot(p)
-    if (current === last) return
-    last = current
+    if (current === last) {
+      consecutive++
+      if (consecutive >= stableChecks) return
+    } else {
+      consecutive = 0
+      last = current
+    }
   }
   console.warn('[daxx] tabela nao estabilizou dentro do timeout — seguindo com o conteudo atual')
 }
@@ -264,7 +276,11 @@ async function setDateFilter(p: Page, startDate?: string, endDate?: string): Pro
     }
   })
 
-  await waitForTableChange(p, before, 15000)
+  // datas mais antigas parecem levar mais tempo pro backend do DAXX responder,
+  // e nesse meio tempo a tabela mostra um estado intermediário que pode
+  // ficar "parado" por um instante — por isso um timeout maior e mais
+  // checagens de estabilidade aqui do que na paginação.
+  await waitForTableChange(p, before, 30000, 4, 500)
 }
 
 export async function listarCampanhas(startDate?: string, endDate?: string): Promise<DaxxCampaign[]> {
