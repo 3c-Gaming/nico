@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { obterStatusBot } from '@/lib/integrações/sendpulse'
+import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
 
 export async function GET(request: NextRequest) {
   const botId = request.nextUrl.searchParams.get('bot_id')
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const stats = await obterStatusBot(botId, AbortSignal.timeout(15_000))
+    const stats = await comContaDoBot(botId, (apiKey) => obterStatusBot(botId, apiKey, AbortSignal.timeout(15_000)))
     return NextResponse.json({ stats })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 })

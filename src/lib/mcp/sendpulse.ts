@@ -1,39 +1,39 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { listarContasSendpulse, contaParaBot, registrarContaDoBot, type ContaSendpulse } from '../integrações/contasSendpulse'
 
-const MCP_URL = process.env.SENDPULSE_MCP || 'https://mcp.sendpulse.com/mcp'
-const SP_ID = process.env.SENDPULSE_CLIENT_ID
-const SP_SECRET = process.env.SENDPULSE_CLIENT_SECRET
-
-function headersMCP(): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (SP_ID && SP_SECRET) {
-    h['X-SP-ID'] = SP_ID
-    h['X-SP-SECRET'] = SP_SECRET
+function headersMCP(conta: ContaSendpulse): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-SP-ID': conta.clientId,
+    'X-SP-SECRET': conta.clientSecret,
   }
-  return h
 }
 
-let client: Client | null = null
-let connectPromise: Promise<Client> | null = null
+// Um client MCP por conta — cada conta SendPulse é um servidor MCP autenticado
+// separadamente (X-SP-ID/X-SP-SECRET próprios), não dá pra reusar uma única conexão.
+const clientes = new Map<string, Client>()
+const conectando = new Map<string, Promise<Client>>()
 
-async function getClient(): Promise<Client> {
-  if (client) return client
-  if (connectPromise) return connectPromise
+async function getClient(conta: ContaSendpulse): Promise<Client> {
+  const existente = clientes.get(conta.id)
+  if (existente) return existente
+  const emAndamento = conectando.get(conta.id)
+  if (emAndamento) return emAndamento
 
-  connectPromise = (async () => {
-    const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), {
-      requestInit: { headers: headersMCP() },
+  const promise = (async () => {
+    const transport = new StreamableHTTPClientTransport(new URL(conta.mcpUrl), {
+      requestInit: { headers: headersMCP(conta) },
     })
-
     const c = new Client({ name: 'nico-app', version: '1.0.0' })
     await c.connect(transport)
-    client = c
-    connectPromise = null
+    clientes.set(conta.id, c)
+    conectando.delete(conta.id)
     return c
   })()
 
-  return connectPromise
+  conectando.set(conta.id, promise)
+  return promise
 }
 
 function extrairTexto(content: unknown[]): string {
@@ -51,8 +51,8 @@ export interface TagInfo {
   contactCount: number
 }
 
-export async function listarTags(botId: string): Promise<TagInfo[]> {
-  const mcp = await getClient()
+async function buscarTagsDaConta(conta: ContaSendpulse, botId: string): Promise<TagInfo[]> {
+  const mcp = await getClient(conta)
   const result = await mcp.callTool({
     name: 'chatbots_bots_tags_list',
     arguments: {
@@ -64,9 +64,8 @@ export async function listarTags(botId: string): Promise<TagInfo[]> {
   const texto = extrairTexto(result.content as unknown[])
 
   // A MCP não lança exceção pra erro de execução da ferramenta — devolve isError:true com o
-  // texto do erro no lugar do conteúdo normal (ex: bot desconectado na SendPulse, erro 400).
-  // Sem checar isso, esse texto de erro cairia no catch do JSON.parse abaixo e voltaria como
-  // "sem tags" silenciosamente, sem dar pra distinguir de um bot que realmente não tem tags.
+  // texto do erro no lugar do conteúdo normal (ex: bot de outra conta, bot desconectado,
+  // erro 400). É esse isError que sinaliza "conta errada" pro retry em listarTags.
   if (result.isError) {
     throw new Error(texto || 'Tool execution failed')
   }
@@ -86,8 +85,34 @@ export async function listarTags(botId: string): Promise<TagInfo[]> {
   }
 }
 
-export async function listAvailableTools() {
-  const mcp = await getClient()
+/** Cada rota da API roda isolada como function serverless na Vercel — o palpite de
+ * conta (contaParaBot) só é confiável dentro da mesma invocação que populou o cache.
+ * Tenta o palpite primeiro e, se a ferramenta MCP der isError (conta errada), tenta as
+ * outras contas configuradas em sequência — sempre acerta, mesmo a frio. */
+export async function listarTags(botId: string): Promise<TagInfo[]> {
+  const contas = listarContasSendpulse()
+  if (!contas.length) return []
+  const palpite = contaParaBot(botId)
+  const ordem = palpite ? [palpite, ...contas.filter((c) => c.id !== palpite.id)] : contas
+
+  let ultimoErro: unknown
+  for (const conta of ordem) {
+    try {
+      const tags = await buscarTagsDaConta(conta, botId)
+      registrarContaDoBot(botId, conta.id)
+      return tags
+    } catch (err) {
+      ultimoErro = err
+    }
+  }
+  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta SendPulse reconheceu o bot ${botId}`)
+}
+
+export async function listAvailableTools(contaId?: string) {
+  const contas = listarContasSendpulse()
+  const conta = contas.find((c) => c.id === contaId) ?? contas[0]
+  if (!conta) return []
+  const mcp = await getClient(conta)
   const result = await mcp.listTools()
   return result.tools.map(t => ({
     name: t.name,
@@ -96,23 +121,41 @@ export async function listAvailableTools() {
   }))
 }
 
+/** Sem bot_id nos parâmetros pra resolver a conta de antemão — tenta cada conta
+ * configurada em sequência até uma responder com sucesso. */
+async function tentarTodasContas<T>(fn: (conta: ContaSendpulse) => Promise<T>, ehVazio: (v: T) => boolean): Promise<T | null> {
+  for (const conta of listarContasSendpulse()) {
+    try {
+      const valor = await fn(conta)
+      if (!ehVazio(valor)) return valor
+    } catch {
+      // tenta a próxima conta
+    }
+  }
+  return null
+}
+
 export async function runFlow(params: {
   channel: string
   contactId: string
   flowId: string
   externalData?: Record<string, unknown>
 }) {
-  const mcp = await getClient()
-  const result = await mcp.callTool({
-    name: 'chatbots_flows_run',
-    arguments: {
-      channel: params.channel,
-      contactId: params.contactId,
-      flowId: params.flowId,
-      ...(params.externalData ? { externalData: params.externalData } : {}),
-    },
-  })
-  return extrairTexto(result.content as unknown[])
+  const resultado = await tentarTodasContas(async (conta) => {
+    const mcp = await getClient(conta)
+    const result = await mcp.callTool({
+      name: 'chatbots_flows_run',
+      arguments: {
+        channel: params.channel,
+        contactId: params.contactId,
+        flowId: params.flowId,
+        ...(params.externalData ? { externalData: params.externalData } : {}),
+      },
+    })
+    if (result.isError) throw new Error(extrairTexto(result.content as unknown[]) || 'Tool execution failed')
+    return extrairTexto(result.content as unknown[])
+  }, (v) => !v)
+  return resultado ?? ''
 }
 
 export async function listChatMessages(params: {
@@ -122,37 +165,41 @@ export async function listChatMessages(params: {
   offset?: number
   order?: 'asc' | 'desc'
 }) {
-  const mcp = await getClient()
-  const result = await mcp.callTool({
-    name: 'chatbots_chats_messages_list',
-    arguments: {
-      channel: params.channel,
-      contactId: params.contactId,
-      ...(params.limit !== undefined ? { limit: params.limit } : {}),
-      ...(params.offset !== undefined ? { offset: params.offset } : {}),
-      ...(params.order ? { order: params.order } : {}),
-    },
-  })
-  return extrairTexto(result.content as unknown[])
+  const resultado = await tentarTodasContas(async (conta) => {
+    const mcp = await getClient(conta)
+    const result = await mcp.callTool({
+      name: 'chatbots_chats_messages_list',
+      arguments: {
+        channel: params.channel,
+        contactId: params.contactId,
+        ...(params.limit !== undefined ? { limit: params.limit } : {}),
+        ...(params.offset !== undefined ? { offset: params.offset } : {}),
+        ...(params.order ? { order: params.order } : {}),
+      },
+    })
+    if (result.isError) throw new Error(extrairTexto(result.content as unknown[]) || 'Tool execution failed')
+    return extrairTexto(result.content as unknown[])
+  }, (v) => !v)
+  return resultado ?? ''
 }
 
 async function callContactsShow(channel: string, contactId: string) {
-  const mcp = await getClient()
-  const result = await mcp.callTool({
-    name: 'chatbots_contacts_show',
-    arguments: { channel, id: contactId },
-  })
+  return tentarTodasContas(async (conta) => {
+    const mcp = await getClient(conta)
+    const result = await mcp.callTool({
+      name: 'chatbots_contacts_show',
+      arguments: { channel, id: contactId },
+    })
 
-  const texto = extrairTexto(result.content as unknown[])
-  if (!texto) return null
+    const texto = extrairTexto(result.content as unknown[])
+    if (!texto || texto.startsWith('Tool execution failed')) return null
 
-  if (texto.startsWith('Tool execution failed')) return null
-
-  try {
-    return JSON.parse(texto) as Record<string, unknown>
-  } catch {
-    return null
-  }
+    try {
+      return JSON.parse(texto) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }, (v) => v === null)
 }
 
 export async function getContactInfo(contactId: string) {
@@ -162,5 +209,3 @@ export async function getContactInfo(contactId: string) {
 export async function getContactWhatsApp(contactId: string) {
   return callContactsShow('whatsapp', contactId)
 }
-
-

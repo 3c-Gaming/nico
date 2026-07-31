@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch, invalidate } from '@/lib/cache'
-import { listarNumeros } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas } from '@/lib/integrações/sendpulse'
 import { listarTags } from '@/lib/mcp/sendpulse'
 
 const BASE_URL = 'https://uptntyjjfcbopcxflgnp.supabase.co/functions/v1/leads-export'
@@ -66,7 +66,7 @@ async function contarTag(
  * soma as contagens por nome de tag entre todos os bots.
  */
 async function contarTagsSendpulseTotal(tags: string[]): Promise<Record<string, number>> {
-  const bots = await getOrFetch('sendpulse-bots', 'all', TTL_BOTS, () => listarNumeros())
+  const bots = await getOrFetch('sendpulse-bots', 'all', TTL_BOTS, () => listarNumerosTodasContas())
   const tagsPorBot = await Promise.all(
     bots.map((bot) =>
       getOrFetch('sendpulse-tags-por-bot', bot.id, TTL_TAGS_POR_BOT, () => listarTags(bot.id)).catch(() => []),

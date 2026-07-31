@@ -1,10 +1,10 @@
-import { listarNumeros } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas } from '@/lib/integrações/sendpulse'
 import { getPreferencias } from '@/lib/db/supabase'
 import type { BotConfig } from './types'
 
 export async function obterBots(): Promise<BotConfig[]> {
   const [numeros, { numerosNaoMonitorados }] = await Promise.all([
-    listarNumeros(),
+    listarNumerosTodasContas(),
     getPreferencias(),
   ])
   return numeros

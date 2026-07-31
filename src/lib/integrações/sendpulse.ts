@@ -1,11 +1,11 @@
 import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse } from '@/types'
+import { listarContasSendpulse, registrarContaDoBot, apiKeyParaBot } from './contasSendpulse'
 
 const BASE_URL = 'https://api.sendpulse.com/whatsapp'
-const API_KEY = process.env.SENDPULSE_API_KEY
 
-function getHeaders() {
+function getHeaders(apiKey: string) {
   return {
-    Authorization: `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   }
 }
@@ -32,15 +32,37 @@ function mapearBotParaNumero(bot: any): NumeroSendpulse {
   }
 }
 
-export async function listarNumeros(signal?: AbortSignal): Promise<NumeroSendpulse[]> {
-  const res = await fetch(`${BASE_URL}/bots`, { headers: getHeaders(), signal })
+export async function listarNumeros(apiKey: string, signal?: AbortSignal): Promise<NumeroSendpulse[]> {
+  const res = await fetch(`${BASE_URL}/bots`, { headers: getHeaders(apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   return (json.data ?? []).map(mapearBotParaNumero)
 }
 
-export async function listarFluxos(botId: string, signal?: AbortSignal): Promise<FluxoSendpulse[]> {
-  const res = await fetch(`${BASE_URL}/flows?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(), signal })
+/** Busca números de TODAS as contas configuradas em paralelo e mescla — uma conta
+ * falhando não derruba as outras. Marca cada número com contaId/contaNome e registra
+ * o mapeamento bot->conta pra outras chamadas (fluxos, status, tags) saberem qual
+ * API key usar sem precisar buscar todos os números de novo. */
+export async function listarNumerosTodasContas(signal?: AbortSignal): Promise<NumeroSendpulse[]> {
+  const contas = listarContasSendpulse()
+  const resultados = await Promise.allSettled(
+    contas.map((conta) => listarNumeros(conta.apiKey, signal).then((numeros) => ({ conta, numeros }))),
+  )
+
+  const todos: NumeroSendpulse[] = []
+  for (const r of resultados) {
+    if (r.status !== 'fulfilled') continue
+    const { conta, numeros } = r.value
+    for (const numero of numeros) {
+      registrarContaDoBot(numero.id, conta.id)
+      todos.push({ ...numero, contaId: conta.id, contaNome: conta.nome })
+    }
+  }
+  return todos
+}
+
+export async function listarFluxos(botId: string, apiKey: string, signal?: AbortSignal): Promise<FluxoSendpulse[]> {
+  const res = await fetch(`${BASE_URL}/flows?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,8 +76,8 @@ export async function listarFluxos(botId: string, signal?: AbortSignal): Promise
   }))
 }
 
-export async function obterStatusBot(botId: string, signal?: AbortSignal): Promise<EstatisticasBotSendpulse> {
-  const res = await fetch(`${BASE_URL}/bots/statistics?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(), signal })
+export async function obterStatusBot(botId: string, apiKey: string, signal?: AbortSignal): Promise<EstatisticasBotSendpulse> {
+  const res = await fetch(`${BASE_URL}/bots/statistics?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const d = json.data ?? {}
@@ -74,7 +96,7 @@ export async function enviarMensagem(params: {
 }): Promise<{ sucesso: boolean; mensagemId?: string }> {
   const res = await fetch(`${BASE_URL}/send`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKeyParaBot(params.botId)),
     body: JSON.stringify({
       bot_id: params.botId,
       phone: params.telefone.replace(/\D/g, ''),
@@ -105,7 +127,7 @@ export async function executarFlow(params: {
 
   const res = await fetch(`${BASE_URL}/flows/run`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKeyParaBot(params.botId)),
     body: JSON.stringify(body),
   })
   const rawBody = await res.json().catch(() => null)
@@ -139,7 +161,7 @@ export async function enviarMensagemDireta(params: {
 }): Promise<{ ok: boolean; statusCode: number; body: unknown }> {
   const res = await fetch(`${BASE_URL}/contacts/send`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKeyParaBot(params.botId)),
     body: JSON.stringify({
       contact_id: params.contactId,
       bot_id: params.botId,
@@ -160,7 +182,7 @@ export async function obterMensagensChat(params: {
 }): Promise<{ messages: { id: string; type: string; timestamp: number; text?: string }[] }> {
   const res = await fetch(
     `${BASE_URL}/chats/messages?bot_id=${encodeURIComponent(params.botId)}&contact_id=${encodeURIComponent(params.contactId)}&limit=${params.limit ?? 50}`,
-    { headers: getHeaders() }
+    { headers: getHeaders(apiKeyParaBot(params.botId)) }
   )
   if (!res.ok) return { messages: [] }
   const json = await res.json()
@@ -174,24 +196,30 @@ export async function obterMensagensChat(params: {
   return { messages }
 }
 
+/** Sem bot_id pra resolver a conta de antemão — tenta cada conta configurada em
+ * sequência até uma responder com sucesso (só usado em rota de debug). */
 export async function obterTelefonePorContactId(contactId: string): Promise<string | null> {
-  const res = await fetch(`${BASE_URL}/contacts/get?id=${encodeURIComponent(contactId)}`, {
-    headers: getHeaders(),
-  })
-  if (!res.ok) return null
-  const json = await res.json()
-  if (!json.success) return null
-  const username = json.data?.channel_data?.username
-  return username ? String(username) : null
+  for (const conta of listarContasSendpulse()) {
+    const res = await fetch(`${BASE_URL}/contacts/get?id=${encodeURIComponent(contactId)}`, {
+      headers: getHeaders(conta.apiKey),
+    })
+    if (!res.ok) continue
+    const json = await res.json()
+    if (!json.success) continue
+    const username = json.data?.channel_data?.username
+    if (username) return String(username)
+  }
+  return null
 }
 
 export async function listarChatsAtivos(
   botId: string,
+  apiKey: string,
   signal?: AbortSignal
 ): Promise<{ chats: ChatAtivoSendpulse[]; total: number }> {
   const res = await fetch(
     `${BASE_URL}/chats?bot_id=${encodeURIComponent(botId)}&limit=100`,
-    { headers: getHeaders(), signal }
+    { headers: getHeaders(apiKey), signal }
   )
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()

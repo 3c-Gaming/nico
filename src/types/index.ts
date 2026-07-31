@@ -172,6 +172,10 @@ export interface NumeroSendpulse {
   inboxTotal: number
   inboxNaoLidas: number
   ultimaSync?: string
+  /** Conta SendPulse de origem (id "01"/"02"/... e nome amigável) — preenchido por
+   * listarNumerosTodasContas() quando há mais de uma conta configurada. */
+  contaId?: string
+  contaNome?: string
 }
 
 export interface FluxoSendpulse {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listarNumeros } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas } from '@/lib/integrações/sendpulse'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'botId e telefone são obrigatórios' }, { status: 400 })
     }
 
-    const numeros = await listarNumeros(AbortSignal.timeout(15_000))
+    const numeros = await listarNumerosTodasContas(AbortSignal.timeout(15_000))
     const bot = numeros.find((n) => n.id === botId)
     if (!bot) {
       return NextResponse.json({ error: 'Número/bot não encontrado' }, { status: 404 })

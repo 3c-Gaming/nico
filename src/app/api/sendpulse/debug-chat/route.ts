@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
 
 const BASE_URL = 'https://api.sendpulse.com/whatsapp'
-const API_KEY = process.env.SENDPULSE_API_KEY
 
 export async function GET(request: NextRequest) {
   const botId = request.nextUrl.searchParams.get('bot_id')
@@ -10,21 +10,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `${BASE_URL}/chats?bot_id=${encodeURIComponent(botId)}&size=3`,
-      {
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+    const json = await comContaDoBot(botId, async (apiKey) => {
+      const res = await fetch(
+        `${BASE_URL}/chats?bot_id=${encodeURIComponent(botId)}&size=3`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`Sendpulse error ${res.status}: ${text}`)
       }
-    )
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      return NextResponse.json({ error: `Sendpulse error ${res.status}: ${text}` }, { status: 502 })
-    }
-
-    const json = await res.json()
+      return res.json()
+    })
     const chats = json.data ?? []
 
     const debug = chats.map((chat: Record<string, unknown>) => ({

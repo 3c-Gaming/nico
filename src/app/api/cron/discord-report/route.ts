@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sendChannelMessage } from '@/lib/discord/verify'
-import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas, listarFluxos } from '@/lib/integrações/sendpulse'
+import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 import { getPreferencias } from '@/lib/db/supabase'
 import { embedRelatorio } from '@/lib/discord/embeds'
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
   try {
     const [todosNumeros, { pinnedNumeros }] = await Promise.all([
-      listarNumeros(AbortSignal.timeout(30_000)),
+      listarNumerosTodasContas(AbortSignal.timeout(30_000)),
       getPreferencias(),
     ])
     const numeros = todosNumeros.filter(n => pinnedNumeros.includes(n.id))
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 
     await Promise.all(numeros.map(async num => {
       try {
-        const fluxos = await listarFluxos(num.id, AbortSignal.timeout(10_000))
+        const fluxos = await listarFluxos(num.id, apiKeyParaBot(num.id), AbortSignal.timeout(10_000))
         fluxosPorBot.set(num.id, fluxos)
       } catch {
         fluxosPorBot.set(num.id, [])

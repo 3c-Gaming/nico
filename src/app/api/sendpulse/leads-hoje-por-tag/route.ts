@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch } from '@/lib/cache'
+import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
 
 const BASE_URL = 'https://api.sendpulse.com/whatsapp'
-const API_KEY = process.env.SENDPULSE_API_KEY
 const PAGE_SIZE = 1000
 const TIMEOUT_MS = 15_000
 const TTL_MS = 60_000
 
-function getHeaders() {
+function getHeaders(apiKey: string) {
   return {
-    Authorization: `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   }
 }
@@ -27,26 +27,27 @@ function parseData(dataStr?: string): { inicio: number; fim: number } {
   return { inicio, fim }
 }
 
-async function fetchComTimeout(url: string, signal?: AbortSignal): Promise<Response> {
+async function fetchComTimeout(url: string, apiKey: string, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
-    return await fetch(url, { headers: getHeaders(), signal: signal ?? controller.signal })
+    return await fetch(url, { headers: getHeaders(apiKey), signal: signal ?? controller.signal })
   } finally {
     clearTimeout(timer)
   }
 }
 
-async function contarContatosPorTag(botId: string, tag: string, inicio: number, fim: number): Promise<number> {
+async function contarContatosPorTag(botId: string, apiKey: string, tag: string, inicio: number, fim: number): Promise<number> {
   let totalFiltrados = 0
   let skip = 0
   let temMais = true
 
   while (temMais) {
     const res = await fetchComTimeout(
-      `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${PAGE_SIZE}&skip=${skip}`
+      `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${PAGE_SIZE}&skip=${skip}`,
+      apiKey
     )
-    if (!res.ok) return 0
+    if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
 
     const json = await res.json()
     const contatos: Record<string, unknown>[] = json.data ?? []
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
       const resultados = await Promise.allSettled(
         tags.map(async (tag) => {
           const count = await getOrFetch('leads-hoje', `${botId}::${tag}::${inicio}`, TTL_MS, () =>
-            contarContatosPorTag(botId, tag, inicio, fim)
+            comContaDoBot(botId, (apiKey) => contarContatosPorTag(botId, apiKey, tag, inicio, fim))
           )
           return { tag, count }
         })

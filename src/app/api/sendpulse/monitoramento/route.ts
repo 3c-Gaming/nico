@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { listarNumeros, listarChatsAtivos } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas, listarChatsAtivos } from '@/lib/integrações/sendpulse'
+import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 import { getOrFetch } from '@/lib/cache'
 import type { DadosMonitoramento, NumeroMonitorado } from '@/types'
 
@@ -38,7 +39,7 @@ async function fetchComTimeout<T>(
 }
 
 async function fetchFullMonitoramento(): Promise<DadosMonitoramento> {
-  const numerosResult = await fetchComTimeout((signal) => listarNumeros(signal))
+  const numerosResult = await fetchComTimeout((signal) => listarNumerosTodasContas(signal))
   if (!numerosResult.ok) {
     throw new Error('Timeout ao listar números')
   }
@@ -49,7 +50,7 @@ async function fetchFullMonitoramento(): Promise<DadosMonitoramento> {
     const batch = numeros.slice(i, i + BATCH_SIZE)
     const batchResults = await Promise.allSettled(
       batch.map(async (numero) => {
-        const r = await fetchComTimeout((signal) => listarChatsAtivos(numero.id, signal))
+        const r = await fetchComTimeout((signal) => listarChatsAtivos(numero.id, apiKeyParaBot(numero.id), signal))
         if (!r.ok) {
           return {
             numero,

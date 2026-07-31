@@ -376,7 +376,10 @@ export default function HomePage() {
 
   const numerosPinados = useMemo(() => {
     if (!monitoramento?.numeros) return []
-    return monitoramento.numeros.filter((n) => pinnedNumeros.includes(n.numero.id))
+    return monitoramento.numeros
+      .filter((n) => pinnedNumeros.includes(n.numero.id))
+      // Ativos sempre no topo, independente da conta.
+      .sort((a, b) => (a.numero.status === 'ativo' ? 0 : 1) - (b.numero.status === 'ativo' ? 0 : 1))
   }, [monitoramento?.numeros, pinnedNumeros, pinVersion])
 
   const disparosPinados = useMemo(() => {
@@ -1117,7 +1120,14 @@ export default function HomePage() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${item.numero.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`} />
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-[var(--text-primary)] truncate">{item.numero.nome}</div>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm font-medium text-[var(--text-primary)] truncate">{item.numero.nome}</span>
+                          {item.numero.contaNome && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                              {item.numero.contaNome}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-[var(--text-muted)] font-mono truncate">{item.numero.numero}</div>
                       </div>
                     </div>

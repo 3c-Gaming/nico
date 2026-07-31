@@ -339,6 +339,11 @@ export default function NumerosPage() {
     return [...data.numeros]
       .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero)
       .sort((a, b) => {
+        // Ativos sempre no topo, independente da conta — só depois disso entra o
+        // critério de atividade recente/nome.
+        const ativoA = a.numero.status === 'ativo' ? 0 : 1
+        const ativoB = b.numero.status === 'ativo' ? 0 : 1
+        if (ativoA !== ativoB) return ativoA - ativoB
         const va = a.ultimoAumentoMs ?? 0
         const vb = b.ultimoAumentoMs ?? 0
         if (va !== vb) return vb - va
@@ -432,7 +437,14 @@ export default function NumerosPage() {
                           {isExpanded ? <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />}
                           <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${item.numero.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`} />
                           <div>
-                            <div className="font-medium text-[var(--text-primary)]">{item.numero.nome}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-[var(--text-primary)]">{item.numero.nome}</span>
+                              {item.numero.contaNome && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                                  {item.numero.contaNome}
+                                </span>
+                              )}
+                            </div>
                             <div className="text-xs text-[var(--text-muted)] font-mono">{item.numero.numero}</div>
                           </div>
                         </div>

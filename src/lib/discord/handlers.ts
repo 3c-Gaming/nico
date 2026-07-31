@@ -28,10 +28,10 @@ type ReplyFn = (payload: { embeds?: DiscordEmbed[]; content?: string }) => Promi
 
 export async function handleStatus(reply: ReplyFn) {
   try {
-    const { listarNumeros } = await import('@/lib/integrações/sendpulse')
+    const { listarNumerosTodasContas } = await import('@/lib/integrações/sendpulse')
     const { getPreferencias } = await import('@/lib/db/supabase')
     const [numeros, { numerosNaoMonitorados }] = await Promise.all([
-      listarNumeros(AbortSignal.timeout(30_000)),
+      listarNumerosTodasContas(AbortSignal.timeout(30_000)),
       getPreferencias(),
     ])
     const monitorados = numeros.filter(n => !numerosNaoMonitorados.includes(n.id))
@@ -49,8 +49,9 @@ export async function handleFluxos(reply: ReplyFn, options: { name: string; valu
   }
 
   try {
-    const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
-    const numeros = await listarNumeros(AbortSignal.timeout(30_000))
+    const { listarNumerosTodasContas, listarFluxos } = await import('@/lib/integrações/sendpulse')
+    const { apiKeyParaBot } = await import('@/lib/integrações/contasSendpulse')
+    const numeros = await listarNumerosTodasContas(AbortSignal.timeout(30_000))
     const bot = findBot(numeros, botInput)
 
     if (!bot) {
@@ -58,7 +59,7 @@ export async function handleFluxos(reply: ReplyFn, options: { name: string; valu
       return
     }
 
-    const fluxos = await listarFluxos(bot.id, AbortSignal.timeout(30_000))
+    const fluxos = await listarFluxos(bot.id, apiKeyParaBot(bot.id), AbortSignal.timeout(30_000))
     await reply({ embeds: [embedFluxosBot(bot.nome || bot.numero || bot.id, fluxos)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao buscar fluxos: ${(err as Error).message}`)] })
@@ -132,10 +133,11 @@ export async function handleTestarTodos(reply: ReplyFn, channelId?: string) {
 
 export async function handleRelatorio(reply: ReplyFn) {
   try {
-    const { listarNumeros, listarFluxos } = await import('@/lib/integrações/sendpulse')
+    const { listarNumerosTodasContas, listarFluxos } = await import('@/lib/integrações/sendpulse')
+    const { apiKeyParaBot } = await import('@/lib/integrações/contasSendpulse')
     const { getPreferencias } = await import('@/lib/db/supabase')
     const [numeros, { pinnedNumeros, numerosNaoMonitorados }] = await Promise.all([
-      listarNumeros(AbortSignal.timeout(30_000)),
+      listarNumerosTodasContas(AbortSignal.timeout(30_000)),
       getPreferencias(),
     ])
     const ativos = numeros.filter(n => !numerosNaoMonitorados.includes(n.id) && pinnedNumeros.includes(n.id))
@@ -143,7 +145,7 @@ export async function handleRelatorio(reply: ReplyFn) {
 
     await Promise.all(ativos.map(async num => {
       try {
-        const fluxos = await listarFluxos(num.id, AbortSignal.timeout(10_000))
+        const fluxos = await listarFluxos(num.id, apiKeyParaBot(num.id), AbortSignal.timeout(10_000))
         fluxosPorBot.set(num.id, fluxos)
       } catch {
         fluxosPorBot.set(num.id, [])

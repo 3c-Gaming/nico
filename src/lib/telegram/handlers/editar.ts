@@ -1,12 +1,13 @@
 import { Context } from 'grammy'
 import { listaNumeros, listaFluxos, confirmacao, menuPrincipal } from '../keyboards'
 import { estadosEdicao, paginasCache, ensurePaginasCache } from '../types'
-import { listarNumeros, listarFluxos } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas, listarFluxos } from '@/lib/integrações/sendpulse'
+import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 import { getGhToken, fetchFileWithSha, replaceDestinations, commitFile } from '@/lib/paginas/github-sync'
 
 export async function handleEditarNumero(ctx: Context, paginaIdx: number, destIndex: number) {
   try {
-    const numeros = await listarNumeros()
+    const numeros = await listarNumerosTodasContas()
     const ativos = numeros.filter(n => n.status === 'ativo')
 
     if (ativos.length === 0) {
@@ -35,7 +36,7 @@ export async function handleSelecionarNumero(ctx: Context, paginaIdx: number, de
     }
 
     // Buscar dados do número selecionado
-    const numeros = await listarNumeros()
+    const numeros = await listarNumerosTodasContas()
     const numero = numeros.find(n => n.id === botId)
     if (!numero) {
       await ctx.answerCallbackQuery('Número não encontrado')
@@ -52,7 +53,7 @@ export async function handleSelecionarNumero(ctx: Context, paginaIdx: number, de
     })
 
     // Buscar fluxos disponíveis para esse número
-    const fluxos = await listarFluxos(botId)
+    const fluxos = await listarFluxos(botId, apiKeyParaBot(botId))
     const ativos = fluxos.filter(f => f.status === 'ativo')
     const inativos = fluxos.filter(f => f.status !== 'ativo')
 
@@ -95,11 +96,11 @@ export async function handleSelecionarFluxo(ctx: Context, paginaIdx: number, des
     }
 
     // Buscar nome do fluxo
-    const numeros = await listarNumeros()
+    const numeros = await listarNumerosTodasContas()
     const numero = numeros.find(n => n.numero === estado.novoPhone)
     let flowNome = '...' + flowId.slice(-8)
     if (numero) {
-      const fluxos = await listarFluxos(numero.id)
+      const fluxos = await listarFluxos(numero.id, apiKeyParaBot(numero.id))
       const fluxo = fluxos.find(f => f.id === flowId)
       if (fluxo) flowNome = fluxo.nome
     }

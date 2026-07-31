@@ -1,7 +1,7 @@
 import type { ChatAtivoSendpulse } from '@/types'
+import { apiKeyParaBot } from './contasSendpulse'
 
 const BASE_URL = 'https://api.sendpulse.com/whatsapp'
-const API_KEY = process.env.SENDPULSE_API_KEY
 
 const PAGE_SIZE = 200
 const MAX_PAGES_ABSOLUTE = 20
@@ -25,9 +25,9 @@ interface Janelas {
   umaHoraAtras: number
 }
 
-function getHeaders() {
+function getHeaders(botId: string) {
   return {
-    Authorization: `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${apiKeyParaBot(botId)}`,
     'Content-Type': 'application/json',
   }
 }
@@ -73,7 +73,7 @@ export async function listarChats(
 ): Promise<{ chats: ChatAtivoSendpulse[]; meta: { total: number } }> {
   const res = await fetch(
     `${BASE_URL}/chats?bot_id=${encodeURIComponent(botId)}&size=${size}&skip=${skip}`,
-    { headers: getHeaders(), signal }
+    { headers: getHeaders(botId), signal }
   )
   if (!res.ok) throw new Error(`WhatsApp API error: ${res.status}`)
   const json = (await res.json()) as {

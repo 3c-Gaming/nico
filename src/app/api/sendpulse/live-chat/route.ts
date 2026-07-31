@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { listarNumeros, obterStatusBot, listarFluxos } from '@/lib/integrações/sendpulse'
+import { listarNumerosTodasContas, obterStatusBot, listarFluxos } from '@/lib/integrações/sendpulse'
+import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 import { getOrFetch } from '@/lib/cache'
 import type { DadosMonitoramento, NumeroMonitorado } from '@/types'
 
@@ -28,10 +29,11 @@ async function fetchComTimeout<T>(
   }
 }
 
-async function processarBot(numero: Awaited<ReturnType<typeof listarNumeros>>[number]): Promise<NumeroMonitorado> {
+async function processarBot(numero: Awaited<ReturnType<typeof listarNumerosTodasContas>>[number]): Promise<NumeroMonitorado> {
+  const apiKey = apiKeyParaBot(numero.id)
   const [statsR, fluxosR] = await Promise.allSettled([
-    fetchComTimeout((signal) => obterStatusBot(numero.id, signal)),
-    fetchComTimeout((signal) => listarFluxos(numero.id, signal)),
+    fetchComTimeout((signal) => obterStatusBot(numero.id, apiKey, signal)),
+    fetchComTimeout((signal) => listarFluxos(numero.id, apiKey, signal)),
   ])
 
   const statsOk = statsR.status === 'fulfilled' && statsR.value.ok
@@ -65,7 +67,7 @@ async function processarBot(numero: Awaited<ReturnType<typeof listarNumeros>>[nu
 }
 
 async function fetchAllBots(): Promise<DadosMonitoramento> {
-  const numerosResult = await fetchComTimeout((signal) => listarNumeros(signal))
+  const numerosResult = await fetchComTimeout((signal) => listarNumerosTodasContas(signal))
   if (!numerosResult.ok) {
     throw new Error('Timeout ao listar números')
   }
