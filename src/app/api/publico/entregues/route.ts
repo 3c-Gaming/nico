@@ -36,8 +36,8 @@ async function fetchDaxxCampanhas(date: string): Promise<DaxxCampaign[]> {
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const nome = searchParams.get('nome')
-  const date = searchParams.get('date')
+  const nome = searchParams.get('nome')?.trim()
+  const date = searchParams.get('date')?.trim()
 
   if (!nome || !date) {
     return NextResponse.json(

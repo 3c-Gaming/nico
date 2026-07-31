@@ -37,9 +37,9 @@ async function fetchExportData(casa: 'superbet' | 'mgm', date: string): Promise<
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const casaParam = searchParams.get('casa')
-  const utm = searchParams.get('utm') ?? searchParams.get('pid')
-  const date = searchParams.get('date')
+  const casaParam = searchParams.get('casa')?.trim()
+  const utm = (searchParams.get('utm') ?? searchParams.get('pid'))?.trim()
+  const date = searchParams.get('date')?.trim()
 
   if (!casaParam || !utm || !date) {
     return NextResponse.json(
