@@ -31,7 +31,7 @@ let page: Page | null = null
 let lastLogin = 0
 const SESSION_TTL = 30 * 60 * 1000
 
-let cacheCampanhas: { data: DaxxCampaign[]; timestamp: number } | null = null
+const cacheCampanhas = new Map<string, { data: DaxxCampaign[]; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000
 
 let loginPromise: Promise<Page> | null = null
@@ -170,11 +170,19 @@ async function clicarProxima(p: Page): Promise<void> {
   await p.waitForSelector('#cliDisparosTbody tr', { timeout: 10000 })
 }
 
-async function setDateFilter(p: Page): Promise<void> {
-  const hoje = new Date()
-  const inicio = new Date(hoje.getFullYear(), 5, 1)
-  const fmtInicio = inicio.toISOString().slice(0, 10)
-  const fmtFim = hoje.toISOString().slice(0, 10)
+async function setDateFilter(p: Page, startDate?: string, endDate?: string): Promise<void> {
+  let fmtInicio: string
+  let fmtFim: string
+
+  if (startDate) {
+    fmtInicio = startDate
+    fmtFim = endDate ?? startDate
+  } else {
+    const hoje = new Date()
+    const inicio = new Date(hoje.getFullYear(), 5, 1)
+    fmtInicio = inicio.toISOString().slice(0, 10)
+    fmtFim = hoje.toISOString().slice(0, 10)
+  }
   console.log('[daxx] applying date filter:', fmtInicio, '->', fmtFim)
 
   await p.evaluate(({ i, f }) => {
@@ -194,14 +202,17 @@ async function setDateFilter(p: Page): Promise<void> {
   await p.waitForSelector('#cliDisparosTbody tr', { timeout: 15000 })
 }
 
-export async function listarCampanhas(): Promise<DaxxCampaign[]> {
-  if (cacheCampanhas && Date.now() - cacheCampanhas.timestamp < CACHE_TTL) {
-    console.log('[daxx] returning cached campanhas')
-    return cacheCampanhas.data
+export async function listarCampanhas(startDate?: string, endDate?: string): Promise<DaxxCampaign[]> {
+  const cacheKey = startDate ? `${startDate}|${endDate ?? startDate}` : 'default'
+
+  const cached = cacheCampanhas.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[daxx] returning cached campanhas for', cacheKey)
+    return cached.data
   }
 
   const p = await ensureLoggedIn()
-  await setDateFilter(p)
+  await setDateFilter(p, startDate, endDate)
 
   const todas: DaxxCampaign[] = []
   let pagina = 0
@@ -212,12 +223,6 @@ export async function listarCampanhas(): Promise<DaxxCampaign[]> {
     todas.push(...campanhas)
     console.log(`[daxx] pagina ${pagina + 1}: ${campanhas.length} campanhas (total: ${todas.length})`)
 
-    if (todas.length >= 50) {
-      todas.splice(50)
-      console.log('[daxx] limit reached, keeping 50 most recent')
-      break
-    }
-
     if (!(await temProximaPagina(p))) break
     await clicarProxima(p)
     pagina++
@@ -225,7 +230,7 @@ export async function listarCampanhas(): Promise<DaxxCampaign[]> {
 
   console.log(`[daxx] total: ${todas.length} campanhas`)
 
-  cacheCampanhas = { data: todas, timestamp: Date.now() }
+  cacheCampanhas.set(cacheKey, { data: todas, timestamp: Date.now() })
   return todas
 }
 
@@ -273,7 +278,7 @@ export async function baixarBaseCSV(id: string): Promise<string> {
 }
 
 export async function invalidateCache() {
-  cacheCampanhas = null
+  cacheCampanhas.clear()
 }
 
 export async function close() {

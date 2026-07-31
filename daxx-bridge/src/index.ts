@@ -9,9 +9,11 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, uptime: process.uptime() })
 })
 
-app.get('/campanhas', async (_req, res) => {
+app.get('/campanhas', async (req, res) => {
   try {
-    const campanhas = await listarCampanhas()
+    const startDate = req.query.startDate ? String(req.query.startDate) : undefined
+    const endDate = req.query.endDate ? String(req.query.endDate) : undefined
+    const campanhas = await listarCampanhas(startDate, endDate)
     res.json({ campanhas })
   } catch (err) {
     console.error('[daxx] /campanhas error:', (err as Error).message)
@@ -41,10 +43,12 @@ app.get('/campanhas/:id/base', async (req, res) => {
   }
 })
 
-app.all('/campanhas/refresh', async (_req, res) => {
+app.all('/campanhas/refresh', async (req, res) => {
   try {
+    const startDate = req.query.startDate ? String(req.query.startDate) : undefined
+    const endDate = req.query.endDate ? String(req.query.endDate) : undefined
     invalidateCache()
-    const campanhas = await listarCampanhas()
+    const campanhas = await listarCampanhas(startDate, endDate)
     res.json({ campanhas })
   } catch (err) {
     console.error('[daxx] /campanhas/refresh error:', (err as Error).message)
