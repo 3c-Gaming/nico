@@ -303,11 +303,24 @@ export async function listarCampanhas(startDate?: string, endDate?: string): Pro
     const todas: DaxxCampaign[] = []
     let pagina = 0
     const MAX_PAGINAS = 100
+    // Sem startDate (usado pelo dashboard de campanhas, que não filtra por
+    // data) a janela é de 2 meses e já passou de 380 campanhas — raspar
+    // tudo isso a cada cache-miss é lento e pesado o suficiente pra ter
+    // derrubado o processo (SIGTERM) num deploy recente. Consultas com
+    // startDate explícito (usadas pelos endpoints públicos) continuam sem
+    // limite, já que ali o resultado de um único dia é sempre pequeno.
+    const LIMITE_SEM_FILTRO = 100
 
     while (pagina < MAX_PAGINAS) {
       const campanhas = await lerTabela(p)
       todas.push(...campanhas)
       console.log(`[daxx] pagina ${pagina + 1}: ${campanhas.length} campanhas (total: ${todas.length})`)
+
+      if (!startDate && todas.length >= LIMITE_SEM_FILTRO) {
+        console.log(`[daxx] sem filtro de data — mantendo as ${LIMITE_SEM_FILTRO} mais recentes`)
+        todas.splice(LIMITE_SEM_FILTRO)
+        break
+      }
 
       if (!(await temProximaPagina(p))) break
       await clicarProxima(p)
