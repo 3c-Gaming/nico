@@ -6,6 +6,7 @@ interface DaxxCampaign {
   id: string
   nome: string
   entregues: number
+  lidas: number
   dataCriacao: string
 }
 
@@ -70,15 +71,18 @@ export async function GET(req: NextRequest) {
   })
 
   const entregues = matched.reduce((sum, c) => sum + c.entregues, 0)
+  const lidas = matched.reduce((sum, c) => sum + c.lidas, 0)
 
   return NextResponse.json({
     nome,
     date,
     entregues,
+    lidas,
     campanhas: matched.map((c) => ({
       id: c.id,
       nome: c.nome,
       entregues: c.entregues,
+      lidas: c.lidas,
       dataCriacao: c.dataCriacao,
     })),
   })
