@@ -27,4 +27,5 @@ export const CORES_CASA: Record<string, string> = {
   MGM: '#db9209',
   SuperBet: '#c8102e',
   KingPanda: '#8b5cf6',
+  NoviBet: '#00d17a',
 }

@@ -43,6 +43,68 @@ function classificarCiclo(nome: string): CicloDisparo {
   return m ? (`D${m[1]}` as CicloDisparo) : 'TOTAL'
 }
 
+// Mesma casa aparece com grafias diferentes entre meses (ex: "MGMBET" e "MGM") — normaliza
+// pro nome canônico antes de agregar, senão vira duas linhas separadas em "por casa".
+const CASA_CANONICA: Record<string, string> = { MGMBET: 'MGM' }
+function normalizarCasa(casa: string): string {
+  return CASA_CANONICA[casa.toUpperCase()] ?? casa
+}
+
+// Os CSVs de disparos mudam de layout mês a mês (colunas reordenadas, CLIQUES/TX LIDAS/TX
+// CLIQUES às vezes nem existem) — por isso mapeamos por nome de cabeçalho em vez de índice fixo.
+const norm = (h: string) => h.trim().toUpperCase().replace(/\s+/g, ' ')
+const ALIASES: Record<string, string[]> = {
+  DATA: ['DATA'],
+  CASA: ['CASA'],
+  PROMO: ['PROMOÇÃO/OBJETIVO', 'PROMOCAO/OBJETIVO', 'PROMOÇÃO', 'PROMOCAO'],
+  UTM: ['UTM/PID', 'UTMS / PIDS', 'UTMS/PIDS', 'UTM / PID', 'UTMS', 'PIDS'],
+  LUCRO: ['LUCRO/PREJUIZO', 'LUCRO/PREJUÍZO'],
+  ROAS: ['ROAS'],
+  ENTREGUES: ['ENTREGUES'],
+  LIDAS: ['LIDAS'],
+  CLIQUES: ['CLIQUES'],
+  CUSTO: ['CUSTO'],
+  REGISTROS: ['REGISTROS'],
+  FTD: ['FTD', 'FTDS'],
+  CPAS: ['CPAS'],
+  CPA_VAL: ['CPA'],
+}
+
+interface ColunasIdx {
+  DATA: number
+  CASA: number
+  PROMO: number
+  UTM: number
+  LUCRO: number
+  ROAS: number
+  ENTREGUES: number
+  LIDAS: number
+  CLIQUES?: number
+  CUSTO: number
+  REGISTROS: number
+  FTD: number
+  CPAS: number
+  CPA_VAL: number
+}
+
+function mapearColunas(header: string[]): ColunasIdx {
+  const idx: Partial<Record<string, number>> = {}
+  const cols = header.map(norm)
+  for (const [chave, nomes] of Object.entries(ALIASES)) {
+    for (const nome of nomes) {
+      const i = cols.indexOf(norm(nome))
+      if (i !== -1) {
+        idx[chave] = i
+        break
+      }
+    }
+  }
+  const obrigatorias = ['DATA', 'CASA', 'PROMO', 'UTM', 'LUCRO', 'ROAS', 'ENTREGUES', 'LIDAS', 'CUSTO', 'REGISTROS', 'FTD', 'CPAS', 'CPA_VAL']
+  const faltando = obrigatorias.filter((k) => idx[k] === undefined)
+  if (faltando.length) throw new Error('Colunas não encontradas no CSV: ' + faltando.join(', '))
+  return idx as unknown as ColunasIdx
+}
+
 function agregadoVazio(): AgregadoJunho {
   return { disparos: 0, entregues: 0, lidas: 0, custo: 0, faturamento: 0, lucro: 0, registros: 0, ftd: 0, cpas: 0, roas: 0 }
 }
@@ -69,30 +131,43 @@ function round2(n: number): number {
 }
 
 export function processarCsvResultados(csvTexto: string, periodo: { inicio: string; fim: string }): ResultadosJunho2026 {
-  const linhas = csvTexto.split(/\r?\n/).filter((l) => l.trim().length > 0)
-  const corpo = linhas.slice(1, -1) // remove header e linha TOTAIS
+  const textoLimpo = csvTexto.replace(/^﻿/, '')
+  const linhas = textoLimpo.split(/\r?\n/).filter((l) => l.trim().length > 0)
+  if (!linhas.length) throw new Error('CSV vazio')
 
-  const disparos: DisparoJunho[] = corpo.map((linha) => {
-    const c = parseCsvLine(linha)
-    const nome = (c[3] ?? '').trim()
-    return {
-      data: (c[0] ?? '').trim(),
-      casa: (c[1] ?? '').trim(),
-      utm: (c[2] ?? '').trim(),
-      nome,
-      ciclo: classificarCiclo(nome),
-      lucro: round2(numeroBR(c[4])),
-      roas: numeroBR(c[5]),
-      entregues: numeroBR(c[6]),
-      lidas: numeroBR(c[7]),
-      cliques: numeroBR(c[8]),
-      custo: round2(numeroBR(c[11])),
-      registros: numeroBR(c[16]),
-      ftd: numeroBR(c[17]),
-      cpas: numeroBR(c[18]),
-      cpaReceita: round2(numeroBR(c[19])),
-    }
-  })
+  const idx = mapearColunas(parseCsvLine(linhas[0]))
+
+  // A última linha costuma ser um agregado "TOTAIS" (data/casa vazios, só números) — descarta.
+  const ultimaLinha = parseCsvLine(linhas[linhas.length - 1])
+  const ultimaTemData = (ultimaLinha[idx.DATA] ?? '').trim().length > 0
+  const corpoLinhas = linhas.slice(1, ultimaTemData ? undefined : -1)
+
+  const disparos: DisparoJunho[] = corpoLinhas
+    .map((linha) => {
+      const c = parseCsvLine(linha)
+      const casaBruta = (c[idx.CASA] ?? '').trim()
+      const nome = (c[idx.PROMO] ?? '').trim()
+      const utm = (c[idx.UTM] ?? '').trim()
+      return {
+        data: (c[idx.DATA] ?? '').trim(),
+        casa: normalizarCasa(casaBruta),
+        utm,
+        nome,
+        ciclo: classificarCiclo(nome),
+        lucro: round2(numeroBR(c[idx.LUCRO])),
+        roas: numeroBR(c[idx.ROAS]),
+        entregues: numeroBR(c[idx.ENTREGUES]),
+        lidas: numeroBR(c[idx.LIDAS]),
+        cliques: idx.CLIQUES !== undefined ? numeroBR(c[idx.CLIQUES]) : 0,
+        custo: round2(numeroBR(c[idx.CUSTO])),
+        registros: numeroBR(c[idx.REGISTROS]),
+        ftd: numeroBR(c[idx.FTD]),
+        cpas: numeroBR(c[idx.CPAS]),
+        cpaReceita: round2(numeroBR(c[idx.CPA_VAL])),
+      }
+    })
+    // descarta linhas sem data ou sem casa reconhecida (ex: placeholder "Selecione" de dropdown vazio)
+    .filter((d) => d.data && d.casa && d.casa.toUpperCase() !== 'SELECIONE')
 
   const totais = agregadoVazio()
   for (const d of disparos) acumular(totais, d)
