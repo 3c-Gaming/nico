@@ -10,6 +10,14 @@ interface DaxxCampaign {
   dataCriacao: string
 }
 
+// A planilha às vezes erra a data entre colchetes (referência de quando foi criado o disparo,
+// digitada à mão) — mas a data de entrega que vem logo depois de "DISP"/"DISP TOTAL" é
+// confiável. Buscamos a partir dali pra não depender do colchete estar certo.
+function comecarNaDataDeEntrega(nome: string): string {
+  const semColchete = nome.replace(/^\[\d{2}\/\d{2}\]\s*DISP\s*(?:TOTAL\s*)?/i, '').trim()
+  return semColchete || nome
+}
+
 function daxxDateToISO(str: string): string | null {
   // DAXX retorna "DD/MM/YY, HH:mm" (ano com 2 dígitos) ou, ocasionalmente, "DD/MM/YYYY"
   const match = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/)
@@ -64,10 +72,11 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  const nomeBusca = comecarNaDataDeEntrega(nome)
   const matched = campanhas.filter((c) => {
     const iso = daxxDateToISO(c.dataCriacao)
     if (iso !== date) return false
-    return c.nome.toLowerCase().includes(nome.toLowerCase())
+    return c.nome.toLowerCase().includes(nomeBusca.toLowerCase())
   })
 
   const entregues = matched.reduce((sum, c) => sum + c.entregues, 0)
