@@ -52,7 +52,9 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
                   <div className="text-xs text-[var(--text-muted)]">
                     {d.data} · {d.casa}
                   </div>
-                  <div className="text-sm font-bold text-[var(--success)]"> Lucro: {formatarMoeda(d.lucro)}</div>
+                  <div className="text-sm font-bold text-[var(--success)]">
+                    Gastamos: {formatarMoeda(d.custo)} → Lucro: {formatarMoeda(d.lucro)}
+                  </div>
                 </div>
               </div>
             </div>
