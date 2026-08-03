@@ -18,6 +18,24 @@ function comecarNaDataDeEntrega(nome: string): string {
   return semColchete || nome
 }
 
+// A DAXX abrevia o nome de algumas casas nas campanhas (ex: "NOVI" em vez de "NOVIBET"), mas a
+// planilha usa o nome completo — geramos variações com as abreviações conhecidas pra não perder
+// o match só por causa disso.
+const ABREVIACOES_CASA: [string, string][] = [
+  ['NOVIBET', 'NOVI'],
+  ['BETESPORTE', 'BETE'],
+]
+
+function variacoesBusca(nome: string): string[] {
+  const variacoes = new Set([nome])
+  for (const [completo, abreviado] of ABREVIACOES_CASA) {
+    if (nome.toUpperCase().includes(completo)) {
+      variacoes.add(nome.replace(new RegExp(completo, 'gi'), abreviado))
+    }
+  }
+  return [...variacoes]
+}
+
 function daxxDateToISO(str: string): string | null {
   // DAXX retorna "DD/MM/YY, HH:mm" (ano com 2 dígitos) ou, ocasionalmente, "DD/MM/YYYY"
   const match = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/)
@@ -73,10 +91,12 @@ export async function GET(req: NextRequest) {
   }
 
   const nomeBusca = comecarNaDataDeEntrega(nome)
+  const candidatos = variacoesBusca(nomeBusca).map((c) => c.toLowerCase())
   const matched = campanhas.filter((c) => {
     const iso = daxxDateToISO(c.dataCriacao)
     if (iso !== date) return false
-    return c.nome.toLowerCase().includes(nomeBusca.toLowerCase())
+    const nomeLower = c.nome.toLowerCase()
+    return candidatos.some((cand) => nomeLower.includes(cand))
   })
 
   const entregues = matched.reduce((sum, c) => sum + c.entregues, 0)
