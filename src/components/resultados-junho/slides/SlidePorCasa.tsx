@@ -20,7 +20,7 @@ export function SlidePorCasa({ dados }: { dados: ResultadosJunho2026 }) {
           itens={casas.map(([casa, agg]) => ({
             label: casa,
             valor: agg.lucro,
-            cor: 'var(--success)',
+            cor: agg.lucro >= 0 ? 'var(--success)' : 'var(--error)',
             destaque: formatarMoeda(agg.lucro),
           }))}
         />
