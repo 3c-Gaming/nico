@@ -28,13 +28,13 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
     <SlideShell
       eyebrow="Esteira Ciclo de 7 dias"
       titulo="Conversão por etapa do ciclo"
-      subtitulo={`A base "quente" logo após o registro (D1) teve ROAS ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
+      subtitulo={`A base "quente" logo após o registro (D1) teve ROI ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
     >
       <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
         <StatTile label="Investimento" value={totalCiclo.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" />
         <StatTile label="Faturamento" value={totalCiclo.faturamento} prefix="R$ " decimals={0} cor="var(--success)" delay={0.1} />
         <StatTile label="Lucro" value={totalCiclo.lucro} prefix="R$ " decimals={0} cor="var(--success)" delay={0.2} />
-        <StatTile label="ROAS TOTAL" value={roasCiclo} suffix="x" decimals={2} cor="var(--success)" delay={0.3} />
+        <StatTile label="ROI TOTAL" value={roasCiclo} suffix="x" decimals={2} cor="var(--success)" delay={0.3} />
       </SlideItem>
 
       <SlideItem className="w-full">
@@ -43,7 +43,7 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
             label: c,
             valor: porCiclo[c].roas,
             cor: CORES_CICLO[c],
-            destaque: `${porCiclo[c].roas.toFixed(2)}x ROAS`,
+            destaque: `${porCiclo[c].roas.toFixed(2)}x ROI`,
           }))}
           formatarValor={(v) => `${v.toFixed(2)}x`}
         />

@@ -27,7 +27,7 @@ export function SlideBaseTotal({ dados }: { dados: ResultadosJunho2026 }) {
         <StatTile label="Investido / Custo" value={total.custo} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.1} />
         <StatTile label="Faturamento Total" value={total.faturamento} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.2} />
         <StatTile label="Lucro TOTAL" value={total.lucro} prefix="R$ " cor="var(--success)" tamanho="lg" delay={0.3} />
-        <StatTile label="ROAS TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
+        <StatTile label="ROI TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
       </SlideItem>
 
       <SlideItem className="w-full flex flex-col gap-2">

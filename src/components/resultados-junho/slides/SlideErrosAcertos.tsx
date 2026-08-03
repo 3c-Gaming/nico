@@ -26,12 +26,12 @@ export function SlideErrosAcertos({ dados, topicos }: SlideErrosAcertosProps) {
 
   const acertosSugeridos = [
     `Disparos de base total foram ${pctBaseTotal}% do lucro do mês vindo de só ${porCiclo.TOTAL.disparos} disparos.`,
-    `D1 converteu com ROAS de ${porCiclo.D1.roas.toFixed(1)}x — a base "quente" logo após o registro responde muito bem.`,
+    `D1 converteu com ROI de ${porCiclo.D1.roas.toFixed(1)}x — a base "quente" logo após o registro responde muito bem.`,
     `${melhorCasa} liderou o mês com ${formatarMoeda(melhorCasaAgg.lucro)} de lucro em ${melhorCasaAgg.disparos} disparos.`,
   ]
 
   const pontosDeAtencaoSugeridos = [
-    `D5/D7 converteram bem menos que D1/D3 — ROAS caiu ${razaoCiclo}x do D1 pro D5. Vale revisar oferta ou intensidade nesse estágio.`,
+    `D5/D7 converteram bem menos que D1/D3 — ROI caiu ${razaoCiclo}x do D1 pro D5. Vale revisar oferta ou intensidade nesse estágio.`,
     `${diasPrejuizo.length} dias do mês fecharam no vermelho, com destaque pro disparo "${piorDisparo?.nome}" (${formatarMoeda(
       piorDisparo?.lucro ?? 0,
     )}).`,

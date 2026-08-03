@@ -92,7 +92,7 @@ export default function ResultadosPage() {
                       <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.lucro)}</div>
                     </div>
                     <div>
-                      <div className="text-[var(--text-muted)]">ROAS</div>
+                      <div className="text-[var(--text-muted)]">ROI</div>
                       <div className="font-semibold text-[var(--text-primary)]">{r.dados.totais.roas.toFixed(2)}x</div>
                     </div>
                   </div>

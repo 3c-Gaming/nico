@@ -13,7 +13,7 @@ export function SlideTotais({ dados }: { dados: ResultadosJunho2026 }) {
         <StatTile label="Investido" value={totais.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" tamanho="lg" />
         <StatTile label="Faturamento" value={totais.faturamento} prefix="R$ " decimals={0} cor="var(--success)" tamanho="lg" delay={0.1} />
         <StatTile label="Lucro" value={totais.lucro} prefix="R$ " decimals={0} cor="var(--success)" tamanho="lg" delay={0.2} />
-        <StatTile label="ROAS" value={totais.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
+        <StatTile label="ROI" value={totais.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
       </SlideItem>
 
       <SlideItem className="grid grid-cols-3 md:grid-cols-3 gap-3 w-full">
