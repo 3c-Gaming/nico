@@ -5,8 +5,19 @@
  * Lê os CSVs de ./mes, consulta as APIs de controlenumeros.vercel.app e grava
  * as versões repreenchidas em ./resultado (mesmo nome de arquivo).
  *
- * Colunas repreenchidas: ENTREGUES, REGISTROS, FTD, CPAS e CPA (valor).
- * CPA em valor: SuperBet = cpa * 500 | MGM = cpa * 260
+ * Colunas repreenchidas: ENTREGUES, LIDAS, REGISTROS, FTD, CPAS (contagens vindas da API) e,
+ * recalculados linha a linha a partir delas: CUSTO, CPA (valor), LUCRO/PREJUIZO, ROAS, C.FTD,
+ * C.REG, REG > FTD e FTD > CPA.
+ *
+ * Fórmulas:
+ *   CUSTO       = ENTREGUES * 0,13
+ *   CPA (valor) = CPAS * (SuperBet: 500 | MGM: 260)
+ *   LUCRO       = CPA (valor) - CUSTO
+ *   ROAS        = CPA (valor) / CUSTO
+ *   C.FTD       = CUSTO / FTD
+ *   C.REG       = CUSTO / REGISTROS
+ *   REG > FTD   = FTD / REGISTROS * 100
+ *   FTD > CPA   = CPAS / FTD * 100
  *
  * Estrutura esperada:
  *   resultados-disparos/
@@ -85,6 +96,8 @@ const toCSV = (rows) => rows.map((r) => r.map(q).join(',')).join('\r\n') + '\r\n
 const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = (n) => nf2.format(Number(n) || 0);
 const brl = (n) => 'R$ ' + nf2.format(Number(n) || 0);
+const pct = (n) => num(n) + '%';
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 /** tenta achar o ano no nome do arquivo: 2026 | 2K26 | _26 */
 function anoDoArquivo(nome) {
@@ -168,6 +181,13 @@ const ALIASES = {
   FTD: ['FTD', 'FTDS'],
   CPAS: ['CPAS'],
   CPA_VAL: ['CPA'],
+  LUCRO: ['LUCRO/PREJUIZO', 'LUCRO/PREJUÍZO'],
+  ROAS: ['ROAS'],
+  CUSTO: ['CUSTO'],
+  C_REG: ['C.REG', 'CREG'],
+  C_FTD: ['C.FTD', 'CFTD'],
+  REG_FTD: ['REG > FTD', 'REG>FTD'],
+  FTD_CPA: ['FTD > CPA', 'FTD>CPA'],
 };
 
 function mapearColunas(header) {
@@ -219,12 +239,14 @@ async function processarArquivo(nomeArquivo) {
     const linha = r + 1;
 
     // 1) ENTREGUES / LIDAS — nome da promoção + data
+    let entregues = Number(String(row[idx.ENTREGUES] || '').replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
     const precisaEntregues = !ONLY_EMPTY || vazio(row[idx.ENTREGUES]);
     const precisaLidas = idx.LIDAS !== undefined && (!ONLY_EMPTY || vazio(row[idx.LIDAS]));
     if (promo && (precisaEntregues || precisaLidas)) {
       try {
         const d = await fetchEntregues(promo, dataISO);
-        if (precisaEntregues) row[idx.ENTREGUES] = num(d.entregues);
+        entregues = Number(d.entregues) || 0;
+        if (precisaEntregues) row[idx.ENTREGUES] = num(entregues);
         if (precisaLidas) row[idx.LIDAS] = num(d.lidas);
         log.push(`L${linha} entregues "${promo}" ${dataISO} -> entregues ${d.entregues} | lidas ${d.lidas}`);
       } catch (e) {
@@ -234,31 +256,57 @@ async function processarArquivo(nomeArquivo) {
       await sleep(DELAY);
     }
 
-    // 2) REGISTROS / FTD / CPAS / CPA em valor
+    // 2) REGISTROS / FTD / CPAS (contagens) — casa + utm/pid + data
+    let registros = 0, ftds = 0, cpas = 0, temResultado = false;
     if (!casa || !chave) {
       stats.pulados++;
-      log.push(`L${linha} sem casa/utm-pid reconhecidos -> pulado`);
-      return;
-    }
-    try {
-      const d = await fetchResultado(casa, chave, dataISO);
-      const registros = Number(d.registros) || 0;
-      const ftds = Number(d.ftds) || 0;
-      const cpas = Number(d.cpa) || 0;
+      log.push(`L${linha} sem casa/utm-pid reconhecidos -> registros/ftd/cpas pulados (custo ainda recalculado)`);
+    } else {
+      try {
+        const d = await fetchResultado(casa, chave, dataISO);
+        registros = Number(d.registros) || 0;
+        ftds = Number(d.ftds) || 0;
+        cpas = Number(d.cpa) || 0;
+        temResultado = true;
 
-      if (!ONLY_EMPTY || vazio(row[idx.REGISTROS])) row[idx.REGISTROS] = num(registros);
-      if (!ONLY_EMPTY || vazio(row[idx.FTD]))       row[idx.FTD] = num(ftds);
-      if (!ONLY_EMPTY || vazio(row[idx.CPAS]))      row[idx.CPAS] = num(cpas);
-      if (idx.CPA_VAL !== undefined && (!ONLY_EMPTY || vazio(row[idx.CPA_VAL]))) {
-        row[idx.CPA_VAL] = brl(cpas * CPA_VALOR[casa]);
+        if (!ONLY_EMPTY || vazio(row[idx.REGISTROS])) row[idx.REGISTROS] = num(registros);
+        if (!ONLY_EMPTY || vazio(row[idx.FTD]))       row[idx.FTD] = num(ftds);
+        if (!ONLY_EMPTY || vazio(row[idx.CPAS]))      row[idx.CPAS] = num(cpas);
+        stats.ok++;
+        log.push(`L${linha} ${casa}/${d.utm} ${dataISO} -> reg ${registros} | ftd ${ftds} | cpa ${cpas}`);
+      } catch (e) {
+        stats.erros++;
+        log.push(`L${linha} resultado ${casa}/${chave} ${dataISO}: ${e.message}`);
       }
-      stats.ok++;
-      log.push(`L${linha} ${casa}/${d.utm} ${dataISO} -> reg ${registros} | ftd ${ftds} | cpa ${cpas} (${brl(cpas * CPA_VALOR[casa])})`);
-    } catch (e) {
-      stats.erros++;
-      log.push(`L${linha} resultado ${casa}/${chave} ${dataISO}: ${e.message}`);
+      await sleep(DELAY);
     }
-    await sleep(DELAY);
+
+    // 3) recalcula CUSTO, CPA (valor), LUCRO, ROAS, C.FTD, C.REG, REG > FTD e FTD > CPA
+    //    a partir dos valores frescos acima — sempre por linha, nunca herdados do CSV original.
+    const custo = round2(entregues * 0.13);
+    if (idx.CUSTO !== undefined) row[idx.CUSTO] = brl(custo);
+
+    if (casa && temResultado) {
+      const cpaValor = round2(cpas * (CPA_VALOR[casa] || 0));
+      const lucro = round2(cpaValor - custo);
+      const roas = custo > 0 ? cpaValor / custo : 0;
+      const custoPorFtd = ftds > 0 ? custo / ftds : 0;
+      const custoPorReg = registros > 0 ? custo / registros : 0;
+      const regParaFtd = registros > 0 ? (ftds / registros) * 100 : 0;
+      const ftdParaCpa = ftds > 0 ? (cpas / ftds) * 100 : 0;
+
+      if (idx.CPA_VAL !== undefined) row[idx.CPA_VAL] = brl(cpaValor);
+      if (idx.LUCRO !== undefined) row[idx.LUCRO] = brl(lucro);
+      if (idx.ROAS !== undefined) row[idx.ROAS] = num(roas);
+      if (idx.C_FTD !== undefined) row[idx.C_FTD] = brl(custoPorFtd);
+      if (idx.C_REG !== undefined) row[idx.C_REG] = brl(custoPorReg);
+      if (idx.REG_FTD !== undefined) row[idx.REG_FTD] = pct(regParaFtd);
+      if (idx.FTD_CPA !== undefined) row[idx.FTD_CPA] = pct(ftdParaCpa);
+
+      log.push(`L${linha} recalculo -> custo ${brl(custo)} | cpaValor ${brl(cpaValor)} | lucro ${brl(lucro)} | roas ${num(roas)}x`);
+    } else {
+      log.push(`L${linha} recalculo -> custo ${brl(custo)} (sem casa/resultado, demais colunas derivadas não recalculadas)`);
+    }
   }
 
   let cursor = 0;
