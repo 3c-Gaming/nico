@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
 import { ModalNovoResultado } from '@/components/resultados-junho/ModalNovoResultado'
 import { formatarMoeda } from '@/components/resultados-junho/formato'
+import { aplicarSegundaCasa } from '@/lib/resultados/segundaCasa'
 import { Trophy, Plus, Presentation, Globe, Pencil } from 'lucide-react'
 import type { Resultado } from '@/types'
 
@@ -53,7 +54,9 @@ export default function ResultadosPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {resultados.map((r) => (
+            {resultados.map((r) => {
+              const totais = aplicarSegundaCasa(r.dados, r.dados.segundaCasa).totais
+              return (
               <div
                 key={r.id}
                 className="rounded-lg overflow-hidden glass bg-[var(--glass-bg)] border border-[var(--glass-border)] flex flex-col"
@@ -81,19 +84,19 @@ export default function ResultadosPage() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <div className="text-[var(--text-muted)]">Investimento</div>
-                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.custo)}</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(totais.custo)}</div>
                     </div>
                     <div>
                       <div className="text-[var(--text-muted)]">Faturamento</div>
-                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.faturamento)}</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(totais.faturamento)}</div>
                     </div>
                     <div>
                       <div className="text-[var(--text-muted)]">Lucro</div>
-                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(r.dados.totais.lucro)}</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{formatarMoeda(totais.lucro)}</div>
                     </div>
                     <div>
                       <div className="text-[var(--text-muted)]">ROI</div>
-                      <div className="font-semibold text-[var(--text-primary)]">{r.dados.totais.roas.toFixed(2)}x</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{totais.roas.toFixed(2)}x</div>
                     </div>
                   </div>
 
@@ -113,7 +116,8 @@ export default function ResultadosPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
