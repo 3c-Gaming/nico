@@ -53,7 +53,7 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
                     {d.data} · {d.casa}
                   </div>
                   <div className="text-sm font-bold text-[var(--success)]">
-                    Lucro: {formatarMoeda(d.lucro)} · ROI {d.roas.toFixed(2)}x
+                    Lucro: {formatarMoeda(d.lucro)} · ROI {d.custo > 0 ? `${d.roas.toFixed(2)}x` : '—'}
                   </div>
                 </div>
               </div>
