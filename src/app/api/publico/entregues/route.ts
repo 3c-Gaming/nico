@@ -26,6 +26,8 @@ const ABREVIACOES_CASA: [string, string][] = [
   ['BETESPORTE', 'BETE'],
 ]
 
+// Algumas campanhas na DAXX não repetem a palavra "BASE" que a planilha usa (ex: real é
+// "12/07 VAIDEBET D3", planilha escreve "12/07 BASE VAIDEBET D3") — tentamos também sem ela.
 function variacoesBusca(nome: string): string[] {
   const variacoes = new Set([nome])
   for (const [completo, abreviado] of ABREVIACOES_CASA) {
@@ -33,7 +35,17 @@ function variacoesBusca(nome: string): string[] {
       variacoes.add(nome.replace(new RegExp(completo, 'gi'), abreviado))
     }
   }
+  for (const v of [...variacoes]) {
+    const semBase = v.replace(/\bBASE\s+/i, '').trim()
+    if (semBase && semBase !== v) variacoes.add(semBase)
+  }
   return [...variacoes]
+}
+
+// A DAXX às vezes tem espaçamento inconsistente entre palavras (ex: "BETE  D3" com espaço
+// duplo) — colapsa espaços repetidos antes de comparar pra não perder o match por isso.
+function normalizarEspacos(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
 }
 
 function daxxDateToISO(str: string): string | null {
@@ -91,11 +103,11 @@ export async function GET(req: NextRequest) {
   }
 
   const nomeBusca = comecarNaDataDeEntrega(nome)
-  const candidatos = variacoesBusca(nomeBusca).map((c) => c.toLowerCase())
+  const candidatos = variacoesBusca(nomeBusca).map((c) => normalizarEspacos(c).toLowerCase())
   const matched = campanhas.filter((c) => {
     const iso = daxxDateToISO(c.dataCriacao)
     if (iso !== date) return false
-    const nomeLower = c.nome.toLowerCase()
+    const nomeLower = normalizarEspacos(c.nome).toLowerCase()
     return candidatos.some((cand) => nomeLower.includes(cand))
   })
 
