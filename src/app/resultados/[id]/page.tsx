@@ -451,7 +451,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
             </div>
           </SecaoAccordion>
 
-          <SecaoAccordion titulo="Segunda casa" aberta={secaoAberta === 'segunda-casa'} onToggle={() => setSecaoAberta('segunda-casa')}>
+          <SecaoAccordion titulo="Oferta de Segunda Casa" aberta={secaoAberta === 'segunda-casa'} onToggle={() => setSecaoAberta('segunda-casa')}>
             <div className="space-y-3">
               <p className="text-xs text-[var(--text-muted)]">
                 CSV com destaques de segunda casa (registros/FTDs sem custo de disparo próprio, de quem já tinha cadastro ou aproveitou oferta complementar).
