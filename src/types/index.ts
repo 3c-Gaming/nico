@@ -537,6 +537,17 @@ export interface DiaJunho {
   ftd: number
 }
 
+// Destaque de "segunda casa": ofertas complementares (sem custo de disparo próprio) que o
+// usuário aproveita numa segunda casa de apostas pra potencializar o LTV. Agregado do período
+// inteiro, sem data/promoção específica — por isso fica de fora de rankings por disparo/dia.
+export interface ItemSegundaCasa {
+  casa: string
+  registros: number
+  ftd: number
+  cpas: number
+  faturamento: number
+}
+
 export interface ResultadosJunho2026 {
   periodo: { inicio: string; fim: string }
   totais: AgregadoJunho & {
@@ -552,6 +563,7 @@ export interface ResultadosJunho2026 {
   topDisparos: DisparoJunho[]
   bottomDisparos: DisparoJunho[]
   disparos: DisparoJunho[]
+  segundaCasa?: ItemSegundaCasa[]
 }
 
 // --- Resultados (listagem de apresentações mensais, ex: /resultados) ---

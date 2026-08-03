@@ -83,7 +83,7 @@ function SecaoAccordion({
   )
 }
 
-type Secao = 'capa' | 'estilo' | 'acertos' | 'atencao' | 'passos'
+type Secao = 'capa' | 'estilo' | 'segunda-casa' | 'acertos' | 'atencao' | 'passos'
 
 export default function EditarResultadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -96,6 +96,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
   const [secaoAberta, setSecaoAberta] = useState<Secao>('capa')
   const [enviandoFundo, setEnviandoFundo] = useState(false)
   const [enviandoLogo, setEnviandoLogo] = useState(false)
+  const [enviandoSegundaCasa, setEnviandoSegundaCasa] = useState(false)
 
   const [topicos, setTopicos] = useState<TopicosResultado>({ acertos: [], pontosAtencao: [], proximosPassos: [] })
 
@@ -189,6 +190,39 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
       addToast('error', (err as Error).message)
     } finally {
       setEnviandoFundo(false)
+    }
+  }
+
+  async function onEnviarSegundaCasa(file: File | undefined) {
+    if (!file) return
+    setEnviandoSegundaCasa(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch(`/api/resultados/${id}/segunda-casa`, { method: 'POST', body })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao processar CSV')
+      setResultado(data.resultado)
+      addToast('success', 'Segunda casa atualizada')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviandoSegundaCasa(false)
+    }
+  }
+
+  async function onLimparSegundaCasa() {
+    setEnviandoSegundaCasa(true)
+    try {
+      const res = await fetch(`/api/resultados/${id}/segunda-casa`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao limpar')
+      setResultado(data.resultado)
+      addToast('success', 'Segunda casa removida')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviandoSegundaCasa(false)
     }
   }
 
@@ -414,6 +448,47 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
                   </div>
                 )}
               </div>
+            </div>
+          </SecaoAccordion>
+
+          <SecaoAccordion titulo="Segunda casa" aberta={secaoAberta === 'segunda-casa'} onToggle={() => setSecaoAberta('segunda-casa')}>
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--text-muted)]">
+                CSV com destaques de segunda casa (registros/FTDs sem custo de disparo próprio, de quem já tinha cadastro ou aproveitou oferta complementar).
+                Colunas nessa ordem: <code>CASA, REG, FTD, CPA, CPA (valor)</code>.
+              </p>
+
+              {(resultado.dados.segundaCasa?.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  {resultado.dados.segundaCasa!.map((item) => (
+                    <div key={item.casa} className="flex items-center justify-between p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border)] text-xs">
+                      <span className="font-medium text-[var(--text-primary)]">{item.casa}</span>
+                      <span className="text-[var(--text-muted)]">
+                        {item.registros} reg · {item.ftd} ftd · {item.faturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
+                  ))}
+                  <button
+                    onClick={onLimparSegundaCasa}
+                    disabled={enviandoSegundaCasa}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--error)] underline transition-colors"
+                  >
+                    Remover segunda casa
+                  </button>
+                </div>
+              )}
+
+              <label className="flex items-center justify-center gap-2 h-8 px-3 text-xs rounded border border-dashed border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors cursor-pointer">
+                <Plus size={12} />
+                {enviandoSegundaCasa ? 'Enviando...' : 'Enviar CSV de segunda casa'}
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  disabled={enviandoSegundaCasa}
+                  onChange={(e) => { onEnviarSegundaCasa(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
             </div>
           </SecaoAccordion>
 
