@@ -130,7 +130,10 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-export function processarCsvResultados(csvTexto: string, periodo: { inicio: string; fim: string }): ResultadosJunho2026 {
+// Só o parsing do CSV pra uma lista de disparos — sem agregar. Reutilizável quando precisamos
+// combinar disparos de mais de um CSV/mês antes de fechar os totais (ex: recorte por período
+// que atravessa dois meses).
+export function parseCsvDisparos(csvTexto: string): DisparoJunho[] {
   const textoLimpo = csvTexto.replace(/^﻿/, '')
   const linhas = textoLimpo.split(/\r?\n/).filter((l) => l.trim().length > 0)
   if (!linhas.length) throw new Error('CSV vazio')
@@ -142,7 +145,7 @@ export function processarCsvResultados(csvTexto: string, periodo: { inicio: stri
   const ultimaTemData = (ultimaLinha[idx.DATA] ?? '').trim().length > 0
   const corpoLinhas = linhas.slice(1, ultimaTemData ? undefined : -1)
 
-  const disparos: DisparoJunho[] = corpoLinhas
+  return corpoLinhas
     .map((linha) => {
       const c = parseCsvLine(linha)
       const casaBruta = (c[idx.CASA] ?? '').trim()
@@ -169,7 +172,10 @@ export function processarCsvResultados(csvTexto: string, periodo: { inicio: stri
     // descarta só linhas sem data — sem casa reconhecida (ex: placeholder "Selecione" de dropdown
     // vazio) ainda conta pros totais gerais (o custo é real), só fica de fora do "por casa"
     .filter((d) => d.data)
+}
 
+// Fecha os totais/agregados a partir de uma lista de disparos já parseada (de um ou mais CSVs).
+export function construirResultado(disparos: DisparoJunho[], periodo: { inicio: string; fim: string }): ResultadosJunho2026 {
   const totais = agregadoVazio()
   for (const d of disparos) acumular(totais, d)
   fecharRoas(totais)
@@ -230,4 +236,8 @@ export function processarCsvResultados(csvTexto: string, periodo: { inicio: stri
     bottomDisparos,
     disparos,
   }
+}
+
+export function processarCsvResultados(csvTexto: string, periodo: { inicio: string; fim: string }): ResultadosJunho2026 {
+  return construirResultado(parseCsvDisparos(csvTexto), periodo)
 }
