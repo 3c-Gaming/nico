@@ -4,58 +4,67 @@ import type { ItemSegundaCasa } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { CORES_CASA, formatarMoeda, formatarNumero } from '../formato'
 
-// Tailwind precisa das classes literais no bundle — por isso um mapa fixo em vez de interpolar o número.
-const GRID_COLS_POR_QTD: Record<number, string> = {
-  1: 'grid-cols-1',
-  2: 'grid-cols-1 md:grid-cols-2',
-  3: 'grid-cols-1 md:grid-cols-3',
+function TabelaSegundaCasa({ itens }: { itens: ItemSegundaCasa[] }) {
+  const totalRegistros = itens.reduce((sum, item) => sum + item.registros, 0)
+  const totalFtd = itens.reduce((sum, item) => sum + item.ftd, 0)
+  const totalCpas = itens.reduce((sum, item) => sum + item.cpas, 0)
+  const totalFaturamento = itens.reduce((sum, item) => sum + item.faturamento, 0)
+
+  return (
+    <div className="overflow-x-auto w-full">
+      <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] overflow-hidden">
+        <table className="min-w-full text-sm text-left">
+          <thead className="bg-[var(--glass-border)]">
+            <tr>
+              <th className="px-4 py-3 text-[var(--text-primary)]">Casa</th>
+              <th className="px-4 py-3 text-[var(--text-primary)]">REG</th>
+              <th className="px-4 py-3 text-[var(--text-primary)]">FTDs</th>
+              <th className="px-4 py-3 text-[var(--text-primary)]">CPAs</th>
+              <th className="px-4 py-3 text-[var(--text-primary)]">Lucro</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((item) => (
+              <tr key={item.casa} className="border-t border-[var(--glass-border)]">
+                <td className="px-4 py-3 font-semibold" style={{ color: CORES_CASA[item.casa] ?? 'var(--d1)' }}>
+                  {item.casa}
+                </td>
+                <td className="px-4 py-3">{formatarNumero(item.registros)}</td>
+                <td className="px-4 py-3">{formatarNumero(item.ftd)}</td>
+                <td className="px-4 py-3">{formatarNumero(item.cpas)}</td>
+                <td className="px-4 py-3 text-green-500 font-bold">{formatarMoeda(item.faturamento)}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-[var(--glass-border)] bg-[var(--glass-border)] font-semibold">
+              <td className="px-4 py-3">TOTAL</td>
+              <td className="px-4 py-3">{formatarNumero(totalRegistros)}</td>
+              <td className="px-4 py-3">{formatarNumero(totalFtd)}</td>
+              <td className="px-4 py-3">{formatarNumero(totalCpas)}</td>
+              <td className="px-4 py-3 text-green-500">{formatarMoeda(totalFaturamento)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export function SlideSegundaCasa({ itens }: { itens: ItemSegundaCasa[] }) {
   const totalFaturamento = itens.reduce((s, d) => s + d.faturamento, 0)
-  const gridCols = GRID_COLS_POR_QTD[itens.length] ?? 'grid-cols-1 md:grid-cols-4'
 
   return (
     <SlideShell
-      eyebrow="Destaque do período"
-      titulo="Segunda casa"
-      subtitulo="Registros, FTDs e faturamento de usuários que já tinham cadastro ou aproveitaram uma oferta complementar em outra casa — sem custo de disparo próprio, potencializando o LTV da base."
+      eyebrow="LTV e Impulsionamento"
+      titulo="Oferta de Segunda Casa"
+      subtitulo="Faturamento da base total dos disparos que ou já tinham cadastro ou aproveitaram além da oferta do disparo padrão uma oferta complementar em outra casa — sem custo de disparo próprio, potencializando o LTV."
     >
-      <SlideItem className={`grid ${gridCols} gap-3 w-full`}>
-        {itens.map((item) => (
-          <div
-            key={item.casa}
-            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 sm:p-4 text-left"
-            style={{ borderLeft: `3px solid ${CORES_CASA[item.casa] ?? 'var(--d1)'}` }}
-          >
-            <div className="text-sm font-bold mb-2" style={{ color: CORES_CASA[item.casa] ?? 'var(--d1)' }}>
-              {item.casa}
-            </div>
-            <div className="text-[11px] sm:text-xs text-[var(--text-primary)] space-y-1">
-              <div>{formatarMoeda(item.faturamento)} de faturamento</div>
-              <div>Lucro livre — oferta extra (tipo order bump), sem custo de disparo</div>
-              <div className="grid grid-cols-3 gap-1 sm:gap-2 border border-[var(--glass-border)] rounded">
-                <div className="p-1.5 sm:p-4 text-center">
-                  <b>{formatarNumero(item.registros)}</b>
-                  <p>REG</p>
-                </div>
-                <div className="p-1.5 sm:p-4 text-center">
-                  <b>{formatarNumero(item.ftd)}</b>
-                  <p>FTDs</p>
-                </div>
-                <div className="p-1.5 sm:p-4 text-center">
-                  <b>{formatarNumero(item.cpas)}</b>
-                  <p>CPAs</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+      <SlideItem className="w-full">
+        <TabelaSegundaCasa itens={itens} />
       </SlideItem>
 
       <SlideItem className="w-full">
-        <div className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 text-sm text-[var(--text-secondary)] text-center">
-          {formatarMoeda(totalFaturamento)} somados ao faturamento total do período, direto de lucro já que não houve custo de disparo dedicado.
+        <div className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 text-sm text-primary text-center">
+          <b className="font-bold text-success">{formatarMoeda(totalFaturamento)}</b> de faturamento total do período como segunda casa ao longo de 35 disparos diferentes.
         </div>
       </SlideItem>
     </SlideShell>
