@@ -28,11 +28,13 @@ export default function UtmsPage() {
   const [novoNome, setNovoNome] = useState('')
   const [novoValor, setNovoValor] = useState('')
   const [novoCasa, setNovoCasa] = useState<Casa>('superbet')
+  const [novoSiteId, setNovoSiteId] = useState('')
 
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [editNome, setEditNome] = useState('')
   const [editValor, setEditValor] = useState('')
   const [editCasa, setEditCasa] = useState<Casa>('superbet')
+  const [editSiteId, setEditSiteId] = useState('')
 
   const itensFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -54,6 +56,7 @@ export default function UtmsPage() {
     setNovoAberto(true)
     setNovoNome('')
     setNovoValor('')
+    setNovoSiteId('')
     setNovoCasa(filtroCasa === 'all' ? 'superbet' : filtroCasa)
   }
 
@@ -61,11 +64,17 @@ export default function UtmsPage() {
     setNovoAberto(false)
     setNovoNome('')
     setNovoValor('')
+    setNovoSiteId('')
   }
 
   function handleSaveNovo() {
     if (!novoNome.trim() || !novoValor.trim()) return
-    add({ nome: novoNome.trim(), valor: novoValor.trim(), casa: novoCasa })
+    add({
+      nome: novoNome.trim(),
+      valor: novoValor.trim(),
+      casa: novoCasa,
+      siteId: novoCasa === 'superbet' ? novoSiteId.trim() || undefined : undefined,
+    })
     addToast('success', 'Cadastrado com sucesso')
     handleCancelNovo()
   }
@@ -75,6 +84,7 @@ export default function UtmsPage() {
     setEditNome(item.nome)
     setEditValor(item.valor)
     setEditCasa(item.casa)
+    setEditSiteId(item.siteId ?? '')
   }
 
   function handleCancelEdit() {
@@ -83,7 +93,12 @@ export default function UtmsPage() {
 
   function handleSaveEdit(id: string) {
     if (!editNome.trim() || !editValor.trim()) return
-    update(id, { nome: editNome.trim(), valor: editValor.trim(), casa: editCasa })
+    update(id, {
+      nome: editNome.trim(),
+      valor: editValor.trim(),
+      casa: editCasa,
+      siteId: editCasa === 'superbet' ? editSiteId.trim() || undefined : undefined,
+    })
     setEditandoId(null)
   }
 
@@ -128,15 +143,16 @@ export default function UtmsPage() {
         </div>
 
         <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
-          <div className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
+          <div className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
             <span>Casa</span>
             <span>Nome</span>
             <span>Valor</span>
+            <span>Site ID</span>
             <span className="text-right">Ações</span>
           </div>
 
           {novoAberto && (
-            <div className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] items-center">
+            <div className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] items-center">
               <Select
                 value={novoCasa}
                 options={[
@@ -158,6 +174,14 @@ export default function UtmsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveNovo()}
                 placeholder={novoCasa === 'superbet' ? 'ex: superbet_junho_d1' : 'ex: 13382'}
                 className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono focus:outline-none focus:border-[var(--border-strong)]"
+              />
+              <input
+                value={novoSiteId}
+                onChange={(e) => setNovoSiteId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveNovo()}
+                placeholder={novoCasa === 'superbet' ? 'ex: 25730' : '—'}
+                disabled={novoCasa !== 'superbet'}
+                className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono focus:outline-none focus:border-[var(--border-strong)] disabled:opacity-40"
               />
               <div className="flex items-center justify-end gap-1">
                 <button
@@ -192,7 +216,7 @@ export default function UtmsPage() {
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 bg-[var(--bg-elevated)] items-center"
+                  className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 bg-[var(--bg-elevated)] items-center"
                 >
                   <Select
                     value={editCasa}
@@ -213,6 +237,14 @@ export default function UtmsPage() {
                     onChange={(e) => setEditValor(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(item.id)}
                     className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--border-strong)]"
+                  />
+                  <input
+                    value={editSiteId}
+                    onChange={(e) => setEditSiteId(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(item.id)}
+                    placeholder={editCasa === 'superbet' ? 'ex: 25730' : '—'}
+                    disabled={editCasa !== 'superbet'}
+                    className="h-9 px-3 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono focus:outline-none focus:border-[var(--border-strong)] disabled:opacity-40"
                   />
                   <div className="flex items-center justify-end gap-1">
                     <button
@@ -237,7 +269,7 @@ export default function UtmsPage() {
             return (
               <div
                 key={item.id}
-                className="group grid grid-cols-[90px_1fr_1fr_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
+                className="group grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
               >
                 <Chip label={info.short} cor={info.cor} size="sm" />
                 <span className="text-sm text-[var(--text-primary)] truncate" title={item.nome}>
@@ -245,6 +277,9 @@ export default function UtmsPage() {
                 </span>
                 <span className="text-xs text-[var(--text-muted)] font-mono truncate" title={item.valor}>
                   {item.valor}
+                </span>
+                <span className="text-xs text-[var(--text-muted)] font-mono truncate">
+                  {item.casa === 'superbet' ? (item.siteId || '—') : '—'}
                 </span>
                 <div className="flex items-center justify-end gap-1">
                   <button

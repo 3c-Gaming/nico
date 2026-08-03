@@ -45,6 +45,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   pinnedDisparos: 'pinned_disparos',
   publicToken: 'public_token',
   responsavelId: 'responsavel_id',
+  siteId: 'site_id',
   templateDaxx: 'template_daxx',
   totalLeads: 'total_leads',
   updatedAt: 'updated_at',
@@ -110,6 +111,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   periodo_inicio: 'periodoInicio',
   periodo_fim: 'periodoFim',
   public_token: 'publicToken',
+  site_id: 'siteId',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {

@@ -5,6 +5,8 @@ export interface UtmConfig {
   nome: string
   valor: string
   casa: 'superbet' | 'betmgm'
+  // Superbet: id da "deal" no painel de afiliados, define o valor do CPA daquela UTM.
+  siteId?: string
   criadoEm: string
 }
 

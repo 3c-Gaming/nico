@@ -30,12 +30,13 @@ function getServerSnapshot(): UtmConfig[] {
 export function useUtmConfigs() {
   const list = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
-  const add = useCallback((data: { nome: string; valor: string; casa: 'superbet' | 'betmgm' }) => {
+  const add = useCallback((data: { nome: string; valor: string; casa: 'superbet' | 'betmgm'; siteId?: string }) => {
     const config: UtmConfig = {
       id: crypto.randomUUID(),
       nome: data.nome,
       valor: data.valor,
       casa: data.casa,
+      siteId: data.siteId,
       criadoEm: new Date().toISOString(),
     }
     addUtmConfig(config)
