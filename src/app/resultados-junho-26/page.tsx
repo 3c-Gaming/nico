@@ -19,7 +19,7 @@ export default function ResultadosJunho26Page() {
     { id: 'capa', render: () => <SlideCapa dados={dados} titulo="Junho 2026" /> },
     { id: 'totais', render: () => <SlideTotais dados={dados} /> },
     { id: 'ciclo', render: () => <SlideCiclo dados={dados} /> },
-    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} /> },
+    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo="Junho 2026" /> },
     { id: 'por-casa', render: () => <SlidePorCasa dados={dados} /> },
     { id: 'ranking', render: () => <SlideRanking dados={dados} /> },
     { id: 'erros-acertos', render: () => <SlideErrosAcertos dados={dados} /> },

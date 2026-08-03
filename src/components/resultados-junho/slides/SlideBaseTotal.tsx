@@ -3,10 +3,11 @@
 import type { ResultadosJunho2026 } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { StatTile } from '../StatTile'
-import { formatarMoeda } from '../formato'
+import { formatarMoeda, slugMes } from '../formato'
 
-export function SlideBaseTotal({ dados }: { dados: ResultadosJunho2026 }) {
+export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; titulo: string }) {
   const total = dados.porCiclo.TOTAL
+  const pastaImagens = slugMes(titulo)
   const top3 = dados.disparos
     .filter((d) => d.ciclo === 'TOTAL')
     .sort((a, b) => b.lucro - a.lucro)
@@ -39,9 +40,10 @@ export function SlideBaseTotal({ dados }: { dados: ResultadosJunho2026 }) {
               key={`${d.data}-${d.nome}`}
               className="flex items-center justify-start rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] px-4 py-3 text-left"
             >
-              <img 
-                src={`/top-disparos/top-${i + 1}.png`} alt={d.nome} width={60} height={60} 
-                className='mr-4 shadow-xl border border-white/50 rounded'  
+              <img
+                src={`/top-disparos/${pastaImagens}/top-${i + 1}.png`} alt={d.nome} width={60} height={60}
+                onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
+                className='mr-4 shadow-xl border border-white/50 rounded'
               />
               <div className="flex justify-between gap-3 min-w-0">
                 <div className="text-lg font-bold text-[var(--pontual)] w-6 shrink-0">{i + 1}º</div>

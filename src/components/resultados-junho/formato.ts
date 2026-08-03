@@ -29,3 +29,13 @@ export const CORES_CASA: Record<string, string> = {
   KingPanda: '#8b5cf6',
   NoviBet: '#00d17a',
 }
+
+// "Julho 2026" -> "julho-2026" — usado pra achar a pasta de imagens do mês em /public/top-disparos
+export function slugMes(titulo: string): string {
+  return titulo
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}

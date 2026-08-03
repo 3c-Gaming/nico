@@ -43,7 +43,7 @@ export function ApresentacaoResultado({ titulo, dados, topicos = TOPICOS_VAZIOS 
     { id: 'capa', render: () => <SlideCapa titulo={titulo} dados={dados} topicos={topicos} /> },
     { id: 'totais', render: () => <SlideTotais dados={dados} /> },
     { id: 'ciclo', render: () => <SlideCiclo dados={dados} /> },
-    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} /> },
+    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo={titulo} /> },
     { id: 'por-casa', render: () => <SlidePorCasa dados={dados} /> },
     { id: 'ranking', render: () => <SlideRanking dados={dados} /> },
     { id: 'erros-acertos', render: () => <SlideErrosAcertos dados={dados} topicos={topicos} /> },
