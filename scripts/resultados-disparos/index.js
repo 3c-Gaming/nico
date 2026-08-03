@@ -283,21 +283,26 @@ async function processarArquivo(nomeArquivo) {
 
     // 3) recalcula CUSTO, CPA (valor), LUCRO, ROAS, C.FTD, C.REG, REG > FTD e FTD > CPA
     //    a partir dos valores frescos acima — sempre por linha, nunca herdados do CSV original.
+    // LUCRO/ROAS sao recalculados mesmo sem casa reconhecida (cpaValor vira 0 — sem receita
+    // atribuida, mas o custo continua contando pro total geral, ja que ele realmente aconteceu).
     const custo = round2(entregues * 0.13);
     if (idx.CUSTO !== undefined) row[idx.CUSTO] = brl(custo);
 
-    if (casa && temResultado) {
-      const cpaValor = round2(cpas * (CPA_VALOR[casa] || 0));
-      const lucro = round2(cpaValor - custo);
-      const roas = custo > 0 ? cpaValor / custo : 0;
+    const temCasa = casa && temResultado;
+    const cpaValor = temCasa ? round2(cpas * (CPA_VALOR[casa] || 0)) : 0;
+    const lucro = round2(cpaValor - custo);
+    const roas = custo > 0 ? cpaValor / custo : 0;
+
+    if (idx.LUCRO !== undefined) row[idx.LUCRO] = brl(lucro);
+    if (idx.ROAS !== undefined) row[idx.ROAS] = num(roas);
+
+    if (temCasa) {
       const custoPorFtd = ftds > 0 ? custo / ftds : 0;
       const custoPorReg = registros > 0 ? custo / registros : 0;
       const regParaFtd = registros > 0 ? (ftds / registros) * 100 : 0;
       const ftdParaCpa = ftds > 0 ? (cpas / ftds) * 100 : 0;
 
       if (idx.CPA_VAL !== undefined) row[idx.CPA_VAL] = brl(cpaValor);
-      if (idx.LUCRO !== undefined) row[idx.LUCRO] = brl(lucro);
-      if (idx.ROAS !== undefined) row[idx.ROAS] = num(roas);
       if (idx.C_FTD !== undefined) row[idx.C_FTD] = brl(custoPorFtd);
       if (idx.C_REG !== undefined) row[idx.C_REG] = brl(custoPorReg);
       if (idx.REG_FTD !== undefined) row[idx.REG_FTD] = pct(regParaFtd);
@@ -305,7 +310,7 @@ async function processarArquivo(nomeArquivo) {
 
       log.push(`L${linha} recalculo -> custo ${brl(custo)} | cpaValor ${brl(cpaValor)} | lucro ${brl(lucro)} | roas ${num(roas)}x`);
     } else {
-      log.push(`L${linha} recalculo -> custo ${brl(custo)} (sem casa/resultado, demais colunas derivadas não recalculadas)`);
+      log.push(`L${linha} recalculo -> custo ${brl(custo)} | lucro ${brl(lucro)} (sem casa/resultado, demais colunas derivadas não recalculadas)`);
     }
   }
 

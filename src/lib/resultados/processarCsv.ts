@@ -166,8 +166,9 @@ export function processarCsvResultados(csvTexto: string, periodo: { inicio: stri
         cpaReceita: round2(numeroBR(c[idx.CPA_VAL])),
       }
     })
-    // descarta linhas sem data ou sem casa reconhecida (ex: placeholder "Selecione" de dropdown vazio)
-    .filter((d) => d.data && d.casa && d.casa.toUpperCase() !== 'SELECIONE')
+    // descarta só linhas sem data — sem casa reconhecida (ex: placeholder "Selecione" de dropdown
+    // vazio) ainda conta pros totais gerais (o custo é real), só fica de fora do "por casa"
+    .filter((d) => d.data)
 
   const totais = agregadoVazio()
   for (const d of disparos) acumular(totais, d)
@@ -185,6 +186,7 @@ export function processarCsvResultados(csvTexto: string, periodo: { inicio: stri
 
   const porCasa: Record<string, AgregadoJunho> = {}
   for (const d of disparos) {
+    if (!d.casa || d.casa.toUpperCase() === 'SELECIONE') continue
     if (!porCasa[d.casa]) porCasa[d.casa] = agregadoVazio()
     acumular(porCasa[d.casa], d)
   }
