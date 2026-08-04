@@ -269,6 +269,7 @@ export default function PaginasPage() {
           destinations: editDestinations,
           text: editText,
           lovable_project_id: paginaSelecionada.lovable_project_id,
+          tracking_file: paginaSelecionada.tracking_file,
         }),
       })
 
