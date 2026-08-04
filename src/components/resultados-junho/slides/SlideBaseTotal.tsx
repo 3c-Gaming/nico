@@ -15,6 +15,7 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
 
   return (
     <SlideShell
+      compact
       eyebrow="Destaques do mês"
       titulo="Disparos Pontuais"
       subtitulo={`${total.disparos} disparos pra base total, com promoções pontuais dos jogos da copa — foram responsáveis por ${(
@@ -22,28 +23,28 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
         100
       ).toFixed(0)}% do lucro do mês.`}
     >
-      <SlideItem className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full">
-        <StatTile label="DISPAROS" value={total.disparos} cor="var(--text-primary)" tamanho="lg" delay={0.3} />
-        <StatTile label="Mensagens Entregues" value={total.entregues} cor="var(--text-primary)" tamanho="lg" />
-        <StatTile label="Investido / Custo" value={total.custo} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.1} />
-        <StatTile label="Faturamento Total" value={total.faturamento} prefix="R$ " cor="var(--text-primary)" tamanho="lg" delay={0.2} />
-        <StatTile label="Lucro TOTAL" value={total.lucro} prefix="R$ " cor="var(--success)" tamanho="lg" delay={0.3} />
-        <StatTile label="ROI TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" tamanho="lg" delay={0.3} />
+      <SlideItem className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full">
+        <StatTile label="DISPAROS" value={total.disparos} cor="var(--text-primary)" delay={0.3} />
+        <StatTile label="Mensagens Entregues" value={total.entregues} cor="var(--text-primary)" />
+        <StatTile label="Investido / Custo" value={total.custo} prefix="R$ " cor="var(--text-primary)" delay={0.1} />
+        <StatTile label="Faturamento Total" value={total.faturamento} prefix="R$ " cor="var(--text-primary)" delay={0.2} />
+        <StatTile label="Lucro TOTAL" value={total.lucro} prefix="R$ " cor="var(--success)" delay={0.3} />
+        <StatTile label="ROI TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" delay={0.3} />
       </SlideItem>
 
-      <SlideItem className="w-full flex flex-col gap-2">
+      <SlideItem className="w-full flex flex-col gap-1.5">
         <div className="text-sm font-semibold text-[var(--text-secondary)] text-left">Top 3 disparos do mês</div>
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-2">
 
           {top3.map((d, i) => (
             <div
               key={`${d.data}-${d.nome}`}
-              className="flex items-center justify-start rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] px-4 py-3 text-left"
+              className="flex items-center justify-start rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] px-3 py-2 text-left"
             >
               <img
-                src={`/top-disparos/${pastaImagens}/top-${i + 1}.png`} alt={d.nome} width={60} height={60}
+                src={`/top-disparos/${pastaImagens}/top-${i + 1}.png`} alt={d.nome} width={44} height={44}
                 onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
-                className='mr-4 shadow-xl border border-white/50 rounded'
+                className='mr-3 shadow-xl border border-white/50 rounded shrink-0'
               />
               <div className="flex justify-between gap-3 min-w-0">
                 <div className="text-lg font-bold text-[var(--pontual)] w-6 shrink-0">{i + 1}º</div>

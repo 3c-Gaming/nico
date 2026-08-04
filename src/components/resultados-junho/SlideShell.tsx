@@ -18,15 +18,23 @@ interface SlideShellProps {
   subtitulo?: React.ReactNode
   children?: React.ReactNode
   align?: 'center' | 'left'
+  // Slides com muito conteúdo empilhado (KPIs + gráfico + cards de detalhe) estouram a
+  // viewport em notebooks com tela mais baixa — compact reduz padding/gap/tamanho de fonte
+  // do cabeçalho pra caber sem cortar. Só usar nos slides que realmente precisam.
+  compact?: boolean
 }
 
-export function SlideShell({ eyebrow, titulo, subtitulo, children, align = 'center' }: SlideShellProps) {
+export function SlideShell({ eyebrow, titulo, subtitulo, children, align = 'center', compact = false }: SlideShellProps) {
   return (
     <motion.div
       variants={containerVariants}
       initial="oculto"
       animate="visivel"
-      className={`w-full max-w-7xl mx-auto flex flex-col gap-5 sm:gap-8 px-4 py-10 sm:px-8 sm:py-16 md:px-16 ${align === 'center' ? 'items-center text-center' : 'items-start text-left'}`}
+      className={`w-full max-w-7xl mx-auto flex flex-col ${
+        compact
+          ? 'gap-3 sm:gap-4 px-4 py-5 sm:px-8 sm:py-6 md:px-12'
+          : 'gap-5 sm:gap-8 px-4 py-10 sm:px-8 sm:py-16 md:px-16'
+      } ${align === 'center' ? 'items-center text-center' : 'items-start text-left'}`}
     >
       {eyebrow && (
         <motion.div
@@ -38,12 +46,12 @@ export function SlideShell({ eyebrow, titulo, subtitulo, children, align = 'cent
       )}
       <motion.h1
         variants={itemVariants}
-        className="text-4xl md:text-6xl font-bold text-[var(--text-primary)] leading-tight"
+        className={`${compact ? 'text-2xl md:text-4xl' : 'text-4xl md:text-6xl'} font-bold text-[var(--text-primary)] leading-tight`}
       >
         {titulo}
       </motion.h1>
       {subtitulo && (
-        <motion.div variants={itemVariants} className="text-base md:text-lg text-[var(--text-secondary)] max-w-2xl">
+        <motion.div variants={itemVariants} className={`${compact ? 'text-sm md:text-base' : 'text-base md:text-lg'} text-[var(--text-secondary)] max-w-2xl`}>
           {subtitulo}
         </motion.div>
       )}

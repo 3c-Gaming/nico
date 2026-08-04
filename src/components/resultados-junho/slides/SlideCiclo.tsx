@@ -26,11 +26,12 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
 
   return (
     <SlideShell
+      compact
       eyebrow="Esteira Ciclo de 7 dias"
       titulo="Conversão por etapa do ciclo"
       subtitulo={`A base "quente" logo após o registro (D1) teve ROI ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
     >
-      <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+      <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
         <StatTile label="Investimento" value={totalCiclo.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" />
         <StatTile label="Faturamento" value={totalCiclo.faturamento} prefix="R$ " decimals={0} cor="var(--success)" delay={0.1} />
         <StatTile label="Lucro" value={totalCiclo.lucro} prefix="R$ " decimals={0} cor="var(--success)" delay={0.2} />
@@ -39,6 +40,7 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
 
       <SlideItem className="w-full">
         <BarraComparativa
+          alturaBarra={26}
           itens={ciclos.map((c) => ({
             label: c,
             valor: porCiclo[c].roas,
@@ -49,31 +51,31 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
         />
       </SlideItem>
 
-      <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+      <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
         {ciclos.map((c) => (
           <div
             key={c}
-            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 sm:p-4 text-left"
+            className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2 sm:p-2.5 text-left"
             style={{ borderLeft: `3px solid ${CORES_CICLO[c]}` }}
           >
-            <div className="text-sm font-bold mb-2" style={{ color: CORES_CICLO[c] }}>
+            <div className="text-sm font-bold mb-1 sm:mb-1.5" style={{ color: CORES_CICLO[c] }}>
               {c}
             </div>
-            <div className="text-[11px] sm:text-xs text-[var(--text-primary)] space-y-1">
+            <div className="text-[11px] sm:text-xs text-[var(--text-primary)] space-y-0.5">
               <div>{porCiclo[c].disparos} Disparos Efetuados</div>
               <div>{formatarMoeda(porCiclo[c].lucro)} Lucro sob custo</div>
               <div>{formatarMoeda(porCiclo[c].custo)} Investido</div>
               <div>{formatarMoeda(porCiclo[c].faturamento)} Faturamento</div>
-              <div className="grid grid-cols-3 gap-1 sm:gap-2 border border-[var(--glass-border)] rounded">
-                <div className="p-1.5 sm:p-4 text-center">
+              <div className="grid grid-cols-3 gap-1 border border-[var(--glass-border)] rounded">
+                <div className="p-1 sm:p-1.5 text-center">
                   <b>{porCiclo[c].registros}</b>
                   <p>REG</p>
                 </div>
-                <div className="p-1.5 sm:p-4 text-center">
+                <div className="p-1 sm:p-1.5 text-center">
                   <b>{porCiclo[c].ftd}</b>
                   <p>FTD</p>
                 </div>
-                <div className="p-1.5 sm:p-4 text-center">
+                <div className="p-1 sm:p-1.5 text-center">
                   <b>{porCiclo[c].cpas}</b>
                   <p>CPA</p>
                 </div>
