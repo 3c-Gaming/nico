@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2, Calendar } from 'lucide-react'
+import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2, Calendar, Copy } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { StatNumber } from '@/components/ui/StatNumber'
@@ -331,6 +331,7 @@ interface FunilRow {
   custoPorReg: number
   custoPorFtd: number
   regParaFtd: number
+  utm: string
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
 }
@@ -613,6 +614,9 @@ export default function HomePage() {
         return found?.numero.numero ?? botId
       }))]
 
+      const utms = [...new Set(flows.flatMap(([_, c]) => utmsDoFluxo(c)))]
+      const utm = utms.length > 0 ? utms.join(', ') : ''
+
       const registros = liveTrackingLoaded
         ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
         : (cache?.registros ?? 0)
@@ -759,7 +763,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
 
@@ -850,6 +854,31 @@ export default function HomePage() {
           </td>
           <td className="py-3 px-3">
             <div className="flex flex-wrap gap-1">
+              {row.casas.length === 0 ? (
+                <span className="text-xs text-[var(--text-muted)]/40">—</span>
+              ) : (
+                row.casas.map((casaId) => {
+                  const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
+                  return casa ? (
+                    <span
+                      key={casaId}
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold font-mono"
+                      style={{
+                        backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
+                        border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
+                        color: row.corBadge ?? 'var(--d1)',
+                      }}
+                      title={casa.nome}
+                    >
+                      {casa.nome}
+                    </span>
+                  ) : null
+                })
+              )}
+            </div>
+          </td>
+          <td className="py-3 px-3">
+            <div className="flex flex-wrap gap-1">
               {row.botNomes.length === 0 ? (
                 <span className="text-xs text-[var(--text-muted)]/40">—</span>
               ) : (
@@ -861,6 +890,26 @@ export default function HomePage() {
               )}
             </div>
           </td>
+          <td className="py-3 px-3 text-left">
+            {row.utm ? (
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(row.utm)}
+                title="Copiar UTM/PID"
+                className="inline-flex items-center gap-1 max-w-[220px] text-xs rounded px-2 py-1 border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+              >
+                <span className="truncate" title={row.utm}>{row.utm}</span>
+                <Copy size={12} />
+              </button>
+            ) : (
+              <span className="text-xs text-[var(--text-muted)]/40">—</span>
+            )}
+          </td>
+          <td className="py-3 px-3 text-right">
+            <span className={`font-semibold font-mono ${row.leadsTotal > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+              {row.leadsTotal > 0 ? row.leadsTotal.toLocaleString('pt-BR') : '—'}
+            </span>
+          </td>
           <td className="py-3 px-3 text-right">
             {row.leadsHojeCarregando ? (
               <div className="flex justify-end"><Spinner size={12} /></div>
@@ -869,11 +918,6 @@ export default function HomePage() {
                 {row.leadsHoje}
               </span>
             )}
-          </td>
-          <td className="py-3 px-3 text-right">
-            <span className={`font-semibold font-mono ${row.leadsTotal > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-              {row.leadsTotal > 0 ? row.leadsTotal.toLocaleString('pt-BR') : '—'}
-            </span>
           </td>
           {isDisparo && (
             <>
@@ -935,8 +979,8 @@ export default function HomePage() {
             {!row.leadsHoje ? (
               <span className="text-xs text-[var(--text-muted)]/40">—</span>
             ) : (
-              <span className="text-xs font-mono text-[var(--text-muted)]">
-                {((row.ftds / row.leadsHoje) * 100).toFixed(1)}%
+              <span className="font-mono text-[var(--text-primary)]">
+                {((row.registros / row.leadsHoje) * 100).toFixed(1)}%
               </span>
             )}
           </td>
@@ -944,8 +988,8 @@ export default function HomePage() {
             {!row.leadsHoje ? (
               <span className="text-xs text-[var(--text-muted)]/40">—</span>
             ) : (
-              <span className="text-xs font-mono text-[var(--text-muted)]">
-                {((row.registros / row.leadsHoje) * 100).toFixed(1)}%
+              <span className="font-mono text-[var(--text-primary)]">
+                {((row.ftds / row.leadsHoje) * 100).toFixed(1)}%
               </span>
             )}
           </td>
@@ -977,7 +1021,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 17 : 10} className="p-0">
+            <td colSpan={isDisparo ? 19 : 12} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1364,9 +1408,11 @@ export default function HomePage() {
                     <thead>
                       <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
@@ -1406,9 +1452,11 @@ export default function HomePage() {
                     <thead>
                       <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
@@ -1422,7 +1470,7 @@ export default function HomePage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
-                        <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={2}>Total</td>
+                        <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={4}>Total</td>
                         <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.leadsTotal.toLocaleString('pt-BR')}</span>
                         </td>
