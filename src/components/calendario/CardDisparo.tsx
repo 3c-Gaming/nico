@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { ItemCalendario, StatusDisparo, Disparo } from '@/types'
+import type { ItemCalendario, StatusDisparo, Disparo, NumeroSendpulse } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEsteiras } from '@/hooks/useEsteiras'
@@ -109,6 +109,9 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   const [pidEscolhido, setPidEscolhido] = useState('')
   const [flowIds, setFlowIdsState] = useState<string[]>(item.disparoLocal?.flowIds ?? (item.disparoLocal?.flowId ? [item.disparoLocal.flowId] : []))
   const [mostrarFluxoPicker, setMostrarFluxoPicker] = useState(() => (item.disparoLocal?.flowIds?.length ?? 0) > 0)
+  const [numerosDisponiveis, setNumerosDisponiveis] = useState<NumeroSendpulse[]>([])
+  const [carregandoNumeros, setCarregandoNumeros] = useState(false)
+  const [botIdSelecionado, setBotIdSelecionado] = useState('')
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
   const { casas, list: casasList, add: addCasa } = useCasasAposta()
@@ -158,24 +161,33 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Funis já configurados em /funis, agrupados por nome — pra deixar o usuário escolher
-  // direto qual funil esse disparo pertence, em vez de precisar escolher um número da
-  // SendPulse pra só depois achar o fluxo certo numa lista de checkboxes aninhada.
-  function funisDisponiveis(): { funil: string; tags: string[] }[] {
-    const mapa = new Map<string, Set<string>>()
+  // Busca os números da SendPulse só quando o picker de funil é aberto pela primeira vez.
+  useEffect(() => {
+    if (!mostrarFluxoPicker || numerosDisponiveis.length > 0) return
+    let cancelado = false
+    setCarregandoNumeros(true)
+    fetch('/api/sendpulse/numeros')
+      .then((r) => (r.ok ? r.json() : { numeros: [] }))
+      .then((data) => { if (!cancelado) setNumerosDisponiveis(data.numeros ?? []) })
+      .catch(() => {})
+      .finally(() => { if (!cancelado) setCarregandoNumeros(false) })
+    return () => { cancelado = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarFluxoPicker])
+
+  // Funis já configurados em /funis pro número escolhido, agrupados por nome — só mostra o
+  // nome do funil (a tag em si não importa pra quem tá vinculando, só qual funil é).
+  function funisDoBot(botId: string): string[] {
+    const nomes = new Set<string>()
     for (const cfg of Object.values(getState().flowTagConfigs)) {
-      if (!cfg.funil) continue
-      if (!mapa.has(cfg.funil)) mapa.set(cfg.funil, new Set())
-      for (const tag of cfg.tags ?? []) mapa.get(cfg.funil)!.add(tag)
+      if (cfg.funil && cfg.botId === botId) nomes.add(cfg.funil)
     }
-    return [...mapa.entries()]
-      .map(([funil, tags]) => ({ funil, tags: [...tags] }))
-      .sort((a, b) => a.funil.localeCompare(b.funil))
+    return [...nomes].sort((a, b) => a.localeCompare(b))
   }
 
-  function flowIdsDoFunil(funilNome: string): string[] {
+  function flowIdsDoFunil(funilNome: string, botId?: string): string[] {
     return Object.entries(getState().flowTagConfigs)
-      .filter(([, c]) => c.funil === funilNome)
+      .filter(([, c]) => c.funil === funilNome && (!botId || c.botId === botId))
       .map(([flowId]) => flowId)
   }
 
@@ -189,7 +201,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   }
 
   function vincularFunil(funilNome: string) {
-    const idsDoFunil = flowIdsDoFunil(funilNome)
+    const idsDoFunil = flowIdsDoFunil(funilNome, botIdSelecionado)
     const proximo = [...new Set([...flowIds, ...idsDoFunil])]
     setFlowIdsState(proximo)
     if (disparoLocal) update(disparoLocal.id, { flowIds: proximo })
@@ -794,7 +806,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
               {mostrarFluxoPicker && (
                 <div className="space-y-2 p-3 rounded bg-[var(--bg-surface)] border border-[var(--border)]">
                   <p className="text-[10px] text-[var(--text-muted)]">
-                    Vincule o funil (já configurado em /funis) pra ver os Leads hoje desse disparo.
+                    Escolha o número e depois o funil pra ver os Leads hoje desse disparo.
                   </p>
                   {funisVinculados().length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -812,19 +824,32 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                     </div>
                   )}
                   <select
-                    value=""
-                    onChange={(e) => { if (e.target.value) vincularFunil(e.target.value) }}
-                    className="w-full h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+                    value={botIdSelecionado}
+                    onChange={(e) => setBotIdSelecionado(e.target.value)}
+                    disabled={carregandoNumeros}
+                    className="w-full h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors disabled:opacity-50"
                   >
-                    <option value="">+ Vincular funil...</option>
-                    {funisDisponiveis()
-                      .filter((f) => !funisVinculados().includes(f.funil))
-                      .map((f) => (
-                        <option key={f.funil} value={f.funil}>
-                          {f.funil}{f.tags.length > 0 ? ` — ${f.tags.join(', ')}` : ''}
-                        </option>
-                      ))}
+                    <option value="">{carregandoNumeros ? 'carregando números...' : 'Número...'}</option>
+                    {numerosDisponiveis.map((num) => (
+                      <option key={num.id} value={num.id}>{num.nome || num.numero}</option>
+                    ))}
                   </select>
+                  {botIdSelecionado && (
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) vincularFunil(e.target.value) }}
+                      className="w-full h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+                    >
+                      <option value="">
+                        {funisDoBot(botIdSelecionado).length === 0 ? 'Nenhum funil configurado pra esse número' : '+ Vincular funil...'}
+                      </option>
+                      {funisDoBot(botIdSelecionado)
+                        .filter((funil) => !funisVinculados().includes(funil))
+                        .map((funil) => (
+                          <option key={funil} value={funil}>{funil}</option>
+                        ))}
+                    </select>
+                  )}
                 </div>
               )}
             </div>
