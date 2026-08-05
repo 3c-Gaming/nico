@@ -149,18 +149,31 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
   useEffect(() => {
     const configs = getState().flowTagConfigs
     const flowIds = disparo.flowIds ?? (disparo.flowId ? [disparo.flowId] : [])
-    const tags = [...new Set(flowIds.flatMap((fid) => configs[fid]?.tags ?? []))]
-    if (!tags.length) { setLeadsHoje(null); return }
+    const porBot = new Map<string, Set<string>>()
+    for (const fid of flowIds) {
+      const cfg = configs[fid]
+      if (!cfg?.tags?.length || !cfg.botId) continue
+      if (!porBot.has(cfg.botId)) porBot.set(cfg.botId, new Set())
+      for (const tag of cfg.tags) porBot.get(cfg.botId)!.add(tag)
+    }
+    if (!porBot.size) { setLeadsHoje(null); return }
     let cancelado = false
-    fetch('/api/leadhub/contagem-por-tag', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (cancelado || !json?.leads) return
-        setLeadsHoje(tags.reduce((acc: number, t: string) => acc + (json.leads[t] ?? 0), 0))
+    Promise.all(
+      [...porBot.entries()].map(([botId, tagsSet]) =>
+        fetch('/api/leadhub/contagem-hoje-sendpulse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botId, tags: [...tagsSet] }),
+        }).then((r) => (r.ok ? r.json() : null))
+      ),
+    )
+      .then((resultados) => {
+        if (cancelado) return
+        const total = resultados.reduce((acc, json) => {
+          if (!json?.leads) return acc
+          return acc + Object.values(json.leads as Record<string, number>).reduce((a, b) => a + b, 0)
+        }, 0)
+        setLeadsHoje(total)
       })
       .catch(() => { if (!cancelado) setLeadsHoje(null) })
     return () => { cancelado = true }

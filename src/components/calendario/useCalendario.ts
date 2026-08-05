@@ -26,6 +26,7 @@ const LIMIAR_SCROLL_PX = 400
 const DAXX_CACHE_KEY = 'daxx-campanhas-calendar'
 const DAXX_CACHE_TS_KEY = 'daxx-campanhas-calendar-ts'
 const DAXX_CACHE_TTL = 5 * 60 * 1000
+const DAXX_POLL_INTERVAL = 90 * 1000
 const MOSTRAR_DAXX_KEY = 'calendario-mostrar-daxx'
 
 function isBrowser(): boolean {
@@ -87,15 +88,23 @@ export function useCalendario() {
     const cache = carregarCacheDaxx()
     if (cache) setCampanhasDaxx(cache)
 
-    fetch('/api/daxx/campanhas')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.campanhas) {
-          setCampanhasDaxx(data.campanhas)
-          salvarCacheDaxx(data.campanhas)
-        }
-      })
-      .catch(() => {})
+    function buscarCampanhas() {
+      fetch('/api/daxx/campanhas')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.campanhas) {
+            setCampanhasDaxx(data.campanhas)
+            salvarCacheDaxx(data.campanhas)
+          }
+        })
+        .catch(() => {})
+    }
+
+    buscarCampanhas()
+    // Recarrega periodicamente enquanto a aba do calendário está aberta — sem isso os dados
+    // de entregues/lidas/novas campanhas ficam presos no snapshot do carregamento inicial,
+    // ficando "desatualizados" pra quem deixa a página aberta acompanhando disparos do dia.
+    const intervalId = setInterval(buscarCampanhas, DAXX_POLL_INTERVAL)
 
     const token = localStorage.getItem('nico_daxx_token')
     if (token) {
@@ -108,6 +117,8 @@ export function useCalendario() {
         })
         .catch(() => {})
     }
+
+    return () => clearInterval(intervalId)
   }, [])
 
   const diasVisiveis = useMemo(() => gerarRangeDias(inicioRange, fimRange), [inicioRange, fimRange])
