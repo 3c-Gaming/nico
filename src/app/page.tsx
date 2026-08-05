@@ -904,6 +904,24 @@ export default function HomePage() {
               {row.ftds}
             </span>
           </td>
+          <td className="py-3 px-3 text-right">
+            {!row.leadsHoje ? (
+              <span className="text-xs text-[var(--text-muted)]/40">—</span>
+            ) : (
+              <span className="text-xs font-mono text-[var(--text-muted)]">
+                {((row.ftds / row.leadsHoje) * 100).toFixed(1)}%
+              </span>
+            )}
+          </td>
+          <td className="py-3 px-3 text-right">
+            {!row.leadsHoje ? (
+              <span className="text-xs text-[var(--text-muted)]/40">—</span>
+            ) : (
+              <span className="text-xs font-mono text-[var(--text-muted)]">
+                {((row.registros / row.leadsHoje) * 100).toFixed(1)}%
+              </span>
+            )}
+          </td>
           <td className="py-3 px-3">
             <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
               {formatarTempoRelativo(row.ultimoLeadAt).texto}
@@ -932,7 +950,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 14 : 7} className="p-0">
+            <td colSpan={isDisparo ? 16 : 9} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1330,6 +1348,8 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/FTD</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1362,6 +1382,8 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1386,6 +1408,24 @@ export default function HomePage() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {!totalTraffic.leadsHoje ? (
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : (
+                            <span className="text-xs font-mono text-[var(--text-muted)]">
+                              {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {!totalTraffic.leadsHoje ? (
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : (
+                            <span className="text-xs font-mono text-[var(--text-muted)]">
+                              {((totalTraffic.registros / totalTraffic.leadsHoje) * 100).toFixed(1)}%
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3" />
                         <td className="py-3 px-3" />
