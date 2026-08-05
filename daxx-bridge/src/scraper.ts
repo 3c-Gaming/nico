@@ -71,10 +71,13 @@ export async function ensureLoggedIn(): Promise<Page> {
 
     if (page && Date.now() - lastLogin < SESSION_TTL) {
       try {
-        await page.evaluate(() => document.title)
+        // document.title sozinho só confirma que a página responde JS, não que a sessão
+        // ainda está logada de fato (ex: um redirect silencioso pro login some com a
+        // tabela mas a página continua "viva") — confirma que a tabela de disparos existe.
+        await page.waitForSelector('#cliDisparosTbody', { state: 'attached', timeout: 3000 })
         return page
       } catch {
-        console.log('[daxx] page lost, reconnecting')
+        console.log('[daxx] page lost or table missing, reconnecting')
       }
     }
 
@@ -140,13 +143,16 @@ async function getTableSnapshot(p: Page): Promise<string> {
 // site passa por um estado intermediário (parece re-renderizar uma prévia)
 // antes de assentar no resultado final do filtro. Por isso esperamos a
 // tabela mudar E DEPOIS ficar estável (sem mais mudanças) por um tempo.
+// Retorna true quando a tabela mudou E estabilizou dentro do prazo (leitura confiável),
+// false quando teve que desistir e seguir em frente mesmo assim (leitura incerta — quem
+// chama decide se ainda assim usa o resultado, mas não deve cachear como se fosse bom).
 async function waitForTableChange(
   p: Page,
   previousSnapshot: string,
   timeout = 15000,
   stableChecks = 3,
   interval = 500,
-): Promise<void> {
+): Promise<boolean> {
   const deadline = Date.now() + timeout
 
   try {
@@ -161,7 +167,7 @@ async function waitForTableChange(
     )
   } catch {
     console.warn('[daxx] tabela nao mudou dentro do timeout — seguindo com o conteudo atual')
-    return
+    return false
   }
 
   let consecutive = 0
@@ -171,13 +177,14 @@ async function waitForTableChange(
     const current = await getTableSnapshot(p)
     if (current === last) {
       consecutive++
-      if (consecutive >= stableChecks) return
+      if (consecutive >= stableChecks) return true
     } else {
       consecutive = 0
       last = current
     }
   }
   console.warn('[daxx] tabela nao estabilizou dentro do timeout — seguindo com o conteudo atual')
+  return false
 }
 
 async function lerTabela(p: Page): Promise<DaxxCampaign[]> {
@@ -232,16 +239,16 @@ async function temProximaPagina(p: Page): Promise<boolean> {
   })
 }
 
-async function clicarProxima(p: Page): Promise<void> {
+async function clicarProxima(p: Page): Promise<boolean> {
   const before = await getTableSnapshot(p)
   await p.evaluate(() => {
     const btn = document.getElementById('cliPagProximo') as HTMLButtonElement | null
     btn?.click()
   })
-  await waitForTableChange(p, before, 10000)
+  return waitForTableChange(p, before, 10000)
 }
 
-async function setDateFilter(p: Page, startDate?: string, endDate?: string): Promise<void> {
+async function setDateFilter(p: Page, startDate?: string, endDate?: string): Promise<boolean> {
   let fmtInicio: string
   let fmtFim: string
 
@@ -277,7 +284,7 @@ async function setDateFilter(p: Page, startDate?: string, endDate?: string): Pro
     if (typeof loader === 'function') loader()
   }, { i: fmtInicio, f: fmtFim })
 
-  await waitForTableChange(p, before, 15000, 2, 300)
+  return waitForTableChange(p, before, 15000, 2, 300)
 }
 
 export async function listarCampanhas(startDate?: string, endDate?: string): Promise<DaxxCampaign[]> {
@@ -298,7 +305,11 @@ export async function listarCampanhas(startDate?: string, endDate?: string): Pro
     }
 
     const p = await ensureLoggedIn()
-    await setDateFilter(p, startDate, endDate)
+    // Se alguma leitura no caminho (filtro ou paginação) ficou incerta — tabela não
+    // mudou/estabilizou a tempo — não cacheamos o resultado: preferimos raspar de novo
+    // na próxima chamada a servir um resultado possivelmente incompleto/desatualizado
+    // por até 5 minutos.
+    let confiavel = await setDateFilter(p, startDate, endDate)
 
     const todas: DaxxCampaign[] = []
     let pagina = 0
@@ -323,13 +334,17 @@ export async function listarCampanhas(startDate?: string, endDate?: string): Pro
       }
 
       if (!(await temProximaPagina(p))) break
-      await clicarProxima(p)
+      confiavel = (await clicarProxima(p)) && confiavel
       pagina++
     }
 
-    console.log(`[daxx] total: ${todas.length} campanhas`)
+    console.log(`[daxx] total: ${todas.length} campanhas${confiavel ? '' : ' (leitura incerta — nao vai pro cache)'}`)
 
-    cacheCampanhas.set(cacheKey, { data: todas, timestamp: Date.now() })
+    if (confiavel) {
+      cacheCampanhas.set(cacheKey, { data: todas, timestamp: Date.now() })
+    } else {
+      cacheCampanhas.delete(cacheKey)
+    }
     return todas
   })
 }
