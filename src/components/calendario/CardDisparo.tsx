@@ -831,7 +831,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                   >
                     <option value="">{carregandoNumeros ? 'carregando números...' : 'Número...'}</option>
                     {numerosDisponiveis
-                      .filter((num) => funisDoBot(num.id).length > 0)
+                      .filter((num) => num.status === 'ativo' && funisDoBot(num.id).length > 0)
                       .sort((a, b) => a.numero.localeCompare(b.numero))
                       .map((num) => (
                         <option key={num.id} value={num.id}>{num.numero}</option>
