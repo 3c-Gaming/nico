@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { ItemCalendario, StatusDisparo, Disparo, NumeroSendpulse, FluxoSendpulse } from '@/types'
+import type { ItemCalendario, StatusDisparo, Disparo } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEsteiras } from '@/hooks/useEsteiras'
@@ -18,9 +18,8 @@ import { StatNumber } from '../ui/StatNumber'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { formatNumero, CUSTO_POR_ENTREGUE, nomeCurto } from '@/lib/resultadoDisparo'
-import { StepNumero } from '../disparos/StepNumero'
 import { getState } from '@/lib/store'
-import { ExternalLink, Trash2, Check, Clock, Database, Pin, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Trash2, Check, Clock, Database, Pin, ChevronDown, ChevronUp, X } from 'lucide-react'
 import Link from 'next/link'
 
 const TIPO_CORES: Record<string, string> = {
@@ -108,11 +107,8 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   const [casasSelecionadas, setCasasSelecionadas] = useState<string[]>([])
   const [utmEscolhida, setUtmEscolhida] = useState('')
   const [pidEscolhido, setPidEscolhido] = useState('')
-  const [numerosSendpulse, setNumerosSendpulseState] = useState<NumeroSendpulse[]>(item.disparoLocal?.numerosSendpulse ?? [])
   const [flowIds, setFlowIdsState] = useState<string[]>(item.disparoLocal?.flowIds ?? (item.disparoLocal?.flowId ? [item.disparoLocal.flowId] : []))
-  const [fluxosDisponiveis, setFluxosDisponiveis] = useState<FluxoSendpulse[]>([])
-  const [carregandoFluxos, setCarregandoFluxos] = useState(false)
-  const [mostrarFluxoPicker, setMostrarFluxoPicker] = useState(() => (item.disparoLocal?.numerosSendpulse?.length ?? 0) > 0)
+  const [mostrarFluxoPicker, setMostrarFluxoPicker] = useState(() => (item.disparoLocal?.flowIds?.length ?? 0) > 0)
   const { update, remove, create } = useDisparos()
   const { getById, create: createEsteira } = useEsteiras()
   const { casas, list: casasList, add: addCasa } = useCasasAposta()
@@ -162,34 +158,46 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const botIdsSendpulseKey = [...new Set(numerosSendpulse.map((n) => n.id))].join(',')
-
-  // Busca os fluxos dos números escolhidos, pra poder marcar quais têm a tag que a gente
-  // quer acompanhar (mesma tag configurada em /funis pra esse fluxo).
-  useEffect(() => {
-    const botIds = botIdsSendpulseKey ? botIdsSendpulseKey.split(',') : []
-    if (!botIds.length) { setFluxosDisponiveis([]); return }
-    let cancelado = false
-    setCarregandoFluxos(true)
-    Promise.all(
-      botIds.map((botId) =>
-        fetch(`/api/sendpulse/fluxos?bot_id=${encodeURIComponent(botId)}`)
-          .then((r) => (r.ok ? r.json() : { fluxos: [] }))
-          .catch(() => ({ fluxos: [] })),
-      ),
-    )
-      .then((resultados) => { if (!cancelado) setFluxosDisponiveis(resultados.flatMap((r) => r.fluxos ?? [])) })
-      .finally(() => { if (!cancelado) setCarregandoFluxos(false) })
-    return () => { cancelado = true }
-  }, [botIdsSendpulseKey])
-
-  function handleNumerosSendpulseChange(nums: NumeroSendpulse[]) {
-    setNumerosSendpulseState(nums)
-    if (disparoLocal) update(disparoLocal.id, { numerosSendpulse: nums })
+  // Funis já configurados em /funis, agrupados por nome — pra deixar o usuário escolher
+  // direto qual funil esse disparo pertence, em vez de precisar escolher um número da
+  // SendPulse pra só depois achar o fluxo certo numa lista de checkboxes aninhada.
+  function funisDisponiveis(): { funil: string; tags: string[] }[] {
+    const mapa = new Map<string, Set<string>>()
+    for (const cfg of Object.values(getState().flowTagConfigs)) {
+      if (!cfg.funil) continue
+      if (!mapa.has(cfg.funil)) mapa.set(cfg.funil, new Set())
+      for (const tag of cfg.tags ?? []) mapa.get(cfg.funil)!.add(tag)
+    }
+    return [...mapa.entries()]
+      .map(([funil, tags]) => ({ funil, tags: [...tags] }))
+      .sort((a, b) => a.funil.localeCompare(b.funil))
   }
 
-  function toggleFlow(flowId: string) {
-    const proximo = flowIds.includes(flowId) ? flowIds.filter((id) => id !== flowId) : [...flowIds, flowId]
+  function flowIdsDoFunil(funilNome: string): string[] {
+    return Object.entries(getState().flowTagConfigs)
+      .filter(([, c]) => c.funil === funilNome)
+      .map(([flowId]) => flowId)
+  }
+
+  function funisVinculados(): string[] {
+    const nomes = new Set<string>()
+    for (const fid of flowIds) {
+      const cfg = getState().flowTagConfigs[fid]
+      if (cfg?.funil) nomes.add(cfg.funil)
+    }
+    return [...nomes]
+  }
+
+  function vincularFunil(funilNome: string) {
+    const idsDoFunil = flowIdsDoFunil(funilNome)
+    const proximo = [...new Set([...flowIds, ...idsDoFunil])]
+    setFlowIdsState(proximo)
+    if (disparoLocal) update(disparoLocal.id, { flowIds: proximo })
+  }
+
+  function desvincularFunil(funilNome: string) {
+    const idsDoFunil = new Set(flowIdsDoFunil(funilNome))
+    const proximo = flowIds.filter((fid) => !idsDoFunil.has(fid))
     setFlowIdsState(proximo)
     if (disparoLocal) update(disparoLocal.id, { flowIds: proximo })
   }
@@ -784,57 +792,39 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                 Fluxo / Leads hoje {flowIds.length > 0 && <span className="text-[var(--d1)]">({flowIds.length} vinculado{flowIds.length > 1 ? 's' : ''})</span>}
               </button>
               {mostrarFluxoPicker && (
-                <div className="space-y-3 p-3 rounded bg-[var(--bg-surface)] border border-[var(--border)]">
+                <div className="space-y-2 p-3 rounded bg-[var(--bg-surface)] border border-[var(--border)]">
                   <p className="text-[10px] text-[var(--text-muted)]">
-                    Vincule o número e o fluxo da SendPulse desse disparo pra ver os Leads hoje (mesma tag configurada em /funis pra esse fluxo).
+                    Vincule o funil (já configurado em /funis) pra ver os Leads hoje desse disparo.
                   </p>
-                  <StepNumero numeros={numerosSendpulse} onChange={handleNumerosSendpulseChange} />
-                  {numerosSendpulse.length > 0 && (
-                    <div>
-                      <span className="text-[var(--text-muted)] block text-xs mb-1">Fluxos</span>
-                      {carregandoFluxos ? (
-                        <span className="text-[10px] text-[var(--text-muted)]">carregando fluxos...</span>
-                      ) : fluxosDisponiveis.length === 0 ? (
-                        <p className="text-[10px] text-[var(--text-muted)]">Nenhum fluxo encontrado pra esse(s) número(s)</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {numerosSendpulse.map((num) => {
-                            const flowsDoNumero = fluxosDisponiveis.filter((f) => f.botId === num.id)
-                            if (!flowsDoNumero.length) return null
-                            return (
-                              <div key={num.id}>
-                                <span className="text-[10px] text-[var(--text-secondary)] font-mono">{num.numero}</span>
-                                <div className="space-y-0.5 mt-0.5">
-                                  {flowsDoNumero.map((flow) => {
-                                    const cfg = getState().flowTagConfigs[flow.id]
-                                    const selected = flowIds.includes(flow.id)
-                                    return (
-                                      <label
-                                        key={flow.id}
-                                        className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded hover:bg-[var(--bg-elevated)] text-xs"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={selected}
-                                          onChange={() => toggleFlow(flow.id)}
-                                          className="accent-[var(--d1)]"
-                                        />
-                                        <span className="text-[var(--text-primary)]">{flow.nome}</span>
-                                        {cfg?.funil && <span className="text-[var(--text-muted)]">({cfg.funil})</span>}
-                                        {(cfg?.tags?.length ?? 0) > 0 && (
-                                          <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">{cfg!.tags.join(', ')}</span>
-                                        )}
-                                      </label>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                  {funisVinculados().length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {funisVinculados().map((funilNome) => (
+                        <span
+                          key={funilNome}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]"
+                        >
+                          {funilNome}
+                          <button onClick={() => desvincularFunil(funilNome)} className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors">
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
                     </div>
                   )}
+                  <select
+                    value=""
+                    onChange={(e) => { if (e.target.value) vincularFunil(e.target.value) }}
+                    className="w-full h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+                  >
+                    <option value="">+ Vincular funil...</option>
+                    {funisDisponiveis()
+                      .filter((f) => !funisVinculados().includes(f.funil))
+                      .map((f) => (
+                        <option key={f.funil} value={f.funil}>
+                          {f.funil}{f.tags.length > 0 ? ` — ${f.tags.join(', ')}` : ''}
+                        </option>
+                      ))}
+                  </select>
                 </div>
               )}
             </div>
