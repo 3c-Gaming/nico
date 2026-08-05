@@ -23,6 +23,7 @@ interface Pagina {
   updated_at: string
   lovable_project_id?: string
   tipo?: string
+  tracking_file?: string
   funil?: string
   casa_id?: string
   tags?: string[]
