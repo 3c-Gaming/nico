@@ -1424,6 +1424,9 @@ export default function HomePage() {
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
                         <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={2}>Total</td>
                         <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.leadsTotal.toLocaleString('pt-BR')}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           {totalTraffic.leadsHojeCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : (
@@ -1433,9 +1436,6 @@ export default function HomePage() {
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.leadsTotal.toLocaleString('pt-BR')}</span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
                         </td>
                         <td className="py-3 px-3 text-right">
@@ -1443,18 +1443,18 @@ export default function HomePage() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {!totalTraffic.leadsHoje ? (
-                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                            <span className="text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="text-xs font-mono text-[var(--text-primary)]">
+                            <span className="font-mono text-[var(--text-primary)]">
                               {((totalTraffic.registros / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
                           {!totalTraffic.leadsHoje ? (
-                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                            <span className="text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="text-xs font-mono text-[var(--text-primary)]">
+                            <span className="font-mono text-[var(--text-primary)]">
                               {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
