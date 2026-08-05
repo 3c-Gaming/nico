@@ -334,7 +334,15 @@ export async function listarCampanhas(startDate?: string, endDate?: string): Pro
       }
 
       if (!(await temProximaPagina(p))) break
-      confiavel = (await clicarProxima(p)) && confiavel
+      const avancou = await clicarProxima(p)
+      confiavel = avancou && confiavel
+      // Se o clique em "próxima" não mudou a tabela de verdade (site lento/flaky), a
+      // proxima leitura pegaria o MESMO conteudo da pagina atual de novo — duplicando
+      // todas as campanhas dessa pagina no resultado final. Para em vez de reler.
+      if (!avancou) {
+        console.warn('[daxx] paginacao nao avancou de verdade — parando pra nao duplicar')
+        break
+      }
       pagina++
     }
 
