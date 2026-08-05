@@ -18,6 +18,12 @@ import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo
 
 const POLL_FUNIL_MS = 30_000
 
+// Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
+// diferentes) — soma os resultados de todas ao invés de só olhar a principal.
+function utmsDoFluxo(c: { utm?: string | null; utmsExtras?: string[] }): string[] {
+  return [c.utm, ...(c.utmsExtras ?? [])].filter((u): u is string => !!u)
+}
+
 function getLocalDate(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -486,7 +492,7 @@ export default function HomePage() {
 
     async function fetchTracking() {
       const flowIdsComUtm = Object.entries(configs).filter(
-        ([fid, c]) => c.utm && c.funil && pinnedFunis.includes(c.funil),
+        ([fid, c]) => utmsDoFluxo(c).length > 0 && c.funil && pinnedFunis.includes(c.funil),
       )
       if (!flowIdsComUtm.length) return
 
@@ -496,17 +502,17 @@ export default function HomePage() {
       ])
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const [fid, c] of flowIdsComUtm) {
-        const utm = c.utm!
+        const utms = utmsDoFluxo(c)
         let registros = 0
         let ftds = 0
         for (const item of (superbetRes as any)?.data ?? []) {
-          if (String(item.acid).includes(utm)) {
+          if (utms.some((utm) => String(item.acid).includes(utm))) {
             registros += item.registrations ?? 0
             ftds += item.ftds ?? 0
           }
         }
         for (const item of (betmgmRes as any)?.data ?? []) {
-          if (String(item.marketing_source_id) === utm) {
+          if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
             registros += item.registrations ?? 0
             ftds += item.ftds ?? 0
           }
@@ -596,21 +602,23 @@ export default function HomePage() {
         const bot = porBot.get(c.botId)!
         bot.flowIds.push(flowId)
         for (const tag of (c.tags ?? [])) bot.tagsSet.add(tag)
-        if (c.utm) bot.utms.add(c.utm)
+        for (const utm of utmsDoFluxo(c)) bot.utms.add(utm)
       }
 
       // base cost via UTM matching
       // pre-compute how many funis each UTM reaches (across ALL configs)
       const utmParaFunis = new Map<string, Set<string>>()
       for (const c of Object.values(configs)) {
-        if (c.utm && c.funil) {
-          if (!utmParaFunis.has(c.utm)) utmParaFunis.set(c.utm, new Set())
-          utmParaFunis.get(c.utm)!.add(c.funil)
+        if (c.funil) {
+          for (const utm of utmsDoFluxo(c)) {
+            if (!utmParaFunis.has(utm)) utmParaFunis.set(utm, new Set())
+            utmParaFunis.get(utm)!.add(c.funil)
+          }
         }
       }
 
       const disparos = todosDisparos
-      const funilUtms = new Set(flows.map(([_, c]) => c.utm).filter(Boolean) as string[])
+      const funilUtms = new Set(flows.flatMap(([_, c]) => utmsDoFluxo(c)))
       // D1/D5 (Superbet) guardam o valor de rastreio em `utm`; D3/D7 (BetMGM) guardam em
       // `betmgmPid` — precisa checar os dois, senão disparos BetMGM nunca cruzam com o funil.
       const valorTrackingDoDisparo = (d: Disparo): string | undefined =>

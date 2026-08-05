@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
+
+// Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
+// diferentes) — soma os resultados de todas ao invés de só olhar a principal.
+function utmsDoFluxo(c: { utm?: string | null; utmsExtras?: string[] }): string[] {
+  return [c.utm, ...(c.utmsExtras ?? [])].filter((u): u is string => !!u)
+}
 
 function getLocalDate(): string {
   const d = new Date()
@@ -93,6 +99,8 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const existing = configs[flow.id]
   const [funil, setFunil] = useState(existing?.funil ?? '')
   const [utm, setUtm] = useState(existing?.utm ?? '')
+  const [utmsExtras, setUtmsExtras] = useState<string[]>(existing?.utmsExtras ?? [])
+  const [utmExtraInput, setUtmExtraInput] = useState('')
   const [lpUrl, setLpUrl] = useState(existing?.lpUrl ?? '')
   const [tipo, setTipo] = useState<'traffic' | 'disparo'>(existing?.tipo ?? 'disparo')
   const [tags, setTags] = useState<string[]>(existing?.tags ?? [])
@@ -106,13 +114,17 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
     setTags(tags.filter((t) => t !== tag))
   }
 
+  function removeUtmExtra(valor: string) {
+    setUtmsExtras(utmsExtras.filter((u) => u !== valor))
+  }
+
   function toggleCasa(casaId: string) {
     setCasas((prev) => prev.includes(casaId) ? prev.filter((id) => id !== casaId) : [...prev, casaId])
   }
 
   async function handleSave() {
     setSaving(true)
-    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || null, utm: utm || null, lpUrl: lpUrl || null, tags, casas, tipo })
+    updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || null, utm: utm || null, utmsExtras, lpUrl: lpUrl || null, tags, casas, tipo })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
     onSave()
@@ -120,9 +132,10 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 
   const prevFunil = existing?.funil ?? ''
   const prevUtm = existing?.utm ?? ''
+  const prevUtmsExtras = (existing?.utmsExtras ?? []).join(',')
   const prevLpUrl = existing?.lpUrl ?? ''
   const prevCasas = (existing?.casas ?? []).join(',')
-  const hasChanges = prevFunil !== funil || prevUtm !== utm || prevLpUrl !== lpUrl || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
+  const hasChanges = prevFunil !== funil || prevUtm !== utm || prevUtmsExtras !== utmsExtras.join(',') || prevLpUrl !== lpUrl || (existing?.tipo ?? 'disparo') !== tipo || (existing?.tags ?? []).join(',') !== tags.join(',') || prevCasas !== casas.join(',')
 
   return (
     <div className="space-y-3 p-4 glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded">
@@ -143,6 +156,43 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
           onChange={setUtm}
           placeholder="selecione ou digite e Enter para cadastrar"
         />
+      </div>
+      <div className="flex items-start gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-16 pt-1">UTMs extras:</span>
+        <div className="flex-1 space-y-1.5">
+          {utmsExtras.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {utmsExtras.map((valor) => (
+                <span key={valor} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
+                  {valor}
+                  <button onClick={() => removeUtmExtra(valor)} className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors">
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <UtmComboBox
+              value={utmExtraInput}
+              onChange={setUtmExtraInput}
+              placeholder="adicionar outra UTM/PID pra somar no mesmo funil..."
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const valor = utmExtraInput.trim()
+                if (valor && valor !== utm && !utmsExtras.includes(valor)) setUtmsExtras([...utmsExtras, valor])
+                setUtmExtraInput('')
+              }}
+              disabled={!utmExtraInput.trim()}
+              className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40 shrink-0"
+              title="Adicionar UTM extra"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-16">LP URL:</span>
@@ -256,6 +306,8 @@ function FunisPageInner() {
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(getLocalDate())
   const [trackingLoaded, setTrackingLoaded] = useState(false)
+  // flow.id -> ainda esperando a contagem de leads de hoje daquele fluxo especificamente
+  const [carregandoFlows, setCarregandoFlows] = useState<Set<string>>(new Set())
 
   async function carregarDados() {
     setLoading(!refreshing)
@@ -282,23 +334,37 @@ function FunisPageInner() {
       setFluxosMap(fluxos)
 
       const configs = getState().flowTagConfigs
-      const allTags = [...new Set(
-        Object.values(fluxos).flat().flatMap((f) => configs[f.id]?.tags ?? [])
-      )]
+      const flowsComTags = Object.values(fluxos).flat().filter((f) => (configs[f.id]?.tags?.length ?? 0) > 0)
 
-      if (allTags.length > 0) {
-        const res = await fetch('/api/leadhub/contagem-por-tag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tags: allTags }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setContagens(data.leads ?? {})
-          setContagensTotal(data.totais ?? {})
-          setUltimoLeadMap(data.ultimoLead ?? {})
-        }
-      }
+      // Um POST só com as tags de TODOS os fluxos de uma vez: se demorar/falhar (muitas
+      // tags, um bot lento), a tabela inteira fica sem "Leads hoje". Busca fluxo a fluxo,
+      // em paralelo mas isolado — um lento/com erro não trava os demais, e cada linha
+      // resolve (e para de girar o spinner) assim que a sua própria resposta chega.
+      setCarregandoFlows(new Set(flowsComTags.map((f) => f.id)))
+      await Promise.allSettled(
+        flowsComTags.map(async (f) => {
+          const tags = configs[f.id]?.tags ?? []
+          try {
+            const res = await fetch('/api/leadhub/contagem-por-tag', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tags }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              setContagens((prev) => ({ ...prev, ...data.leads }))
+              setContagensTotal((prev) => ({ ...prev, ...data.totais }))
+              setUltimoLeadMap((prev) => ({ ...prev, ...data.ultimoLead }))
+            }
+          } finally {
+            setCarregandoFlows((prev) => {
+              const next = new Set(prev)
+              next.delete(f.id)
+              return next
+            })
+          }
+        }),
+      )
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -333,7 +399,7 @@ function FunisPageInner() {
   // Busca tracking 3CGG para todos os flows que têm utm
   useEffect(() => {
     const configs = getState().flowTagConfigs
-    const withUtm = Object.values(configs).filter((c) => c.utm)
+    const withUtm = Object.values(configs).filter((c) => utmsDoFluxo(c).length > 0)
     if (!withUtm.length) return
 
     async function fetchTracking() {
@@ -347,17 +413,17 @@ function FunisPageInner() {
 
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const cfg of withUtm) {
-        const utm = cfg.utm!
+        const utms = utmsDoFluxo(cfg)
         let registros = 0
         let ftds = 0
         for (const item of superbetEvents) {
-          if (String(item.acid).includes(utm)) {
+          if (utms.some((utm) => String(item.acid).includes(utm))) {
             registros += item.registrations ?? 0
             ftds += item.ftds ?? 0
           }
         }
         for (const item of betmgmEvents) {
-          if (String(item.marketing_source_id) === utm) {
+          if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
             registros += item.registrations ?? 0
             ftds += item.ftds ?? 0
           }
@@ -427,7 +493,7 @@ function FunisPageInner() {
           leadsHoje: leads,
           total,
           ultimoLeadAt,
-          carregandoContagens: tags.length > 0 && Object.keys(contagens).length === 0 && Object.keys(contagensTotal).length === 0,
+          carregandoContagens: tags.length > 0 && carregandoFlows.has(flow.id),
         })
       }
     }
@@ -437,7 +503,7 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensTotal, ultimoLeadMap, filtroBot, filtroBusca])
+  }, [numeros, fluxosMap, contagens, contagensTotal, ultimoLeadMap, carregandoFlows, filtroBot, filtroBusca])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
@@ -541,6 +607,8 @@ function FunisPageInner() {
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Total</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                 </tr>
               </thead>
@@ -687,6 +755,24 @@ function FunisPageInner() {
                           ) : (
                             <span className={`font-semibold font-mono ${(trackingMap[row.flow.id]?.ftds ?? 0) > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
                               {trackingMap[row.flow.id]?.ftds ?? 0}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {!row.utm || !row.leadsHoje ? (
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : (
+                            <span className="text-xs font-mono text-[var(--text-muted)]">
+                              {(((trackingMap[row.flow.id]?.ftds ?? 0) / row.leadsHoje) * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {!row.utm || !row.leadsHoje ? (
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                          ) : (
+                            <span className="text-xs font-mono text-[var(--text-muted)]">
+                              {(((trackingMap[row.flow.id]?.registros ?? 0) / row.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
                         </td>

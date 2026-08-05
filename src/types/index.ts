@@ -306,6 +306,8 @@ export interface FlowTagConfig {
   tags: string[]
   funil?: string | null
   utm?: string | null
+  /** UTMs adicionais além de `utm` — resultados (registros/FTD) somam entre todas. */
+  utmsExtras?: string[]
   casas?: string[]
   tipo?: 'traffic' | 'disparo'
   lpUrl?: string | null
