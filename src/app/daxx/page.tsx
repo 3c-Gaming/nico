@@ -23,17 +23,25 @@ interface ExportItem {
 
 const CACHE_KEY = 'daxx-campanhas'
 const TS_KEY = 'daxx-campanhas-timestamp'
+// Sem TTL aqui, um erro transitório no bridge nunca mais tinha motivo pra sumir — a tela
+// ficava mostrando o último snapshot bom indefinidamente (chegou a travar por semanas).
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+// DAXX retorna "DD/MM/YY, HH:mm" (ano com 2 dígitos) ou, ocasionalmente, "DD/MM/YYYY"
+function anoCompleto(anoStr: string): number {
+  return anoStr.length === 2 ? 2000 + Number(anoStr) : Number(anoStr)
+}
 
 function parseDataDaxx(str: string): Date | null {
-  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/)
   if (!match) return null
-  return new Date(+match[3], +match[2] - 1, +match[1])
+  return new Date(anoCompleto(match[3]), +match[2] - 1, +match[1])
 }
 
 function daxxDateToISO(str: string): string | null {
-  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/)
   if (!match) return null
-  return `${match[3]}-${match[2]}-${match[1]}`
+  return `${anoCompleto(match[3])}-${match[2]}-${match[1]}`
 }
 
 function hojeISO(): string {
@@ -49,6 +57,7 @@ function carregarCache(): { data: DisparoDaxx[]; timestamp: string } | null {
     const raw = localStorage.getItem(CACHE_KEY)
     const ts = localStorage.getItem(TS_KEY)
     if (!raw || !ts) return null
+    if (Date.now() - new Date(ts).getTime() > CACHE_TTL_MS) return null
     return { data: JSON.parse(raw), timestamp: ts }
   } catch {
     return null

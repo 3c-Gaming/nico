@@ -69,6 +69,7 @@ export default function DetalheDisparoPage() {
   const [fluxosDisponiveis, setFluxosDisponiveis] = useState<FluxoSendpulse[]>([])
   const [carregandoFluxos, setCarregandoFluxos] = useState(false)
   const [sincronizandoTracking, setSincronizandoTracking] = useState(false)
+  const [sincronizandoDaxx, setSincronizandoDaxx] = useState(false)
 
   const disparo = getById(id)
 
@@ -295,6 +296,32 @@ export default function DetalheDisparoPage() {
     }
   }
 
+  // "Entregues DAXX" é gravado uma vez na criação do disparo e nunca mais era atualizado
+  // sozinho — se o bridge estava fora do ar ou instável nesse momento, o valor ficava
+  // congelado pra sempre. Esse botão busca de novo, ao vivo, direto na DAXX.
+  async function handleSyncEntreguesDaxx() {
+    if (!disparo) return
+    setSincronizandoDaxx(true)
+    try {
+      const params = new URLSearchParams({ nome: disparo.nomenclatura, date: disparo.dataDisparo })
+      const res = await fetch(`/api/publico/entregues?${params.toString()}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `Erro ${res.status}`)
+      update(id, {
+        conversao: {
+          entreguesDaxx: json.entregues ?? 0,
+          leadsFluxo: disparo.conversao?.leadsFluxo ?? 0,
+          atualizadoEm: new Date().toISOString(),
+        },
+      })
+      addToast('success', `Entregues DAXX atualizado: ${json.entregues ?? 0}`)
+    } catch (err) {
+      addToast('error', (err as Error).message || 'Erro ao buscar entregues na DAXX')
+    } finally {
+      setSincronizandoDaxx(false)
+    }
+  }
+
   function handleAvancarEsteira() {
     if (!podeAvancar || !proximoTipo || !esteira) return
     setAvancando(true)
@@ -376,6 +403,15 @@ export default function DetalheDisparoPage() {
               </>
             ) : (
               <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSyncEntreguesDaxx}
+                  loading={sincronizandoDaxx}
+                  icon={<RefreshCw size={16} />}
+                >
+                  Entregues DAXX
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
