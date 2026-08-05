@@ -14,6 +14,19 @@ function ddmmParaIso(dd: string, mm: string): string {
   return `${ano}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
 }
 
+/**
+ * "DD/MM/YY, HH:mm" (formato real do campo dataCriacao devolvido pela API da DAXX) ou,
+ * ocasionalmente, "DD/MM/YYYY" -> "YYYY-MM-DD". Diferente de ddmmParaIso acima: essa aqui lê
+ * a data REAL de quando o disparo saiu, não uma data digitada à mão no nome da campanha
+ * (que pode estar desatualizada — copiada de um ciclo anterior sem editar).
+ */
+export function dataCriacaoDaxxParaIso(str: string): string | null {
+  const match = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/)
+  if (!match) return null
+  const ano = match[3].length === 2 ? `20${match[3]}` : match[3]
+  return `${ano}-${match[2]}-${match[1]}`
+}
+
 function normalizarTexto(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ')
 }

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Search, Link2, Unlink, ChevronDown, ExternalLink } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
-import { parsearNomeCampanhaDaxx } from '@/lib/daxx-parser'
+import { dataCriacaoDaxxParaIso } from '@/lib/daxx-parser'
 import type { Disparo, DisparoDaxx, TemplateDaxx } from '@/types'
 
 interface ModalLinkDaxxProps {
@@ -30,10 +30,8 @@ export function ModalLinkDaxx({ open, funilNome, disparos, campanhas, onLink, on
   const campanhasDeHoje = useMemo(() => {
     const hoje = new Date()
     const hojeKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
-    return campanhas.filter((c) => {
-      const parsed = parsearNomeCampanhaDaxx(c.nome)
-      return parsed.dataDisparo === hojeKey
-    })
+    // Usa a data real (dataCriacao) — o nome é digitado à mão e às vezes fica desatualizado.
+    return campanhas.filter((c) => dataCriacaoDaxxParaIso(c.dataCriacao) === hojeKey)
   }, [campanhas])
 
   const campanhasFiltradas = useMemo(() => {

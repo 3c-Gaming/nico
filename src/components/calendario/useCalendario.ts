@@ -6,7 +6,7 @@ import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEtapaConfigs } from '@/hooks/useEtapaConfigs'
 import { gerarRangeDias, isMesmaData, adicionarDias } from '@/lib/datas'
-import { parsearNomeCampanhaDaxx, casaPadraoPorTipo } from '@/lib/daxx-parser'
+import { parsearNomeCampanhaDaxx, casaPadraoPorTipo, dataCriacaoDaxxParaIso } from '@/lib/daxx-parser'
 import { DEFAULT_CONFIGS } from '@/lib/esteira'
 
 export interface FiltrosCalendario {
@@ -182,8 +182,12 @@ export function useCalendario() {
           if (vinculados.has(campanha.id)) continue
 
           const parsed = parsearNomeCampanhaDaxx(campanha.nome)
-          if (!parsed.dataDisparo) continue
-          if (parsed.dataDisparo !== key) continue
+          // A data de verdade é a que a DAXX registrou (dataCriacao) — o nome é digitado à
+          // mão e às vezes fica com data velha (copiado de um ciclo anterior sem atualizar),
+          // o que fazia disparos de hoje sumirem do calendário.
+          const dataReal = dataCriacaoDaxxParaIso(campanha.dataCriacao)
+          if (!dataReal) continue
+          if (dataReal !== key) continue
 
           const casasAposta = casaPadraoPorTipo(parsed.tipo, casasList)
 
