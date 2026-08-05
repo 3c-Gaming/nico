@@ -830,9 +830,12 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                     className="w-full h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors disabled:opacity-50"
                   >
                     <option value="">{carregandoNumeros ? 'carregando números...' : 'Número...'}</option>
-                    {numerosDisponiveis.map((num) => (
-                      <option key={num.id} value={num.id}>{num.nome || num.numero}</option>
-                    ))}
+                    {numerosDisponiveis
+                      .filter((num) => funisDoBot(num.id).length > 0)
+                      .sort((a, b) => a.numero.localeCompare(b.numero))
+                      .map((num) => (
+                        <option key={num.id} value={num.id}>{num.numero}</option>
+                      ))}
                   </select>
                   {botIdSelecionado && (
                     <select
