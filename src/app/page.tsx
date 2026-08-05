@@ -320,6 +320,7 @@ interface FunilRow {
   lpUrls: string[]
   leadsHoje: number
   leadsHojeCarregando: boolean
+  leadsTotal: number
   baseCusto: number
   baseLinhas: number
   ultimoLeadAt: string | null
@@ -340,6 +341,7 @@ export default function HomePage() {
   const { list: todosDisparos, update: updateDisparo } = useDisparos()
   const { pinnedDisparos, toggle: handleTogglePinDisparo } = usePinnedDisparos()
   const [contagens, setContagens] = useState<Record<string, number>>({})
+  const [contagensTotal, setContagensTotal] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
   const [carregandoFunis, setCarregandoFunis] = useState(false)
@@ -480,6 +482,7 @@ export default function HomePage() {
 
         if (tagsPorBot.size) {
           const leads: Record<string, number> = {}
+          const totais: Record<string, number> = {}
           const ultimoLead: Record<string, string | null> = {}
           await Promise.allSettled(
             [...tagsPorBot.entries()].map(async ([botId, tagsSet]) => {
@@ -491,11 +494,13 @@ export default function HomePage() {
               if (res.ok) {
                 const data = await res.json()
                 Object.assign(leads, data.leads)
+                Object.assign(totais, data.totais)
                 Object.assign(ultimoLead, data.ultimoLead)
               }
             }),
           )
           setContagens(leads)
+          setContagensTotal(totais)
           setUltimoLeadMap(ultimoLead)
           setLiveLeadsLoaded(true)
         }
@@ -589,6 +594,9 @@ export default function HomePage() {
       // Sem dado ao vivo nem cache pra cair como fallback: mostrar "0" aqui daria a
       // impressão de que já sabemos que é zero, quando na verdade ainda não carregou.
       const leadsHojeCarregando = !liveLeadsLoaded && cache?.leadsHoje == null && tags.length > 0
+      const leadsTotal = liveLeadsLoaded
+        ? tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+        : (cache?.totalLeads ?? 0)
       const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
         const ts = ultimoLeadMap[t] ?? null
         if (!ts) return best
@@ -751,9 +759,9 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
-  }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
 
@@ -765,10 +773,11 @@ export default function HomePage() {
       (acc, r) => ({
         leadsHoje: acc.leadsHoje + r.leadsHoje,
         leadsHojeCarregando: acc.leadsHojeCarregando || r.leadsHojeCarregando,
+        leadsTotal: acc.leadsTotal + r.leadsTotal,
         registros: acc.registros + r.registros,
         ftds: acc.ftds + r.ftds,
       }),
-      { leadsHoje: 0, leadsHojeCarregando: false, registros: 0, ftds: 0 },
+      { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0 },
     )
   }, [trafficRows])
 
@@ -860,6 +869,11 @@ export default function HomePage() {
                 {row.leadsHoje}
               </span>
             )}
+          </td>
+          <td className="py-3 px-3 text-right">
+            <span className={`font-semibold font-mono ${row.leadsTotal > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+              {row.leadsTotal > 0 ? row.leadsTotal.toLocaleString('pt-BR') : '—'}
+            </span>
           </td>
           {isDisparo && (
             <>
@@ -963,7 +977,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 16 : 9} className="p-0">
+            <td colSpan={isDisparo ? 17 : 10} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1352,6 +1366,7 @@ export default function HomePage() {
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
@@ -1393,10 +1408,11 @@ export default function HomePage() {
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1417,6 +1433,9 @@ export default function HomePage() {
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.leadsTotal.toLocaleString('pt-BR')}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
                         </td>
                         <td className="py-3 px-3 text-right">
@@ -1426,8 +1445,8 @@ export default function HomePage() {
                           {!totalTraffic.leadsHoje ? (
                             <span className="text-xs text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="text-xs font-mono text-[var(--text-muted)]">
-                              {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
+                            <span className="text-xs font-mono text-[var(--text-primary)]">
+                              {((totalTraffic.registros / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
                         </td>
@@ -1435,8 +1454,8 @@ export default function HomePage() {
                           {!totalTraffic.leadsHoje ? (
                             <span className="text-xs text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="text-xs font-mono text-[var(--text-muted)]">
-                              {((totalTraffic.registros / totalTraffic.leadsHoje) * 100).toFixed(1)}%
+                            <span className="text-xs font-mono text-[var(--text-primary)]">
+                              {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
                         </td>
