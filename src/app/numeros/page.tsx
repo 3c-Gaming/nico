@@ -109,10 +109,10 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
         try {
           const allTags = [...new Set(flowsComTags.flatMap((f) => configs[f.id].tags))]
 
-          const res = await fetch('/api/leadhub/contagem-por-tag', {
+          const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags: allTags }),
+            body: JSON.stringify({ botId, tags: allTags }),
           })
 
           if (res.ok) {
@@ -289,10 +289,10 @@ export default function NumerosPage() {
         )]
         if (tags.length === 0) return [n.numero.id, 0] as const
         try {
-          const res = await fetch('/api/leadhub/contagem-por-tag', {
+          const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags }),
+            body: JSON.stringify({ botId: n.numero.id, tags }),
           })
           if (!res.ok) return [n.numero.id, 0] as const
           const { leads } = await res.json()

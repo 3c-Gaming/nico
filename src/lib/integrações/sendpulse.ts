@@ -88,6 +88,47 @@ export async function obterStatusBot(botId: string, apiKey: string, signal?: Abo
   }
 }
 
+export interface ContagemTagHoje {
+  total: number
+  hoje: number
+  ultimoLeadAt: string | null
+}
+
+function hojeLocalISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Busca direto na API da SendPulse (getByTag) em vez do LeadHub (função externa) — bem mais
+ * rápido: `meta.total` já vem certo mesmo pedindo poucos registros, e os contatos voltam
+ * ordenados do mais recente pro mais antigo, então os de hoje sempre estão no topo da lista
+ * (sem risco de "sumir" mesmo em tags com milhares de contatos acumulados).
+ * Só serve pra "hoje" — não tem filtro de data pra consultar dias passados/futuros, porque
+ * pra isso precisaria baixar a lista inteira da tag (poderia ser bem mais lento que o LeadHub,
+ * que filtra a data no servidor).
+ */
+export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiKey: string, signal?: AbortSignal): Promise<ContagemTagHoje> {
+  const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=1000`
+  const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+  if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+  const json = await res.json()
+  const total = Number(json.meta?.total ?? 0)
+
+  const hojeKey = hojeLocalISO()
+  let hoje = 0
+  let ultimoLeadAt: string | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const contato of (json.data ?? []) as any[]) {
+    const createdAt = String(contato.created_at ?? '')
+    if (!createdAt) continue
+    if (!ultimoLeadAt || createdAt > ultimoLeadAt) ultimoLeadAt = createdAt
+    if (createdAt.slice(0, 10) === hojeKey) hoje++
+  }
+
+  return { total, hoje, ultimoLeadAt }
+}
+
 export async function enviarMensagem(params: {
   botId: string
   telefone: string

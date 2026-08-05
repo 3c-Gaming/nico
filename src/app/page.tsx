@@ -450,7 +450,13 @@ export default function HomePage() {
       .map(([flowId]) => flowId)
     if (!relevantFlowIds.length) return
     const botIds = [...new Set(relevantFlowIds.map((fid) => configs[fid].botId))]
-    const allTags = [...new Set(relevantFlowIds.flatMap((fid) => configs[fid].tags ?? []))]
+    const tagsPorBot = new Map<string, Set<string>>()
+    for (const fid of relevantFlowIds) {
+      const cfg = configs[fid]
+      if (!cfg.botId || !cfg.tags?.length) continue
+      if (!tagsPorBot.has(cfg.botId)) tagsPorBot.set(cfg.botId, new Set())
+      for (const tag of cfg.tags) tagsPorBot.get(cfg.botId)!.add(tag)
+    }
 
     async function fetchData() {
       setCarregandoFunis(true)
@@ -472,19 +478,26 @@ export default function HomePage() {
         }
         setFluxosMap(novo)
 
-        if (allTags.length) {
-          const res = await fetch('/api/leadhub/contagem-por-tag', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags: allTags }),
-          })
-          if (res.ok) {
-            const data = await res.json()
-            const leads = data.leads ?? {}
-            setContagens(leads)
-            setUltimoLeadMap(data.ultimoLead ?? {})
-            setLiveLeadsLoaded(true)
-          }
+        if (tagsPorBot.size) {
+          const leads: Record<string, number> = {}
+          const ultimoLead: Record<string, string | null> = {}
+          await Promise.allSettled(
+            [...tagsPorBot.entries()].map(async ([botId, tagsSet]) => {
+              const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ botId, tags: [...tagsSet] }),
+              })
+              if (res.ok) {
+                const data = await res.json()
+                Object.assign(leads, data.leads)
+                Object.assign(ultimoLead, data.ultimoLead)
+              }
+            }),
+          )
+          setContagens(leads)
+          setUltimoLeadMap(ultimoLead)
+          setLiveLeadsLoaded(true)
         }
       } catch { /* noop */ } finally {
         setCarregandoFunis(false)

@@ -344,11 +344,12 @@ function FunisPageInner() {
       await Promise.allSettled(
         flowsComTags.map(async (f) => {
           const tags = configs[f.id]?.tags ?? []
+          const botId = configs[f.id]?.botId
           try {
-            const res = await fetch('/api/leadhub/contagem-por-tag', {
+            const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tags }),
+              body: JSON.stringify({ botId, tags }),
             })
             if (res.ok) {
               const data = await res.json()
@@ -378,10 +379,10 @@ function FunisPageInner() {
     if (!row.tags.length || recarregandoTag[key]) return
     setRecarregandoTag((prev) => ({ ...prev, [key]: true }))
     try {
-      const res = await fetch('/api/leadhub/contagem-por-tag', {
+      const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: row.tags, refresh: true }),
+        body: JSON.stringify({ botId: row.botId, tags: row.tags, refresh: true }),
       })
       if (res.ok) {
         const data = await res.json()
