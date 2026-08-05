@@ -23,6 +23,7 @@ interface Pagina {
   updated_at: string
   lovable_project_id?: string
   tipo?: string
+  tracking_file?: string
   funil?: string
   casa_id?: string
   tags?: string[]
@@ -203,7 +204,7 @@ export default function PaginasPage() {
       const res = await fetch('/api/paginas/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: pagina.github_owner, repo: pagina.github_repo }),
+        body: JSON.stringify({ owner: pagina.github_owner, repo: pagina.github_repo, tracking_file: pagina.tracking_file }),
       })
       const json = await res.json()
       if (res.ok) {
@@ -269,6 +270,7 @@ export default function PaginasPage() {
           destinations: editDestinations,
           text: editText,
           lovable_project_id: paginaSelecionada.lovable_project_id,
+          tracking_file: paginaSelecionada.tracking_file,
         }),
       })
 

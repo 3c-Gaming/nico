@@ -4,18 +4,19 @@ import {
   extractDestinations, extractText, replaceDestinations, replaceText,
 } from '@/lib/paginas/github-sync'
 
-// Lê o tracking-whatsapp.tsx de um repo GitHub e extrai DESTINATIONS + TEXT
+// Lê o tracking file de um repo GitHub e extrai DESTINATIONS + TEXT
 export async function POST(request: NextRequest) {
   try {
-    const { owner, repo } = await request.json()
+    const { owner, repo, tracking_file } = await request.json()
     if (!owner || !repo) {
       return NextResponse.json({ error: 'owner e repo são obrigatórios' }, { status: 400 })
     }
 
     const token = await getGhToken()
-    const fileContent = await fetchFileFromGitHub(token, owner, repo, 'src/components/tracking-whatsapp.tsx')
+    const filePath = tracking_file || 'src/components/tracking-whatsapp.tsx'
+    const fileContent = await fetchFileFromGitHub(token, owner, repo, filePath)
     if (!fileContent) {
-      return NextResponse.json({ error: 'tracking-whatsapp.tsx não encontrado no repositório' }, { status: 404 })
+      return NextResponse.json({ error: `${filePath} não encontrado no repositório` }, { status: 404 })
     }
 
     const destinations = extractDestinations(fileContent)
@@ -27,16 +28,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT - Atualiza o tracking-whatsapp.tsx no GitHub com novos DESTINATIONS e TEXT
+// PUT - Atualiza o tracking file no GitHub com novos DESTINATIONS e TEXT
 export async function PUT(request: NextRequest) {
   try {
-    const { owner, repo, destinations, text, lovable_project_id } = await request.json()
+    const { owner, repo, destinations, text, lovable_project_id, tracking_file } = await request.json()
     if (!owner || !repo || !destinations) {
       return NextResponse.json({ error: 'owner, repo e destinations são obrigatórios' }, { status: 400 })
     }
 
     const token = await getGhToken()
-    const filePath = 'src/components/tracking-whatsapp.tsx'
+    const filePath = tracking_file || 'src/components/tracking-whatsapp.tsx'
 
     const { content: currentContent, sha, error: fetchError } = await fetchFileWithSha(token, owner, repo, filePath)
     if (!currentContent || !sha) {
