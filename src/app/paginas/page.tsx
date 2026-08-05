@@ -204,7 +204,7 @@ export default function PaginasPage() {
       const res = await fetch('/api/paginas/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: pagina.github_owner, repo: pagina.github_repo }),
+        body: JSON.stringify({ owner: pagina.github_owner, repo: pagina.github_repo, tracking_file: pagina.tracking_file }),
       })
       const json = await res.json()
       if (res.ok) {
