@@ -319,6 +319,7 @@ interface FunilRow {
   corBadge?: string
   lpUrls: string[]
   leadsHoje: number
+  leadsHojeCarregando: boolean
   baseCusto: number
   baseLinhas: number
   ultimoLeadAt: string | null
@@ -572,6 +573,9 @@ export default function HomePage() {
       const leadsHoje = liveLeadsLoaded
         ? tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
         : (cache?.leadsHoje ?? 0)
+      // Sem dado ao vivo nem cache pra cair como fallback: mostrar "0" aqui daria a
+      // impressão de que já sabemos que é zero, quando na verdade ainda não carregou.
+      const leadsHojeCarregando = !liveLeadsLoaded && cache?.leadsHoje == null && tags.length > 0
       const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
         const ts = ultimoLeadMap[t] ?? null
         if (!ts) return best
@@ -734,7 +738,7 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
     })
   }, [pinnedFunis, contagens, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
 
@@ -747,10 +751,11 @@ export default function HomePage() {
     return trafficRows.reduce(
       (acc, r) => ({
         leadsHoje: acc.leadsHoje + r.leadsHoje,
+        leadsHojeCarregando: acc.leadsHojeCarregando || r.leadsHojeCarregando,
         registros: acc.registros + r.registros,
         ftds: acc.ftds + r.ftds,
       }),
-      { leadsHoje: 0, registros: 0, ftds: 0 },
+      { leadsHoje: 0, leadsHojeCarregando: false, registros: 0, ftds: 0 },
     )
   }, [trafficRows])
 
@@ -835,9 +840,13 @@ export default function HomePage() {
             </div>
           </td>
           <td className="py-3 px-3 text-right">
-            <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
-              {row.leadsHoje}
-            </span>
+            {row.leadsHojeCarregando ? (
+              <div className="flex justify-end"><Spinner size={12} /></div>
+            ) : (
+              <span className={`font-semibold ${row.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                {row.leadsHoje}
+              </span>
+            )}
           </td>
           {isDisparo && (
             <>
@@ -1364,9 +1373,13 @@ export default function HomePage() {
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
                         <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={2}>Total</td>
                         <td className="py-3 px-3 text-right">
-                          <span className={`font-bold ${totalTraffic.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
-                            {totalTraffic.leadsHoje}
-                          </span>
+                          {totalTraffic.leadsHojeCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : (
+                            <span className={`font-bold ${totalTraffic.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                              {totalTraffic.leadsHoje}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
