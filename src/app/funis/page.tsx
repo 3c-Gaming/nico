@@ -323,6 +323,12 @@ function FunisPageInner() {
   const [filtroCasas, setFiltroCasas] = useState<string[]>([])
   const [filtroTipo, setFiltroTipo] = useState<'' | 'traffic' | 'disparo'>('')
   const { list: casasList } = useCasasAposta()
+  const [exportModo, setExportModo] = useState<'unico' | 'intervalo'>('unico')
+  const [exportInicio, setExportInicio] = useState(getLocalDate())
+  const [exportFim, setExportFim] = useState(getLocalDate())
+  const [exportando, setExportando] = useState(false)
+  const [exportProgresso, setExportProgresso] = useState('')
+  const [exportErro, setExportErro] = useState<string | null>(null)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
@@ -536,7 +542,7 @@ function FunisPageInner() {
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
-  function exportarCsv() {
+  function exportarCsvUnico() {
     const casasPorId = new Map(casasList.map((c) => [c.id, c.nome]))
     const header = ['Data', 'Funil', 'Tipo', 'Casas', 'Bot', 'Número', 'Fluxo', 'Tags', 'Leads hoje', 'Total', 'Registros', 'FTDs', 'Conv. FTD %', 'Conv. Reg %']
     const linhas = flowRows.map((row) => {
@@ -564,6 +570,120 @@ function FunisPageInner() {
     baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${trackingData}.csv`)
   }
 
+  function gerarRangeDatas(inicio: string, fim: string): string[] {
+    const datas: string[] = []
+    const atual = new Date(`${inicio}T00:00:00`)
+    const fimDate = new Date(`${fim}T00:00:00`)
+    while (atual <= fimDate) {
+      datas.push(`${atual.getFullYear()}-${String(atual.getMonth() + 1).padStart(2, '0')}-${String(atual.getDate()).padStart(2, '0')}`)
+      atual.setDate(atual.getDate() + 1)
+    }
+    return datas
+  }
+
+  // Resultado (registros/FTDs por casa + leads por tag) de um dia específico. Registros/FTDs
+  // vêm do tracking 3CGG (rápido, ~1s). Leads por tag só têm fonte histórica via LeadHub — o
+  // endpoint novo direto na SendPulse só cobre "hoje" — e essa rota é lenta (~60s fixos por
+  // chamada, não por quantidade de tags), então cada dia do intervalo dispara UMA chamada só
+  // (todas as tags juntas) e os dias rodam em paralelo entre si.
+  async function buscarResultadosDoDia(data: string, tagsUnicas: string[]) {
+    const [superbetRes, betmgmRes, leadsRes] = await Promise.all([
+      fetch(`/api/tracking/export?casa=superbet&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+      fetch(`/api/tracking/export?casa=betmgm&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+      tagsUnicas.length === 0
+        ? Promise.resolve({ leads: {} as Record<string, number> })
+        : fetch('/api/leadhub/contagem-por-tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: tagsUnicas, data }),
+          }).then((r) => (r.ok ? r.json() : { leads: {} })).catch(() => ({ leads: {} })),
+    ])
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      superbetEvents: (superbetRes as any)?.data ?? [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      betmgmEvents: (betmgmRes as any)?.data ?? [],
+      leadsPorTag: (leadsRes as { leads?: Record<string, number> })?.leads ?? {},
+    }
+  }
+
+  const MAX_DIAS_EXPORT_INTERVALO = 31
+
+  async function exportarCsvIntervalo() {
+    const datas = gerarRangeDatas(exportInicio, exportFim)
+    if (datas.length === 0) { setExportErro('Intervalo inválido'); return }
+    if (datas.length > MAX_DIAS_EXPORT_INTERVALO) {
+      setExportErro(`Máximo de ${MAX_DIAS_EXPORT_INTERVALO} dias por exportação`)
+      return
+    }
+    setExportErro(null)
+    setExportando(true)
+    setExportProgresso(`0 / ${datas.length} dia(s)...`)
+    try {
+      const tagsUnicas = [...new Set(flowRows.flatMap((r) => r.tags))]
+      const resultadosPorDia = new Map<string, Awaited<ReturnType<typeof buscarResultadosDoDia>>>()
+      let concluidos = 0
+      await Promise.all(datas.map(async (data) => {
+        const resultado = await buscarResultadosDoDia(data, tagsUnicas)
+        resultadosPorDia.set(data, resultado)
+        concluidos++
+        setExportProgresso(`${concluidos} / ${datas.length} dia(s)...`)
+      }))
+
+      const casasPorId = new Map(casasList.map((c) => [c.id, c.nome]))
+      const header = ['Data', 'Funil', 'Tipo', 'Casas', 'Bot', 'Número', 'Fluxo', 'Tags', 'Leads', 'Registros', 'FTDs', 'Conv. FTD %', 'Conv. Reg %']
+      const linhas: string[] = []
+      for (const data of datas) {
+        const dia = resultadosPorDia.get(data)
+        if (!dia) continue
+        for (const row of flowRows) {
+          const cfg = getState().flowTagConfigs[row.flow.id]
+          const utms = utmsDoFluxo(cfg ?? {})
+          let registros = 0
+          let ftds = 0
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const item of dia.superbetEvents as any[]) {
+            if (utms.some((utm) => String(item.acid).includes(utm))) {
+              registros += item.registrations ?? 0
+              ftds += item.ftds ?? 0
+            }
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const item of dia.betmgmEvents as any[]) {
+            if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
+              registros += item.registrations ?? 0
+              ftds += item.ftds ?? 0
+            }
+          }
+          const leads = row.tags.reduce((acc, t) => acc + (dia.leadsPorTag[t] ?? 0), 0)
+          const convFtd = leads > 0 ? ((ftds / leads) * 100).toFixed(1) : ''
+          const convReg = leads > 0 ? ((registros / leads) * 100).toFixed(1) : ''
+          linhas.push([
+            data,
+            row.funil ?? '',
+            row.tipo === 'traffic' ? 'Tráfego' : 'Disparo',
+            row.casas.map((id) => casasPorId.get(id) ?? id).join('; '),
+            row.botNome,
+            row.botNumero,
+            row.flow.nome,
+            row.tags.join('; '),
+            String(leads),
+            String(registros),
+            String(ftds),
+            convFtd,
+            convReg,
+          ].map(csvCampo).join(','))
+        }
+      }
+      baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${exportInicio}_a_${exportFim}.csv`)
+    } catch {
+      setExportErro('Erro ao gerar exportação — tente novamente')
+    } finally {
+      setExportando(false)
+      setExportProgresso('')
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -571,15 +691,81 @@ function FunisPageInner() {
         descricao="Monitoramento de fluxos por tag"
         acoes={
           <div className="flex items-center gap-2">
-            <button
-              onClick={exportarCsv}
-              disabled={flowRows.length === 0}
-              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
-              title="Exportar os fluxos filtrados em CSV, com os resultados da data selecionada"
+            <Dropdown
+              align="right"
+              label={
+                <span className="flex items-center gap-1.5">
+                  <Download size={14} />
+                  Exportar CSV
+                </span>
+              }
             >
-              <Download size={14} />
-              Exportar CSV
-            </button>
+              <div className="p-3 space-y-2.5 w-[280px]">
+                <div className="flex items-center gap-1 bg-[var(--bg-base)] border border-[var(--border)] rounded p-0.5">
+                  <button
+                    onClick={() => setExportModo('unico')}
+                    className={`flex-1 px-2 py-1 text-xs rounded font-medium transition-colors ${exportModo === 'unico' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  >
+                    Dia único
+                  </button>
+                  <button
+                    onClick={() => setExportModo('intervalo')}
+                    className={`flex-1 px-2 py-1 text-xs rounded font-medium transition-colors ${exportModo === 'intervalo' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  >
+                    Intervalo
+                  </button>
+                </div>
+
+                {exportModo === 'unico' ? (
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Usa a data selecionada no filtro: <strong className="text-[var(--text-primary)]">{trackingData}</strong>
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={exportInicio}
+                        onChange={(e) => setExportInicio(e.target.value)}
+                        className="flex-1 h-7 px-1.5 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">até</span>
+                      <input
+                        type="date"
+                        value={exportFim}
+                        onChange={(e) => setExportFim(e.target.value)}
+                        className="flex-1 h-7 px-1.5 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Uma linha por fluxo por dia, no mesmo CSV. Até {MAX_DIAS_EXPORT_INTERVALO} dias — cada exportação
+                      busca o histórico de leads (não tem atalho rápido pra datas passadas), pode levar cerca de 1min.
+                    </p>
+                  </div>
+                )}
+
+                {exportErro && <p className="text-xs text-[var(--error)]">{exportErro}</p>}
+
+                <button
+                  onClick={exportModo === 'unico' ? exportarCsvUnico : exportarCsvIntervalo}
+                  disabled={flowRows.length === 0 || exportando}
+                  className="flex items-center justify-center gap-1.5 w-full h-8 rounded text-xs font-medium text-white disabled:opacity-50 transition-opacity"
+                  style={{ backgroundColor: 'var(--d1)' }}
+                >
+                  {exportando ? (
+                    <>
+                      <Spinner size={12} />
+                      {exportProgresso || 'Gerando...'}
+                    </>
+                  ) : (
+                    <>
+                      <Download size={12} />
+                      Baixar CSV
+                    </>
+                  )}
+                </button>
+              </div>
+            </Dropdown>
             <button
               onClick={() => setSaveVersion((v) => v + 1)}
               disabled={refreshing}
