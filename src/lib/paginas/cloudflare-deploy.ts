@@ -90,20 +90,19 @@ export async function deployCloudflare(
 
     const { jwt, buckets } = session.result
 
-    // 2. Upload dos arquivos em buckets
+    // 2. Upload dos arquivos em buckets (base64-encoded)
     for (const bucket of (buckets || [])) {
       if (!bucket.length) continue
 
-      // Criar FormData com os arquivos desse bucket
       const formData = new FormData()
       for (const hash of bucket) {
         const file = hashToFile.get(hash)
         if (file) {
-          formData.append(hash, new Blob([new Uint8Array(file.content)]), file.path)
+          formData.append(hash, new Blob([file.content.toString('base64')]), file.path)
         }
       }
 
-      const uploadRes = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/${workerName}/assets-upload`, {
+      const uploadRes = await fetch(`${CF_API}/accounts/${accountId}/workers/assets/upload?base64=true`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${jwt}` },
         body: formData,
