@@ -72,7 +72,7 @@ export async function deployCloudflare(
     const manifest: Record<string, { hash: string; size: number }> = {}
     const hashToFile = new Map<string, RepoFile>()
     for (const f of files) {
-      const hash = createHash('sha256').update(f.content).digest('hex')
+      const hash = createHash('sha256').update(f.content).digest('hex').slice(0, 32)
       manifest[f.path] = { hash, size: f.content.length }
       hashToFile.set(hash, f)
     }
