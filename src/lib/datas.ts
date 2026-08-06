@@ -1,3 +1,30 @@
+const TIMEZONE_BRASIL = 'America/Sao_Paulo'
+
+/**
+ * Data de hoje (YYYY-MM-DD) no fuso de Brasília, independente do fuso onde o código roda.
+ * Funções serverless da Vercel rodam em UTC — usar `new Date().getDate()` direto faz o dia
+ * virar 3h antes da hora certa (21h em Brasília já é meia-noite em UTC, ou seja, "amanhã").
+ * Use isso (e `dataParaBrasilISO`) em vez de `new Date()` cru sempre que o cálculo de "hoje"
+ * rodar no servidor.
+ */
+export function hojeBrasilISO(): string {
+  return dataParaBrasilISO(new Date())
+}
+
+export function dataParaBrasilISO(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE_BRASIL, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+
+/**
+ * Timestamp (ms) da meia-noite de um dia (YYYY-MM-DD) no fuso de Brasília. O Brasil não usa
+ * mais horário de verão desde 2019, então o offset é sempre UTC-3 fixo — dá pra calcular sem
+ * depender de timezone database.
+ */
+export function inicioDoDiaBrasilMs(dataISO: string = hojeBrasilISO()): number {
+  return new Date(`${dataISO}T03:00:00.000Z`).getTime()
+}
+
 export function formatarData(date: Date, formato: 'DD/MM' | 'DD/MM/YYYY' | 'YYYY-MM-DD'): string {
   const dia = String(date.getDate()).padStart(2, '0')
   const mes = String(date.getMonth() + 1).padStart(2, '0')

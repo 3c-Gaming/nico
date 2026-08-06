@@ -1,5 +1,6 @@
 import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse } from '@/types'
 import { listarContasSendpulse, registrarContaDoBot, apiKeyParaBot } from './contasSendpulse'
+import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
 
 const BASE_URL = 'https://api.sendpulse.com/whatsapp'
 
@@ -94,11 +95,6 @@ export interface ContagemTagHoje {
   ultimoLeadAt: string | null
 }
 
-function hojeLocalISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /**
  * Busca direto na API da SendPulse (getByTag) em vez do LeadHub (função externa) — bem mais
  * rápido: `meta.total` já vem certo mesmo pedindo poucos registros, e os contatos voltam
@@ -115,7 +111,7 @@ export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiK
   const json = await res.json()
   const total = Number(json.meta?.total ?? 0)
 
-  const hojeKey = hojeLocalISO()
+  const hojeKey = hojeBrasilISO()
   let hoje = 0
   let ultimoLeadAt: string | null = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,7 +119,9 @@ export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiK
     const createdAt = String(contato.created_at ?? '')
     if (!createdAt) continue
     if (!ultimoLeadAt || createdAt > ultimoLeadAt) ultimoLeadAt = createdAt
-    if (createdAt.slice(0, 10) === hojeKey) hoje++
+    // Compara pelo dia em Brasília, não pela data crua (UTC) do timestamp da SendPulse —
+    // do contrário um lead das 22h de Brasília (já 01h UTC do dia seguinte) fica de fora de "hoje".
+    if (dataParaBrasilISO(createdAt) === hojeKey) hoje++
   }
 
   return { total, hoje, ultimoLeadAt }

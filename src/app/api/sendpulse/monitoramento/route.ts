@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { listarNumerosTodasContas, listarChatsAtivos } from '@/lib/integrações/sendpulse'
 import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 import { getOrFetch } from '@/lib/cache'
+import { inicioDoDiaBrasilMs } from '@/lib/datas'
 import type { DadosMonitoramento, NumeroMonitorado } from '@/types'
 
 const TIMEOUT_BOT_MS = 30_000
@@ -9,8 +10,7 @@ const BATCH_SIZE = 3
 const TTL_MS = 15_000
 
 function contarLeadsHoje(chats: { ultimaAtividade: string }[]): number {
-  const agora = new Date()
-  const inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()).getTime()
+  const inicio = inicioDoDiaBrasilMs()
   const fim = inicio + 86_400_000
   return chats.filter((c) => {
     const data = new Date(c.ultimaAtividade).getTime()

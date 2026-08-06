@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch, invalidate } from '@/lib/cache'
 import { listarNumerosTodasContas } from '@/lib/integrações/sendpulse'
 import { listarTags } from '@/lib/mcp/sendpulse'
+import { hojeBrasilISO } from '@/lib/datas'
 
 const BASE_URL = 'https://uptntyjjfcbopcxflgnp.supabase.co/functions/v1/leads-export'
 const EXPORT_KEY = '12ec6e8b105c396d3ab940adab51e516'
@@ -9,11 +10,6 @@ const TIMEOUT = 30_000
 const TTL_TODAY = 60_000
 const TTL_BOTS = 5 * 60_000
 const TTL_TAGS_POR_BOT = 5 * 60_000
-
-function hojeISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function extrairTimestampLead(lead: Record<string, unknown>): string | null {
   for (const campo of ['criado_em', 'atualizado_em', 'created_at', 'createdAt', 'created']) {
@@ -99,7 +95,7 @@ export async function POST(request: NextRequest) {
       invalidate('sendpulse-tags-por-bot')
     }
 
-    const hoje = body.data ?? hojeISO()
+    const hoje = body.data ?? hojeBrasilISO()
     const [totais, resultadosHoje] = await Promise.all([
       contarTagsSendpulseTotal(body.tags).catch(() => ({} as Record<string, number>)),
       Promise.allSettled(
