@@ -345,7 +345,8 @@ function FunisPageInner() {
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
-  const [trackingData, setTrackingData] = useState(getLocalDate())
+  const [trackingDataInicio, setTrackingDataInicio] = useState(getLocalDate())
+  const [trackingDataFim, setTrackingDataFim] = useState(getLocalDate())
   const [trackingLoaded, setTrackingLoaded] = useState(false)
   // flow.id -> ainda esperando a contagem de leads de hoje daquele fluxo especificamente
   const [carregandoFlows, setCarregandoFlows] = useState<Set<string>>(new Set())
@@ -445,29 +446,37 @@ function FunisPageInner() {
     if (!withUtm.length) return
 
     async function fetchTracking() {
-      const [superbetRes, betmgmRes] = await Promise.all([
-        fetch(`/api/tracking/export?casa=superbet&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
-        fetch(`/api/tracking/export?casa=betmgm&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
-      ])
+      const datas = gerarRangeDatas(trackingDataInicio, trackingDataFim).slice(0, MAX_DIAS_EXPORT_INTERVALO)
+      if (!datas.length) return
 
-      const superbetEvents: any[] = (superbetRes as any)?.data ?? []
-      const betmgmEvents: any[] = (betmgmRes as any)?.data ?? []
+      const porDia = await Promise.all(datas.map(async (data) => {
+        const [superbetRes, betmgmRes] = await Promise.all([
+          fetch(`/api/tracking/export?casa=superbet&date=${data}`).then((r) => r.json()).catch(() => ({})),
+          fetch(`/api/tracking/export?casa=betmgm&date=${data}`).then((r) => r.json()).catch(() => ({})),
+        ])
+        return {
+          superbetEvents: (superbetRes as any)?.data ?? [] as any[],
+          betmgmEvents: (betmgmRes as any)?.data ?? [] as any[],
+        }
+      }))
 
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const cfg of withUtm) {
         const utms = utmsDoFluxo(cfg)
         let registros = 0
         let ftds = 0
-        for (const item of superbetEvents) {
-          if (utms.some((utm) => String(item.acid).includes(utm))) {
-            registros += item.registrations ?? 0
-            ftds += item.ftds ?? 0
+        for (const dia of porDia) {
+          for (const item of dia.superbetEvents) {
+            if (utms.some((utm) => String(item.acid).includes(utm))) {
+              registros += item.registrations ?? 0
+              ftds += item.ftds ?? 0
+            }
           }
-        }
-        for (const item of betmgmEvents) {
-          if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
-            registros += item.registrations ?? 0
-            ftds += item.ftds ?? 0
+          for (const item of dia.betmgmEvents) {
+            if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
+              registros += item.registrations ?? 0
+              ftds += item.ftds ?? 0
+            }
           }
         }
         novo[cfg.flowId] = { registros, ftds }
@@ -499,7 +508,7 @@ function FunisPageInner() {
     }
 
     fetchTracking()
-  }, [trackingData, saveVersion])
+  }, [trackingDataInicio, trackingDataFim, saveVersion])
 
   const flowRows = useMemo(() => {
     const termo = filtroBusca.toLowerCase()
@@ -577,6 +586,7 @@ function FunisPageInner() {
   const linhasParaExportar = selecionados.size > 0 ? flowRows.filter((r) => selecionados.has(chaveLinha(r))) : flowRows
 
   function exportarCsvUnico() {
+    const dataLabel = trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio}_a_${trackingDataFim}`
     const casasPorId = new Map(casasList.map((c) => [c.id, c.nome]))
     const header = ['Data', 'Funil', 'Tipo', 'Casas', 'Bot', 'Número', 'Fluxo', 'Tags', 'Leads hoje', 'Total', 'Registros', 'FTDs', 'Conv. FTD %', 'Conv. Reg %']
     const linhas = linhasParaExportar.map((row) => {
@@ -585,7 +595,7 @@ function FunisPageInner() {
       const convFtd = row.leadsHoje > 0 ? ((ftds / row.leadsHoje) * 100).toFixed(1) : ''
       const convReg = row.leadsHoje > 0 ? ((registros / row.leadsHoje) * 100).toFixed(1) : ''
       return [
-        trackingData,
+        dataLabel,
         row.funil ?? '',
         row.tipo === 'traffic' ? 'Tráfego' : 'Disparo',
         row.casas.map((id) => casasPorId.get(id) ?? id).join('; '),
@@ -601,7 +611,7 @@ function FunisPageInner() {
         convReg,
       ].map(csvCampo).join(',')
     })
-    baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${trackingData}.csv`)
+    baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${dataLabel}.csv`)
   }
 
   function gerarRangeDatas(inicio: string, fim: string): string[] {
@@ -740,19 +750,22 @@ function FunisPageInner() {
                     onClick={() => setExportModo('unico')}
                     className={`flex-1 px-2 py-1 text-xs rounded font-medium transition-colors ${exportModo === 'unico' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
-                    Dia único
+                    Resumo
                   </button>
                   <button
                     onClick={() => setExportModo('intervalo')}
                     className={`flex-1 px-2 py-1 text-xs rounded font-medium transition-colors ${exportModo === 'intervalo' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
-                    Intervalo
+                    Por dia
                   </button>
                 </div>
 
                 {exportModo === 'unico' ? (
                   <p className="text-xs text-[var(--text-muted)]">
-                    Usa a data selecionada no filtro: <strong className="text-[var(--text-primary)]">{trackingData}</strong>
+                    Uma linha por funil, somando o período do filtro:{' '}
+                    <strong className="text-[var(--text-primary)]">
+                      {trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`}
+                    </strong>
                   </p>
                 ) : (
                   <div className="space-y-1.5">
@@ -834,9 +847,12 @@ function FunisPageInner() {
             className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
           >
             <option value="">Todos</option>
-            {numeros.map((num) => (
-              <option key={num.id} value={num.id}>{num.nome}</option>
-            ))}
+            {numeros
+              .filter((num) => num.status === 'ativo')
+              .sort((a, b) => a.numero.localeCompare(b.numero))
+              .map((num) => (
+                <option key={num.id} value={num.id}>{num.numero}</option>
+              ))}
           </select>
 
           <Dropdown label={`Casa${filtroCasas.length > 0 ? ` (${filtroCasas.length})` : ''}`}>
@@ -890,12 +906,21 @@ function FunisPageInner() {
               className="flex-1 h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
             />
           </div>
-          <input
-            type="date"
-            value={trackingData}
-            onChange={(e) => setTrackingData(e.target.value)}
-            className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={trackingDataInicio}
+              onChange={(e) => setTrackingDataInicio(e.target.value)}
+              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+            <span className="text-xs text-[var(--text-muted)]">até</span>
+            <input
+              type="date"
+              value={trackingDataFim}
+              onChange={(e) => setTrackingDataFim(e.target.value)}
+              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+          </div>
 
           <span className="text-xs text-[var(--text-muted)] ml-auto whitespace-nowrap">
             {flowRows.length} fluxo(s)
