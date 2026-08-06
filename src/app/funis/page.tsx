@@ -2,13 +2,32 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
+import { Dropdown } from '@/components/ui/Dropdown'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
+
+function csvCampo(valor: string): string {
+  if (valor.includes(',') || valor.includes('"') || valor.includes('\n')) {
+    return `"${valor.replace(/"/g, '""')}"`
+  }
+  return valor
+}
+
+function baixarCsv(conteudo: string, nomeArquivo: string) {
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nomeArquivo
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
 // diferentes) — soma os resultados de todas ao invés de só olhar a principal.
@@ -29,6 +48,7 @@ interface FlowRow {
   funil?: string | null
   utm?: string | null
   lpUrl?: string | null
+  tipo: 'traffic' | 'disparo'
   tags: string[]
   casas: string[]
   leadsHoje: number
@@ -300,6 +320,9 @@ function FunisPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [filtroBot, setFiltroBot] = useState<string>('')
   const [filtroBusca, setFiltroBusca] = useState(searchParams.get('busca') ?? '')
+  const [filtroCasas, setFiltroCasas] = useState<string[]>([])
+  const [filtroTipo, setFiltroTipo] = useState<'' | 'traffic' | 'disparo'>('')
+  const { list: casasList } = useCasasAposta()
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
@@ -481,6 +504,10 @@ function FunisPageInner() {
           return best
         }, null)
         if (termo && !flow.nome.toLowerCase().includes(termo) && !(funil ?? '').toLowerCase().includes(termo)) continue
+        const casas = configs[flow.id]?.casas ?? []
+        if (filtroCasas.length > 0 && !casas.some((id) => filtroCasas.includes(id))) continue
+        const tipo = configs[flow.id]?.tipo ?? 'disparo'
+        if (filtroTipo && tipo !== filtroTipo) continue
         rows.push({
           botId: num.id,
           botNome: num.nome,
@@ -489,8 +516,9 @@ function FunisPageInner() {
           funil,
           utm: configs[flow.id]?.utm,
           lpUrl: configs[flow.id]?.lpUrl,
+          tipo,
           tags,
-          casas: configs[flow.id]?.casas ?? [],
+          casas,
           leadsHoje: leads,
           total,
           ultimoLeadAt,
@@ -504,9 +532,37 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensTotal, ultimoLeadMap, carregandoFlows, filtroBot, filtroBusca])
+  }, [numeros, fluxosMap, contagens, contagensTotal, ultimoLeadMap, carregandoFlows, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
+
+  function exportarCsv() {
+    const casasPorId = new Map(casasList.map((c) => [c.id, c.nome]))
+    const header = ['Data', 'Funil', 'Tipo', 'Casas', 'Bot', 'Número', 'Fluxo', 'Tags', 'Leads hoje', 'Total', 'Registros', 'FTDs', 'Conv. FTD %', 'Conv. Reg %']
+    const linhas = flowRows.map((row) => {
+      const registros = trackingMap[row.flow.id]?.registros ?? 0
+      const ftds = trackingMap[row.flow.id]?.ftds ?? 0
+      const convFtd = row.leadsHoje > 0 ? ((ftds / row.leadsHoje) * 100).toFixed(1) : ''
+      const convReg = row.leadsHoje > 0 ? ((registros / row.leadsHoje) * 100).toFixed(1) : ''
+      return [
+        trackingData,
+        row.funil ?? '',
+        row.tipo === 'traffic' ? 'Tráfego' : 'Disparo',
+        row.casas.map((id) => casasPorId.get(id) ?? id).join('; '),
+        row.botNome,
+        row.botNumero,
+        row.flow.nome,
+        row.tags.join('; '),
+        String(row.leadsHoje),
+        String(row.total),
+        String(registros),
+        String(ftds),
+        convFtd,
+        convReg,
+      ].map(csvCampo).join(',')
+    })
+    baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${trackingData}.csv`)
+  }
 
   return (
     <>
@@ -514,14 +570,25 @@ function FunisPageInner() {
         titulo="Funis"
         descricao="Monitoramento de fluxos por tag"
         acoes={
-          <button
-            onClick={() => setSaveVersion((v) => v + 1)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Carregando...' : 'Recarregar'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportarCsv}
+              disabled={flowRows.length === 0}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+              title="Exportar os fluxos filtrados em CSV, com os resultados da data selecionada"
+            >
+              <Download size={14} />
+              Exportar CSV
+            </button>
+            <button
+              onClick={() => setSaveVersion((v) => v + 1)}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Carregando...' : 'Recarregar'}
+            </button>
+          </div>
         }
       />
 
@@ -545,6 +612,47 @@ function FunisPageInner() {
               <option key={num.id} value={num.id}>{num.nome}</option>
             ))}
           </select>
+
+          <Dropdown label={`Casa${filtroCasas.length > 0 ? ` (${filtroCasas.length})` : ''}`}>
+            <div className="p-2 max-h-48 overflow-y-auto min-w-[160px]">
+              {casasList.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-[var(--text-muted)]">Nenhuma casa cadastrada</p>
+              ) : (
+                casasList.map((casa) => {
+                  const selected = filtroCasas.includes(casa.id)
+                  return (
+                    <button
+                      key={casa.id}
+                      onClick={() => setFiltroCasas((prev) => selected ? prev.filter((id) => id !== casa.id) : [...prev, casa.id])}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: casa.cor }} />
+                      <span className="flex-1 text-left">{casa.nome}</span>
+                      {selected && <Check size={14} className="text-[var(--d1)]" />}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </Dropdown>
+
+          <Dropdown label={filtroTipo ? (filtroTipo === 'traffic' ? 'Tipo: Tráfego' : 'Tipo: Disparo') : 'Tipo'}>
+            <div className="p-1 min-w-[140px]">
+              {([['', 'Todos'], ['disparo', 'Disparo'], ['traffic', 'Tráfego']] as const).map(([valor, label]) => {
+                const selected = filtroTipo === valor
+                return (
+                  <button
+                    key={valor}
+                    onClick={() => setFiltroTipo(valor)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
+                  >
+                    <span className="flex-1 text-left">{label}</span>
+                    {selected && <Check size={14} className="text-[var(--d1)]" />}
+                  </button>
+                )
+              })}
+            </div>
+          </Dropdown>
 
           <div className="flex items-center gap-1.5 flex-1 max-w-xs">
             <Search size={14} className="text-[var(--text-muted)] shrink-0" />
