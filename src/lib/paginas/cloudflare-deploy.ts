@@ -116,11 +116,11 @@ export async function deployCloudflare(
       for (const hash of bucket) {
         const file = hashToFile.get(hash)
         if (file) {
-          formData.append(hash, new Blob([file.content.toString('base64')], { type: getMimeType(file.path) }), file.path)
+          formData.append(hash, new Blob([new Uint8Array(file.content)], { type: getMimeType(file.path) }), file.path)
         }
       }
 
-      const uploadRes = await fetch(`${CF_API}/accounts/${accountId}/workers/assets/upload?base64=true`, {
+      const uploadRes = await fetch(`${CF_API}/accounts/${accountId}/workers/assets/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${jwt}` },
         body: formData,
