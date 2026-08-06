@@ -59,6 +59,10 @@ interface FlowRow {
   carregandoContagens: boolean
 }
 
+function chaveLinha(row: FlowRow): string {
+  return `${row.botId}-${row.flow.id}`
+}
+
 function FlowStatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-medium ${
@@ -331,6 +335,7 @@ function FunisPageInner() {
   const [exportando, setExportando] = useState(false)
   const [exportProgresso, setExportProgresso] = useState('')
   const [exportErro, setExportErro] = useState<string | null>(null)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
@@ -544,10 +549,29 @@ function FunisPageInner() {
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
+  function toggleSelecionado(key: string) {
+    setSelecionados((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function toggleSelecionarTodos() {
+    const chaves = flowRows.map(chaveLinha)
+    const todosSelecionados = chaves.length > 0 && chaves.every((k) => selecionados.has(k))
+    setSelecionados(todosSelecionados ? new Set() : new Set(chaves))
+  }
+
+  // Quando nada está selecionado, exporta tudo que está filtrado na tela (comportamento
+  // anterior); selecionar alguma linha restringe a exportação só a essas.
+  const linhasParaExportar = selecionados.size > 0 ? flowRows.filter((r) => selecionados.has(chaveLinha(r))) : flowRows
+
   function exportarCsvUnico() {
     const casasPorId = new Map(casasList.map((c) => [c.id, c.nome]))
     const header = ['Data', 'Funil', 'Tipo', 'Casas', 'Bot', 'Número', 'Fluxo', 'Tags', 'Leads hoje', 'Total', 'Registros', 'FTDs', 'Conv. FTD %', 'Conv. Reg %']
-    const linhas = flowRows.map((row) => {
+    const linhas = linhasParaExportar.map((row) => {
       const registros = trackingMap[row.flow.id]?.registros ?? 0
       const ftds = trackingMap[row.flow.id]?.ftds ?? 0
       const convFtd = row.leadsHoje > 0 ? ((ftds / row.leadsHoje) * 100).toFixed(1) : ''
@@ -622,7 +646,7 @@ function FunisPageInner() {
     setExportando(true)
     setExportProgresso(`0 / ${datas.length} dia(s)...`)
     try {
-      const tagsUnicas = [...new Set(flowRows.flatMap((r) => r.tags))]
+      const tagsUnicas = [...new Set(linhasParaExportar.flatMap((r) => r.tags))]
       const resultadosPorDia = new Map<string, Awaited<ReturnType<typeof buscarResultadosDoDia>>>()
       let concluidos = 0
       await Promise.all(datas.map(async (data) => {
@@ -638,7 +662,7 @@ function FunisPageInner() {
       for (const data of datas) {
         const dia = resultadosPorDia.get(data)
         if (!dia) continue
-        for (const row of flowRows) {
+        for (const row of linhasParaExportar) {
           const cfg = getState().flowTagConfigs[row.flow.id]
           const utms = utmsDoFluxo(cfg ?? {})
           let registros = 0
@@ -746,11 +770,17 @@ function FunisPageInner() {
                   </div>
                 )}
 
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  {selecionados.size > 0
+                    ? `${selecionados.size} funil(is) selecionado(s) — exporta só esses.`
+                    : `Nenhum funil marcado — exporta todos os ${flowRows.length} filtrado(s) na tela.`}
+                </p>
+
                 {exportErro && <p className="text-xs text-[var(--error)]">{exportErro}</p>}
 
                 <button
                   onClick={exportModo === 'unico' ? exportarCsvUnico : exportarCsvIntervalo}
-                  disabled={flowRows.length === 0 || exportando}
+                  disabled={linhasParaExportar.length === 0 || exportando}
                   className="flex items-center justify-center gap-1.5 w-full h-8 rounded text-xs font-medium text-white disabled:opacity-50 transition-opacity"
                   style={{ backgroundColor: 'var(--d1)' }}
                 >
@@ -891,6 +921,15 @@ function FunisPageInner() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--glass-border)]">
+                  <th className="text-left py-3 px-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={flowRows.length > 0 && flowRows.every((r) => selecionados.has(chaveLinha(r)))}
+                      onChange={toggleSelecionarTodos}
+                      className="accent-[var(--d1)]"
+                      title="Selecionar todos os fluxos filtrados"
+                    />
+                  </th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
@@ -911,11 +950,19 @@ function FunisPageInner() {
               </thead>
               <tbody>
                 {flowRows.map((row) => {
-                  const configKey = `${row.botId}-${row.flow.id}`
+                  const configKey = chaveLinha(row)
                   const isEditing = editingKey === configKey
                   return (
                     <Fragment key={configKey}>
                       <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
+                        <td className="py-3 px-3">
+                          <input
+                            type="checkbox"
+                            checked={selecionados.has(configKey)}
+                            onChange={() => toggleSelecionado(configKey)}
+                            className="accent-[var(--d1)]"
+                          />
+                        </td>
                         <td className="py-3 px-3">
                           {row.funil ? (
                             <div className="flex items-center gap-1.5">
@@ -1106,7 +1153,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={15} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}
