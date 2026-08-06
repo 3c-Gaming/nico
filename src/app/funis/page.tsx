@@ -85,18 +85,23 @@ function TagChip({ label }: { label: string }) {
   )
 }
 
-function FunilChip({ label, cor }: { label: string; cor?: string }) {
+function FunilChip({ label, cor, selecionado, onClick }: { label: string; cor?: string; selecionado?: boolean; onClick?: () => void }) {
   const c = cor ?? 'var(--d1)'
+  const Tag = onClick ? 'button' : 'span'
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold font-mono"
+    <Tag
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold font-mono transition-colors ${onClick ? 'cursor-pointer' : ''}`}
       style={{
-        backgroundColor: `${c}20`,
-        border: `1px solid ${c}30`,
-        color: c,
+        backgroundColor: selecionado ? c : `${c}20`,
+        border: `1px solid ${c}${selecionado ? '' : '30'}`,
+        color: selecionado ? 'var(--bg-base)' : c,
       }}
+      title={onClick ? (selecionado ? 'Clique pra remover da seleção' : 'Clique pra selecionar pra exportação') : undefined}
     >
+      {selecionado && <Check size={10} strokeWidth={3} />}
       {label}
-    </span>
+    </Tag>
   )
 }
 
@@ -559,10 +564,13 @@ function FunisPageInner() {
   }
 
   function toggleSelecionarTodos() {
-    const chaves = flowRows.map(chaveLinha)
+    const chaves = flowRows.filter((r) => r.funil).map(chaveLinha)
     const todosSelecionados = chaves.length > 0 && chaves.every((k) => selecionados.has(k))
     setSelecionados(todosSelecionados ? new Set() : new Set(chaves))
   }
+
+  const chavesComFunil = flowRows.filter((r) => r.funil).map(chaveLinha)
+  const todosFunisSelecionados = chavesComFunil.length > 0 && chavesComFunil.every((k) => selecionados.has(k))
 
   // Quando nada está selecionado, exporta tudo que está filtrado na tela (comportamento
   // anterior); selecionar alguma linha restringe a exportação só a essas.
@@ -921,16 +929,19 @@ function FunisPageInner() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--glass-border)]">
-                  <th className="text-left py-3 px-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={flowRows.length > 0 && flowRows.every((r) => selecionados.has(chaveLinha(r)))}
-                      onChange={toggleSelecionarTodos}
-                      className="accent-[var(--d1)]"
-                      title="Selecionar todos os fluxos filtrados"
-                    />
+                  <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">
+                    <div className="flex items-center gap-2">
+                      Funil
+                      {chavesComFunil.length > 0 && (
+                        <button
+                          onClick={toggleSelecionarTodos}
+                          className="text-[10px] font-medium normal-case text-[var(--d1)] hover:underline"
+                        >
+                          {todosFunisSelecionados ? 'limpar' : 'selecionar todos'}
+                        </button>
+                      )}
+                    </div>
                   </th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
@@ -956,14 +967,6 @@ function FunisPageInner() {
                     <Fragment key={configKey}>
                       <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
                         <td className="py-3 px-3">
-                          <input
-                            type="checkbox"
-                            checked={selecionados.has(configKey)}
-                            onChange={() => toggleSelecionado(configKey)}
-                            className="accent-[var(--d1)]"
-                          />
-                        </td>
-                        <td className="py-3 px-3">
                           {row.funil ? (
                             <div className="flex items-center gap-1.5">
                               {row.casas.length > 0 && (
@@ -983,6 +986,8 @@ function FunisPageInner() {
                               )}
                               <FunilChip
                                 label={row.funil}
+                                selecionado={selecionados.has(configKey)}
+                                onClick={() => toggleSelecionado(configKey)}
                                 cor={(() => {
                                   const primeiraId = row.casas[0]
                                   if (!primeiraId) return undefined
@@ -1153,7 +1158,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={15} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}
