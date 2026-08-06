@@ -8,6 +8,23 @@ function getCfAccountId() { return process.env.CLOUDFLARE_ACCOUNT_ID || '' }
 
 interface RepoFile { path: string; content: Buffer }
 
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html', '.htm': 'text/html',
+  '.js': 'application/javascript', '.mjs': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.svg': 'image/svg+xml',
+  '.webp': 'image/webp', '.ico': 'image/x-icon',
+  '.woff': 'font/woff', '.woff2': 'font/woff2',
+  '.txt': 'text/plain', '.xml': 'text/xml',
+}
+
+function getMimeType(path: string): string {
+  const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
+  return MIME_TYPES[ext] || 'application/octet-stream'
+}
+
 /** Busca todos os arquivos deployáveis de um repo GitHub */
 async function fetchRepoFiles(ghToken: string, owner: string, repo: string): Promise<RepoFile[]> {
   // Tenta main, depois master
@@ -99,7 +116,7 @@ export async function deployCloudflare(
       for (const hash of bucket) {
         const file = hashToFile.get(hash)
         if (file) {
-          formData.append(hash, new Blob([file.content.toString('base64')]), file.path)
+          formData.append(hash, new Blob([file.content.toString('base64')], { type: getMimeType(file.path) }), file.path)
         }
       }
 
