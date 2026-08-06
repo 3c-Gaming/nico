@@ -45,7 +45,9 @@ function StatBox({ label, valor, cor }: { label: string; valor: string; cor: str
 }
 
 function baixarCsv(conteudo: string, nomeArquivo: string) {
-  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8' })
+  // BOM UTF-8 na frente: sem isso o Google Sheets/Excel às vezes erram a detecção de encoding
+  // (ou simplesmente recusam a importação) em CSVs com acentos.
+  const blob = new Blob(['\uFEFF' + conteudo], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
