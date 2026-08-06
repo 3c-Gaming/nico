@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 // PUT - Atualiza o tracking file no GitHub com novos DESTINATIONS e TEXT
 export async function PUT(request: NextRequest) {
   try {
-    const { owner, repo, destinations, text, lovable_project_id, tracking_file } = await request.json()
+    const { owner, repo, destinations, text, lovable_project_id, tracking_file, tipo } = await request.json()
     if (!owner || !repo || !destinations) {
       return NextResponse.json({ error: 'owner, repo e destinations são obrigatórios' }, { status: 400 })
     }
@@ -51,11 +51,14 @@ export async function PUT(request: NextRequest) {
 
     await commitFile(token, owner, repo, filePath, newContent, sha, `chore: atualizar DESTINATIONS via Nico`)
 
-    // Deploy no Lovable (server-side)
+    // Deploy no Lovable ou Cloudflare
     let deployResult = null
     if (lovable_project_id) {
       const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
       deployResult = await deployLovable(lovable_project_id)
+    } else if (tipo === 'html_whatsapp') {
+      const { deployCloudflare } = await import('@/lib/paginas/cloudflare-deploy')
+      deployResult = await deployCloudflare(owner, repo)
     }
 
     return NextResponse.json({ success: true, deploy: deployResult })

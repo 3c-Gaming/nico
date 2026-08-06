@@ -204,12 +204,19 @@ export async function handleConfirmar(ctx: Context, paginaIdx: number) {
 
     const flowShort = '...' + estado.novoFlowId.slice(-8)
 
-    // Deploy no Lovable (server-side com verificação real)
+    // Deploy no Lovable ou Cloudflare
     let deployMsg = ''
     if (pagina.lovable_project_id) {
       const { deployLovable } = await import('@/lib/paginas/lovable-deploy')
       const deploy = await deployLovable(
         pagina.lovable_project_id,
+        async (msg) => { try { await ctx.editMessageText(msg) } catch {} },
+      )
+      deployMsg = `\n${deploy.message}`
+    } else if (pagina.tipo === 'html_whatsapp') {
+      const { deployCloudflare } = await import('@/lib/paginas/cloudflare-deploy')
+      const deploy = await deployCloudflare(
+        pagina.github_owner, pagina.github_repo,
         async (msg) => { try { await ctx.editMessageText(msg) } catch {} },
       )
       deployMsg = `\n${deploy.message}`

@@ -122,15 +122,11 @@ export async function POST(req: Request) {
 
     await commitFile(ghToken, github_owner, github_repo, tracking_file, newContent, sha, commitMsg)
 
-    // 2. Esperar Lovable sincronizar o commit do GitHub antes de deployar
-    //    Sem esse delay, o deploy publica o código antigo (pré-commit)
+    // 2. Deploy no Lovable ou Cloudflare
+    let deployResult: any = null
     if (lovable_project_id) {
+      // Esperar Lovable sincronizar o commit do GitHub antes de deployar
       await new Promise(r => setTimeout(r, 8000))
-    }
-
-    // 3. Deploy no Lovable
-    let deployResult = null
-    if (lovable_project_id) {
       const firebaseToken = await getFirebaseToken()
       const deployRes = await fetch(
         `https://api.lovable.dev/projects/${lovable_project_id}/deployments?async=true`,
@@ -150,6 +146,11 @@ export async function POST(req: Request) {
       } else {
         deployResult = { error: deployText }
       }
+    } else if (state.tipo === 'html_whatsapp') {
+      // Deploy automático no Cloudflare Workers para páginas html_whatsapp
+      const { deployCloudflare } = await import('@/lib/paginas/cloudflare-deploy')
+      const cf = await deployCloudflare(github_owner, github_repo)
+      deployResult = cf.ok ? { deployment_id: 'cloudflare', url: cf.url } : { error: cf.message }
     }
 
     // 4. Atualizar Supabase (para whatsapp)

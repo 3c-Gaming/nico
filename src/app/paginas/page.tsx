@@ -271,6 +271,7 @@ export default function PaginasPage() {
           text: editText,
           lovable_project_id: paginaSelecionada.lovable_project_id,
           tracking_file: paginaSelecionada.tracking_file,
+          tipo: paginaSelecionada.tipo,
         }),
       })
 
