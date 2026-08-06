@@ -149,16 +149,20 @@ export async function deployCloudflare(
       observability: { enabled: true },
     })], { type: 'application/json' }), 'metadata')
     const workerScript = `
-const TYPES = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon','.woff':'font/woff','.woff2':'font/woff2','.txt':'text/plain' };
+const TYPES = { '.html':'text/html;charset=utf-8','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon','.woff':'font/woff','.woff2':'font/woff2','.txt':'text/plain' };
 export default {
   async fetch(request, env) {
     const res = await env.ASSETS.fetch(request);
     const url = new URL(request.url);
     const path = url.pathname === '/' ? '/index.html' : url.pathname;
-    const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
+    const dot = path.lastIndexOf('.');
+    const ext = dot !== -1 ? path.slice(dot).toLowerCase() : '';
     const ct = TYPES[ext];
-    if (ct && res.headers.get('content-type') !== ct) {
-      return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers), 'content-type': ct } });
+    if (ct) {
+      const h = new Headers(res.headers);
+      h.set('content-type', ct);
+      h.delete('cache-control');
+      return new Response(res.body, { status: res.status, headers: h });
     }
     return res;
   }
