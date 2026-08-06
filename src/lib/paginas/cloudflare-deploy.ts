@@ -86,11 +86,11 @@ export async function deployCloudflare(
     if (onProgress) await onProgress(`☁️ Enviando ${files.length} arquivos pro Cloudflare...`)
 
     // Criar manifest (path → {hash, size})
-    const manifest: Record<string, { hash: string; size: number }> = {}
+    const manifest: Record<string, { hash: string; size: number; content_type?: string }> = {}
     const hashToFile = new Map<string, RepoFile>()
     for (const f of files) {
       const hash = createHash('sha256').update(f.content).digest('hex').slice(0, 32)
-      manifest[f.path] = { hash, size: f.content.length }
+      manifest[f.path] = { hash, size: f.content.length, content_type: getMimeType(f.path) }
       hashToFile.set(hash, f)
     }
 
