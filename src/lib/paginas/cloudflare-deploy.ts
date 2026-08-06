@@ -91,6 +91,7 @@ export async function deployCloudflare(
     const { jwt, buckets } = session.result
 
     // 2. Upload dos arquivos em buckets (base64-encoded)
+    let completionJwt = ''
     for (const bucket of (buckets || [])) {
       if (!bucket.length) continue
 
@@ -111,13 +112,21 @@ export async function deployCloudflare(
         const err = await uploadRes.text()
         return { ok: false, message: `❌ Upload falhou: ${err.slice(0, 200)}` }
       }
+      // O último upload retorna o completion JWT
+      const uploadResult = await uploadRes.json()
+      if (uploadResult?.result?.jwt) {
+        completionJwt = uploadResult.result.jwt
+      }
     }
+
+    // Usar completion JWT (do upload) ou o JWT original (se nenhum arquivo precisou upload)
+    const finalJwt = completionJwt || jwt
 
     // 3. Deploy do worker com os assets
     const deployForm = new FormData()
     deployForm.append('metadata', new Blob([JSON.stringify({
       main_module: '__asset-worker.js',
-      assets: { jwt },
+      assets: { jwt: finalJwt },
       compatibility_date: '2026-05-15',
       compatibility_flags: ['nodejs_compat'],
       observability: { enabled: true },
