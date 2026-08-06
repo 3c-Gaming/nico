@@ -148,9 +148,22 @@ export async function deployCloudflare(
       compatibility_flags: ['nodejs_compat'],
       observability: { enabled: true },
     })], { type: 'application/json' }), 'metadata')
-    deployForm.append('__asset-worker.js', new Blob([
-      'export default { async fetch(request, env) { return env.ASSETS.fetch(request); } }',
-    ], { type: 'application/javascript+module' }), '__asset-worker.js')
+    const workerScript = `
+const TYPES = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon','.woff':'font/woff','.woff2':'font/woff2','.txt':'text/plain' };
+export default {
+  async fetch(request, env) {
+    const res = await env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    const path = url.pathname === '/' ? '/index.html' : url.pathname;
+    const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
+    const ct = TYPES[ext];
+    if (ct && res.headers.get('content-type') !== ct) {
+      return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers), 'content-type': ct } });
+    }
+    return res;
+  }
+};`.trim()
+    deployForm.append('__asset-worker.js', new Blob([workerScript], { type: 'application/javascript+module' }), '__asset-worker.js')
 
     const deployRes = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/${workerName}`, {
       method: 'PUT',
