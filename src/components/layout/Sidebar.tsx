@@ -16,6 +16,7 @@ const LINKS = [
   { href: '/utms', label: 'UTMs/PIDs', icon: Hash },
   { href: '/testes', label: 'Testes', icon: Smartphone },
   { href: '/funis', label: 'Funis', icon: Layers },
+  { href: '/jogos', label: 'Jogos', icon: LandPlot },
   { href: '/paginas', label: 'Páginas', icon: FileText },
   //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
   { href: '/casas', label: 'Casas', icon: Dices },

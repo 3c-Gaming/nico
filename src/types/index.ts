@@ -330,6 +330,27 @@ export interface CopaMatch {
   awayScore?: number
 }
 
+export interface Jogo {
+  id: number
+  ligaId: number
+  ligaNome: string
+  ligaLogo?: string
+  paisNome?: string
+  rodada?: string
+  date: string
+  status: 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled'
+  statusCurto: string
+  elapsed?: number | null
+  homeTeam: string
+  awayTeam: string
+  homeLogo?: string
+  awayLogo?: string
+  homeScore?: number
+  awayScore?: number
+  venue?: string
+  city?: string
+}
+
 export interface CopaNoticia {
   titulo: string
   link: string
