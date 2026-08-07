@@ -62,6 +62,44 @@ export async function listarNumerosTodasContas(signal?: AbortSignal): Promise<Nu
   return todos
 }
 
+export interface StatusPlanoSendpulse {
+  contaId: string
+  contaNome: string
+  tariffCode: string
+  isExpired: boolean
+  isExceeded: boolean
+  expiredAt: string | null
+  maxContacts: number
+  maxBots: number
+}
+
+async function buscarStatusPlano(conta: { id: string; nome: string; apiKey: string }, signal?: AbortSignal): Promise<StatusPlanoSendpulse> {
+  const res = await fetch(`${BASE_URL}/account`, { headers: getHeaders(conta.apiKey), signal })
+  if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+  const json = await res.json()
+  const t = json.data?.tariff ?? {}
+  return {
+    contaId: conta.id,
+    contaNome: conta.nome,
+    tariffCode: t.code ?? '',
+    isExpired: !!t.is_expired,
+    isExceeded: !!t.is_exceeded,
+    expiredAt: t.expired_at ?? null,
+    maxContacts: t.max_contacts ?? -1,
+    maxBots: t.max_bots ?? -1,
+  }
+}
+
+/** Status do plano/tarifa de todas as contas SendPulse configuradas — usado pra alertar
+ * quando um plano já expirou ou está perto de expirar (a SendPulse não avisa sozinha). */
+export async function buscarStatusPlanoTodasContas(signal?: AbortSignal): Promise<StatusPlanoSendpulse[]> {
+  const contas = listarContasSendpulse()
+  const resultados = await Promise.allSettled(contas.map((conta) => buscarStatusPlano(conta, signal)))
+  return resultados
+    .filter((r): r is PromiseFulfilledResult<StatusPlanoSendpulse> => r.status === 'fulfilled')
+    .map((r) => r.value)
+}
+
 export async function listarFluxos(botId: string, apiKey: string, signal?: AbortSignal): Promise<FluxoSendpulse[]> {
   const res = await fetch(`${BASE_URL}/flows?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
