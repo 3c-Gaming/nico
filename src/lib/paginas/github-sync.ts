@@ -153,6 +153,38 @@ export function replaceLeadFlowConfig(content: string, config: LeadFlowConfig): 
   return content.replace(/export const LEAD_FLOW_CONFIG\s*=\s*\{[\s\S]*?\};/, newBlock)
 }
 
+// --- TrackingOffer Config (TrackingOffer.tsx) ---
+// Pattern: `?btag=a_25730b_499c_` + `&siteid=25730` + `&adid=499`
+
+export interface TrackingOfferConfig {
+  siteId: string
+  adId: string
+}
+
+export function extractTrackingOfferConfig(content: string): TrackingOfferConfig | null {
+  const siteIdMatch = content.match(/[`'"]&siteid=(\d+)[`'"]/)
+  const adIdMatch = content.match(/[`'"]&adid=(\d+)[`'"]/)
+  if (!siteIdMatch) return null
+  return {
+    siteId: siteIdMatch[1],
+    adId: adIdMatch ? adIdMatch[1] : '',
+  }
+}
+
+export function replaceTrackingOfferConfig(content: string, config: TrackingOfferConfig): string {
+  let result = content
+  // Update siteid param
+  result = result.replace(/([`'"])&siteid=\d+([`'"])/, `$1&siteid=${config.siteId}$2`)
+  // Update adid param
+  if (config.adId) {
+    result = result.replace(/([`'"])&adid=\d+([`'"])/, `$1&adid=${config.adId}$2`)
+  }
+  // Update btag: a_{siteId}b_{adId}c_
+  const adId = config.adId || '499'
+  result = result.replace(/([`'"])\?btag=a_\d+b_\d+c_([`'"])/, `$1?btag=a_${config.siteId}b_${adId}c_$2`)
+  return result
+}
+
 // --- Redirect Config (redirect.ts) ---
 
 export interface RedirectConfig {

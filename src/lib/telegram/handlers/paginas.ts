@@ -6,6 +6,7 @@ import {
   getGhToken, fetchFileFromGitHub,
   extractDestinations, extractText,
   extractRedirectUrl, extractLeadFlowConfig, extractRedirectConfig,
+  extractTrackingOfferConfig,
 } from '@/lib/paginas/github-sync'
 
 export async function handleListarPaginas(ctx: Context) {
@@ -163,6 +164,10 @@ export async function handleVerPagina(ctx: Context, paginaIdx: number) {
       // Detecção por conteúdo do arquivo (mais específico primeiro)
       if (pagina.tracking_file.includes('leadFlow')) {
         return showLeadFlowView(ctx, pagina, paginaIdx, content)
+      }
+
+      if (pagina.tracking_file.includes('TrackingOffer')) {
+        return showTrackingOfferView(ctx, pagina, paginaIdx, content)
       }
 
       if (pagina.tracking_file.includes('redirect.ts')) {
@@ -368,6 +373,39 @@ function showRedirectConfigView(ctx: Context, pagina: any, paginaIdx: number, co
   for (const campo of ['baseUrl', 'lpage', 'siteId', 's1']) {
     kb.text(`✏️ ${campo}`, `pg:ec:${paginaIdx}:${campo}`).row()
   }
+  kb.text('⬅️ Voltar', 'pg:list')
+
+  return Promise.all([
+    ctx.editMessageText(texto, {
+      reply_markup: kb,
+      parse_mode: 'Markdown',
+    }),
+    ctx.answerCallbackQuery(),
+  ])
+}
+
+function showTrackingOfferView(ctx: Context, pagina: any, paginaIdx: number, content: string) {
+  const config = extractTrackingOfferConfig(content)
+  let texto = `📄 *${pagina.nome}* (direto/offer)\n`
+  texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
+  texto = appendCasaFunilInfo(texto, pagina, ctx)
+
+  if (!config) {
+    texto += '_TrackingOffer config não encontrado_'
+    return Promise.all([
+      ctx.editMessageText(texto, { parse_mode: 'Markdown' }),
+      ctx.answerCallbackQuery(),
+    ])
+  }
+
+  texto += `🆔 *siteId:* \`${config.siteId}\`\n`
+  texto += `📢 *adId:* \`${config.adId}\`\n`
+  texto += `🏷️ *btag:* \`a_${config.siteId}b_${config.adId}c_\`\n\n`
+  texto += '_Clique para editar:_'
+
+  const kb = new InlineKeyboard()
+  kb.text(`✏️ siteId`, `pg:ec:${paginaIdx}:offer:siteId`).row()
+  kb.text(`✏️ adId`, `pg:ec:${paginaIdx}:offer:adId`).row()
   kb.text('⬅️ Voltar', 'pg:list')
 
   return Promise.all([

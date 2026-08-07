@@ -6,6 +6,7 @@ import {
   extractRedirectUrl, replaceRedirectUrl,
   extractLeadFlowConfig, replaceLeadFlowConfig,
   extractRedirectConfig, replaceRedirectConfig,
+  extractTrackingOfferConfig, replaceTrackingOfferConfig,
 } from '@/lib/paginas/github-sync'
 
 /** Atualizar um query param individual numa URL */
@@ -115,6 +116,11 @@ export async function handleEditarCampo(ctx: Context, paginaIdx: number, campo: 
     } else if (['baseUrl', 'lpage', 'siteId', 's1'].includes(campo)) {
       const config = extractRedirectConfig(content)
       valorAtual = config?.[campo as keyof typeof config] || ''
+    } else if (campo.startsWith('offer:')) {
+      const offerField = campo.slice(6) as 'siteId' | 'adId'
+      displayCampo = offerField
+      const config = extractTrackingOfferConfig(content)
+      valorAtual = config?.[offerField] || ''
     }
 
     // Salvar estado
@@ -251,12 +257,18 @@ export async function handleConfirmarConfig(ctx: Context, paginaIdx: number) {
       if (!config) throw new Error('REDIRECT_CONFIG não encontrado')
       ;(config as any)[estado.campo] = estado.valorAtual
       newContent = replaceRedirectConfig(content, config)
+    } else if (estado.campo.startsWith('offer:')) {
+      const offerField = estado.campo.slice(6) as 'siteId' | 'adId'
+      const config = extractTrackingOfferConfig(content)
+      if (!config) throw new Error('TrackingOffer config não encontrado')
+      config[offerField] = estado.valorAtual
+      newContent = replaceTrackingOfferConfig(content, config)
     } else {
       // redirectUrl inteira (useRedirectUrl.ts ou TrackingRedirect.tsx)
       newContent = replaceRedirectUrl(content, estado.valorAtual)
     }
 
-    const displayCampo = estado.campo.startsWith('url:') ? estado.campo.slice(4) : estado.campo
+    const displayCampo = estado.campo.startsWith('url:') ? estado.campo.slice(4) : estado.campo.startsWith('offer:') ? estado.campo.slice(6) : estado.campo
     await commitFile(token, pagina.github_owner, pagina.github_repo, pagina.tracking_file!, newContent, sha,
       `chore: atualizar ${displayCampo} via Telegram`)
 
