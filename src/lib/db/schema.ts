@@ -27,6 +27,22 @@ export const disparos = pgTable('disparos', {
   conversao: jsonb('conversao'),
 })
 
+export const disparosPilhado = pgTable('disparos_pilhado', {
+  id: text('id').primaryKey(),
+  data: text('data').notNull(),
+  painel: text('painel').notNull(),
+  origem: text('origem').notNull().default('manual'),
+  daxxCampanhaId: text('daxx_campanha_id'),
+  nomenclatura: text('nomenclatura'),
+  totalBase: integer('total_base').notNull().default(0),
+  entregues: integer('entregues').notNull().default(0),
+  lidas: integer('lidas').notNull().default(0),
+  vendas: integer('vendas'),
+  faturamento: real('faturamento'),
+  criadoEm: text('criado_em').notNull(),
+  atualizadoEm: text('atualizado_em').notNull(),
+})
+
 export const esteiras = pgTable('esteiras', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),

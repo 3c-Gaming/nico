@@ -97,6 +97,28 @@ export interface DisparoDaxx {
   linkTemplate?: string
 }
 
+export type OrigemDisparoPilhado = 'daxx' | 'manual'
+
+/** Braço "Pilhado Prêmios" — disparos que ou vêm de uma campanha DAXX pontual (nome contém
+ * "PILHADO PREMIOS", sem D1/D3/D5/D7) ou são só avisados manualmente ao longo do dia. Vendas e
+ * faturamento vêm do painel h2premios (por conta/painel); custo, %, ticket médio, conversão e
+ * ROI são sempre calculados no app, nunca armazenados. */
+export interface DisparoPilhado {
+  id: string
+  data: string
+  painel: string
+  origem: OrigemDisparoPilhado
+  daxxCampanhaId?: string | null
+  nomenclatura?: string | null
+  totalBase: number
+  entregues: number
+  lidas: number
+  vendas?: number | null
+  faturamento?: number | null
+  criadoEm: string
+  atualizadoEm: string
+}
+
 export interface FaixaLeitura {
   label: string
   total: number

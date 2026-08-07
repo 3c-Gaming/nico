@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
+import type { Disparo, DisparoPilhado, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -48,6 +48,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   siteId: 'site_id',
   utmsExtras: 'utms_extras',
   templateDaxx: 'template_daxx',
+  totalBase: 'total_base',
   totalLeads: 'total_leads',
   updatedAt: 'updated_at',
   urlTemplate: 'url_template',
@@ -106,6 +107,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   cpa_painel_id: 'cpaPainelId',
   betmgm_pid: 'betmgmPid',
   valor_total_base: 'valorTotalBase',
+  total_base: 'totalBase',
   paineis_cpa: 'paineisCPA',
   leads_hoje: 'leadsHoje',
   total_leads: 'totalLeads',
@@ -227,6 +229,51 @@ export async function deletarDisparo(id: string): Promise<boolean> {
 export async function bulkInsertDisparos(disparos: Disparo[]): Promise<Disparo[]> {
   const { data } = await tb('disparos').upsert(disparos.map((d) => toSnakeCase(d as any))).select()
   return rows<Disparo>(data)
+}
+
+// --- Disparos Pilhado (braço "Pilhado Prêmios") ---
+
+export async function listarDisparosPilhado(): Promise<DisparoPilhado[]> {
+  const { data } = await tb('disparos_pilhado').select('*').order('data', { ascending: false })
+  return rows<DisparoPilhado>(data)
+}
+
+export async function getDisparoPilhado(id: string): Promise<DisparoPilhado | null> {
+  const { data } = await tb('disparos_pilhado').select('*').eq('id', id).single()
+  return row<DisparoPilhado>(data)
+}
+
+export async function getDisparoPilhadoPorDaxxCampanhaId(daxxCampanhaId: string): Promise<DisparoPilhado | null> {
+  const { data } = await tb('disparos_pilhado').select('*').eq('daxx_campanha_id', daxxCampanhaId).maybeSingle()
+  return row<DisparoPilhado>(data)
+}
+
+export async function criarDisparoPilhado(disparo: DisparoPilhado): Promise<DisparoPilhado> {
+  const { data, error } = await tb('disparos_pilhado').insert(toSnakeCase(disparo as any)).select().single()
+  if (error) {
+    if (error.code === '23505') throw new Error(`DUPLICATE_DAXX_CAMPANHA:${disparo.daxxCampanhaId ?? ''}`)
+    throw new Error(`Erro ao criar disparo pilhado: ${error.message}`)
+  }
+  return row<DisparoPilhado>(data)!
+}
+
+export async function atualizarDisparoPilhado(id: string, updates: Partial<DisparoPilhado>): Promise<DisparoPilhado | null> {
+  const { data } = await tb('disparos_pilhado')
+    .update(toSnakeCase({ ...updates, atualizadoEm: new Date().toISOString() } as any))
+    .eq('id', id)
+    .select()
+    .single()
+  return row<DisparoPilhado>(data)
+}
+
+export async function deletarDisparoPilhado(id: string): Promise<boolean> {
+  const { error } = await tb('disparos_pilhado').delete().eq('id', id)
+  return !error
+}
+
+export async function bulkInsertDisparosPilhado(disparos: DisparoPilhado[]): Promise<DisparoPilhado[]> {
+  const { data } = await tb('disparos_pilhado').insert(disparos.map((d) => toSnakeCase(d as any))).select()
+  return rows<DisparoPilhado>(data)
 }
 
 // --- Esteiras ---
