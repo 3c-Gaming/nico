@@ -1,6 +1,7 @@
 import express from 'express'
 import { listarCampanhas, getTemplateLink, baixarBaseCSV, invalidateCache, close } from './scraper.js'
 import { buscarResultadoAcid, closeSuperbet } from './superbetScraper.js'
+import { buscarVendasGeraisPorDia, closeH2Premios, type ContaH2Premios } from './h2premiosScraper.js'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3334', 10)
@@ -81,9 +82,28 @@ app.get('/superbet/acid', async (req, res) => {
   }
 })
 
+const CONTAS_H2 = new Set(['kaue', 'thomas', 'gustavo'])
+
+app.get('/h2premios/vendas-por-dia', async (req, res) => {
+  try {
+    const conta = String(req.query.conta ?? '')
+    const dias = req.query.dias ? parseInt(String(req.query.dias), 10) : undefined
+    if (!CONTAS_H2.has(conta)) {
+      res.status(400).json({ error: 'Parametro "conta" deve ser kaue, thomas ou gustavo' })
+      return
+    }
+    const porDia = await buscarVendasGeraisPorDia(conta as ContaH2Premios, dias)
+    res.json({ conta, porDia })
+  } catch (err) {
+    console.error('[h2premios] /h2premios/vendas-por-dia error:', (err as Error).message)
+    res.status(502).json({ error: (err as Error).message })
+  }
+})
+
 process.on('SIGTERM', async () => {
   console.log('[daxx] SIGTERM received, closing browser')
   await closeSuperbet()
+  await closeH2Premios()
   await close()
   process.exit(0)
 })
@@ -91,6 +111,7 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('[daxx] SIGINT received, closing browser')
   await closeSuperbet()
+  await closeH2Premios()
   await close()
   process.exit(0)
 })

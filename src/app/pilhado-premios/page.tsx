@@ -8,9 +8,22 @@ import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { calcularMetricasPilhado, formatPct } from '@/lib/resultadoPilhado'
 import { formatNumero, formatMoeda, formatRoi } from '@/lib/resultadoDisparo'
+import { PAINEIS_PILHADO } from '@/lib/pilhadoPremios'
 import type { DisparoPilhado, DisparoDaxx } from '@/types'
 
-const PAINEIS = ['kaue@3c.gg', 'thomas.almeida@3c.gg', 'gustavo@3c.gg']
+const PAINEIS = PAINEIS_PILHADO
+
+function formatarTempoRelativo(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1) return 'agora'
+  if (diffMin < 60) return `há ${diffMin}min`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `há ${diffH}h`
+  const diffD = Math.floor(diffH / 24)
+  return `há ${diffD}d`
+}
 
 function hoje(): string {
   const d = new Date()
@@ -44,6 +57,7 @@ export default function PilhadoPremiosPage() {
 
   const [importando, setImportando] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [sincronizando, setSincronizando] = useState<Record<string, boolean>>({})
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -178,6 +192,21 @@ export default function PilhadoPremiosPage() {
     if (res.ok) await carregar()
   }
 
+  async function sincronizarPainel(id: string) {
+    setSincronizando((s) => ({ ...s, [id]: true }))
+    setError(null)
+    try {
+      const res = await fetch(`/api/pilhado-premios/${id}/sincronizar`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao sincronizar com o painel')
+      await carregar()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSincronizando((s) => ({ ...s, [id]: false }))
+    }
+  }
+
   async function handleImportarCsv(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -272,6 +301,7 @@ export default function PilhadoPremiosPage() {
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Tkt Médio</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Conv.</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Atualizado</th>
                   <th className="text-right py-2 px-3"></th>
                 </tr>
               </thead>
@@ -302,8 +332,17 @@ export default function PilhadoPremiosPage() {
                           <span className={m.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(m.roi)}</span>
                         ) : '—'}
                       </td>
+                      <td className="py-2 px-3 text-[10px] text-[var(--text-muted)] whitespace-nowrap">{formatarTempoRelativo(d.atualizadoEm)}</td>
                       <td className="py-2 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => sincronizarPainel(d.id)}
+                            disabled={sincronizando[d.id]}
+                            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
+                            title="Atualizar vendas/faturamento do painel h2premios"
+                          >
+                            <RefreshCw size={13} className={sincronizando[d.id] ? 'animate-spin' : ''} />
+                          </button>
                           <button onClick={() => abrirEdicao(d)} className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors" title="Editar">
                             <Pen size={13} />
                           </button>
@@ -334,6 +373,7 @@ export default function PilhadoPremiosPage() {
                       <span className={roiTotal >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(roiTotal)}</span>
                     ) : '—'}
                   </td>
+                  <td></td>
                   <td></td>
                 </tr>
               </tfoot>
