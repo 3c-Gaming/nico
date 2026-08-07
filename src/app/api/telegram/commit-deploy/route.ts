@@ -4,6 +4,7 @@ import {
   replaceDestinations, extractRedirectUrl, replaceRedirectUrl,
   extractLeadFlowConfig, replaceLeadFlowConfig,
   extractRedirectConfig, replaceRedirectConfig,
+  extractTrackingOfferConfig, replaceTrackingOfferConfig,
 } from '@/lib/paginas/github-sync'
 
 const FIREBASE_API_KEY = process.env.LOVABLE_FIREBASE_API_KEY
@@ -119,10 +120,16 @@ export async function POST(req: Request) {
         if (!config) throw new Error('REDIRECT_CONFIG não encontrado')
         ;(config as any)[campo] = valorAtual
         newContent = replaceRedirectConfig(content, config)
+      } else if (campo.startsWith('offer:')) {
+        const offerField = campo.slice(6) as 'siteId' | 'adId'
+        const config = extractTrackingOfferConfig(content)
+        if (!config) throw new Error('TrackingOffer config não encontrado')
+        config[offerField] = valorAtual
+        newContent = replaceTrackingOfferConfig(content, config)
       } else {
         newContent = replaceRedirectUrl(content, valorAtual)
       }
-      const displayCampo = campo.startsWith('url:') ? campo.slice(4) : campo
+      const displayCampo = campo.startsWith('url:') ? campo.slice(4) : campo.startsWith('offer:') ? campo.slice(6) : campo
       commitMsg = `chore: atualizar ${displayCampo} via Telegram`
     } else if (type === 'whatsapp') {
       const { destIndex, novoPhone, novoFlowId, destinations } = state
