@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Pen, Trash2, Upload, RefreshCw, X, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Plus, Pen, Trash2, Upload, RefreshCw, X, AlertTriangle, Check } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
+import { Dropdown } from '@/components/ui/Dropdown'
 import { calcularMetricasPilhado, formatPct } from '@/lib/resultadoPilhado'
 import { formatNumero, formatMoeda, formatRoi } from '@/lib/resultadoDisparo'
 import { PAINEIS_PILHADO } from '@/lib/pilhadoPremios'
@@ -58,6 +59,10 @@ export default function PilhadoPremiosPage() {
   const [importando, setImportando] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sincronizando, setSincronizando] = useState<Record<string, boolean>>({})
+
+  const [filtroPaineis, setFiltroPaineis] = useState<string[]>([])
+  const [filtroDataInicio, setFiltroDataInicio] = useState('')
+  const [filtroDataFim, setFiltroDataFim] = useState('')
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -227,7 +232,16 @@ export default function PilhadoPremiosPage() {
     }
   }
 
-  const totais = disparos.reduce(
+  const disparosFiltrados = useMemo(() => {
+    return disparos.filter((d) => {
+      if (filtroPaineis.length > 0 && !filtroPaineis.includes(d.painel)) return false
+      if (filtroDataInicio && d.data < filtroDataInicio) return false
+      if (filtroDataFim && d.data > filtroDataFim) return false
+      return true
+    })
+  }, [disparos, filtroPaineis, filtroDataInicio, filtroDataFim])
+
+  const totais = disparosFiltrados.reduce(
     (acc, d) => {
       acc.totalBase += d.totalBase
       acc.entregues += d.entregues
@@ -269,6 +283,52 @@ export default function PilhadoPremiosPage() {
       />
 
       <div className="p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Dropdown label={`Painel${filtroPaineis.length > 0 ? ` (${filtroPaineis.length})` : ''}`}>
+            <div className="p-1 min-w-[200px]">
+              {PAINEIS.map((p) => {
+                const selected = filtroPaineis.includes(p)
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setFiltroPaineis((prev) => selected ? prev.filter((x) => x !== p) : [...prev, p])}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
+                  >
+                    <span className="flex-1 text-left font-mono text-xs">{p}</span>
+                    {selected && <Check size={14} className="text-[var(--d1)]" />}
+                  </button>
+                )
+              })}
+            </div>
+          </Dropdown>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={filtroDataInicio}
+              onChange={(e) => setFiltroDataInicio(e.target.value)}
+              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+            />
+            <span className="text-xs text-[var(--text-muted)]">até</span>
+            <input
+              type="date"
+              value={filtroDataFim}
+              onChange={(e) => setFiltroDataFim(e.target.value)}
+              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+            />
+          </div>
+
+          {(filtroPaineis.length > 0 || filtroDataInicio || filtroDataFim) && (
+            <button
+              onClick={() => { setFiltroPaineis([]); setFiltroDataInicio(''); setFiltroDataFim('') }}
+              className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <X size={12} />
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
             <AlertTriangle size={14} />
@@ -281,6 +341,10 @@ export default function PilhadoPremiosPage() {
         ) : disparos.length === 0 ? (
           <div className="text-center py-16 text-sm text-[var(--text-muted)]">
             Nenhum disparo cadastrado ainda. Importe o CSV histórico ou cadastre um novo.
+          </div>
+        ) : disparosFiltrados.length === 0 ? (
+          <div className="text-center py-16 text-sm text-[var(--text-muted)]">
+            Nenhum disparo encontrado com esses filtros.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -306,7 +370,7 @@ export default function PilhadoPremiosPage() {
                 </tr>
               </thead>
               <tbody>
-                {disparos.map((d) => {
+                {disparosFiltrados.map((d) => {
                   const m = calcularMetricasPilhado(d)
                   return (
                     <tr key={d.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -357,7 +421,7 @@ export default function PilhadoPremiosPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[var(--glass-border)] font-semibold">
-                  <td className="py-2 px-3" colSpan={3}>Total ({disparos.length})</td>
+                  <td className="py-2 px-3" colSpan={3}>Total ({disparosFiltrados.length})</td>
                   <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.totalBase)}</td>
                   <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.entregues)}</td>
                   <td></td>
@@ -549,7 +613,7 @@ export default function PilhadoPremiosPage() {
               </div>
             </div>
             <p className="text-[10px] text-[var(--text-muted)]">
-              Vendas e faturamento ainda são sincronizados manualmente do painel h2premios (scraper automático vem a seguir).
+              Vendas e faturamento são sincronizados do painel h2premios pelo botão de atualizar (ícone de refresh na linha) ou automaticamente a cada hora.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={() => setEditando(null)}>
