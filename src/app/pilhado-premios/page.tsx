@@ -375,22 +375,22 @@ export default function PilhadoPremiosPage() {
                   return (
                     <tr key={d.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
                       <td className="py-2 px-3 text-[var(--text-primary)] whitespace-nowrap">{d.data}</td>
-                      <td className="py-2 px-3 text-[var(--text-secondary)] font-mono text-xs">{d.painel}</td>
+                      <td className="py-2 px-3 text-[var(--text-primary)] font-mono text-xs">{d.painel}</td>
                       <td className="py-2 px-3">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.origem === 'daxx' ? 'bg-[var(--d1)]/10 text-[var(--d1)]' : 'bg-[var(--text-muted)]/10 text-[var(--text-muted)]'}`}>
                           {d.origem === 'daxx' ? 'DAXX' : 'Manual'}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-right font-mono">{formatNumero(d.totalBase)}</td>
-                      <td className="py-2 px-3 text-right font-mono">{formatNumero(d.entregues)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{formatPct(m.pctEntregues)}</td>
-                      <td className="py-2 px-3 text-right font-mono">{formatNumero(d.lidas)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{formatPct(m.pctLidas)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(d.totalBase)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(d.entregues)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.pctEntregues)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(d.lidas)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.pctLidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-emerald-400">{formatMoeda(m.custo)}</td>
-                      <td className="py-2 px-3 text-right font-mono">{d.vendas != null ? formatNumero(d.vendas) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono">{d.faturamento != null ? formatMoeda(d.faturamento) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{m.ticketMedio != null ? formatMoeda(m.ticketMedio) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{formatPct(m.conversao)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{d.vendas != null ? formatNumero(d.vendas) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-emerald-400">{d.faturamento != null ? formatMoeda(d.faturamento) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{m.ticketMedio != null ? formatMoeda(m.ticketMedio) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.conversao)}</td>
                       <td className="py-2 px-3 text-right font-mono font-semibold">
                         {m.roi != null ? (
                           <span className={m.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(m.roi)}</span>

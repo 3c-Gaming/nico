@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Gift } from 'lucide-react'
+import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Clover } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 
@@ -17,7 +17,7 @@ const LINKS = [
   { href: '/testes', label: 'Testes', icon: Smartphone },
   { href: '/funis', label: 'Funis', icon: Layers },
   { href: '/jogos', label: 'Jogos', icon: LandPlot },
-  { href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Gift },
+  { href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
   { href: '/paginas', label: 'Páginas', icon: FileText },
   //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
   { href: '/casas', label: 'Casas', icon: Dices },
