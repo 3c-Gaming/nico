@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { obterBotsPinados } from '@/lib/bot-test/bot-list'
 import { executarCicloTeste } from '@/lib/bot-test/runner'
-import { getSupabase } from '@/lib/db/supabase'
+import { getSupabase, listarUsuariosResponsaveis } from '@/lib/db/supabase'
 import { enviarMensagemGrupo } from '@/lib/integrações/whapi'
 import { formatarRelatorio } from '@/lib/bot-test/report'
 import { sendChannelMessage } from '@/lib/discord/verify'
-import { embedResultadoTeste, embedResumoTestes } from '@/lib/discord/embeds'
+import { embedResultadoTeste, embedResumoTestes, embedAlertaPlanoSendpulse } from '@/lib/discord/embeds'
+import { buscarStatusPlanoTodasContas } from '@/lib/integrações/sendpulse'
+import { classificarPlanosSendpulse } from '@/lib/sendpulsePlanos'
 
 export const maxDuration = 120
 
@@ -135,6 +137,30 @@ export async function GET(request: Request) {
       console.log('[cron] Resumo enviado ao Discord')
     } catch (err) {
       console.error('[cron] Erro ao enviar resumo (Discord):', (err as Error).message)
+    }
+  }
+
+  // Alerta de plano SendPulse expirado/expirando — a SendPulse não avisa sozinha, e se o
+  // plano expira os bots/funis daquela conta param de responder. Roda em todo ciclo de
+  // teste (não só quando muda) e sempre marca o responsável pra garantir visibilidade.
+  if (discordChannelId) {
+    try {
+      const planos = await buscarStatusPlanoTodasContas(AbortSignal.timeout(15_000))
+      const { expirados, expirando } = classificarPlanosSendpulse(planos)
+
+      if (expirados.length > 0 || expirando.length > 0) {
+        const responsaveis = await listarUsuariosResponsaveis()
+        const thomas = responsaveis.find((r) => r.nome === 'Thomas Almeida')
+        const mention = thomas?.discordId ? `<@${thomas.discordId}> ` : ''
+
+        await sendChannelMessage(discordChannelId, {
+          content: `${mention}⚠️ Plano da SendPulse ${expirados.length > 0 ? 'expirado' : 'expirando'} — confira abaixo.`,
+          embeds: [embedAlertaPlanoSendpulse(expirados, expirando)],
+        })
+        console.log('[cron] Alerta de plano SendPulse enviado ao Discord')
+      }
+    } catch (err) {
+      console.error('[cron] Erro ao checar/enviar alerta de plano SendPulse:', (err as Error).message)
     }
   }
 

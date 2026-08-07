@@ -7,6 +7,39 @@ export interface DiscordEmbed {
   timestamp?: string
 }
 
+export function embedAlertaPlanoSendpulse(
+  expirados: { contaNome: string; tariffCode: string; expiredAt: string | null }[],
+  expirando: { contaNome: string; tariffCode: string; expiredAt: string | null }[],
+): DiscordEmbed {
+  const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+  const fields: { name: string; value: string; inline?: boolean }[] = []
+
+  for (const p of expirados) {
+    fields.push({
+      name: `🔴 ${p.contaNome}`,
+      value: `Plano **${p.tariffCode || '?'}** JÁ EXPIROU${p.expiredAt ? ` em ${fmt(p.expiredAt)}` : ''}.`,
+      inline: false,
+    })
+  }
+  for (const p of expirando) {
+    fields.push({
+      name: `🟡 ${p.contaNome}`,
+      value: `Plano **${p.tariffCode || '?'}** expira${p.expiredAt ? ` em ${fmt(p.expiredAt)}` : ' em breve'}.`,
+      inline: false,
+    })
+  }
+
+  return {
+    title: '⚠️ Alerta: plano SendPulse expirado ou expirando',
+    description: 'Quando o plano expira, os bots/funis dessa conta **param de responder**. Renove o quanto antes.',
+    color: expirados.length > 0 ? 0xef4444 : 0xf59e0b,
+    fields,
+    footer: { text: 'Nico Bot · monitoramento de plano SendPulse' },
+    timestamp: new Date().toISOString(),
+  }
+}
+
 export function embedStatusBots(numeros: { id: string; nome: string; numero: string; status: string; inboxTotal: number; inboxNaoLidas: number }[]): DiscordEmbed {
   const ativos = numeros.filter(n => n.status === 'ativo').length
   const inativos = numeros.filter(n => n.status === 'inativo').length

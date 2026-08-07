@@ -16,6 +16,11 @@ export function dataParaBrasilISO(date: Date | string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE_BRASIL, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
 }
 
+/** Quantos dias faltam (arredondado pra cima) até um timestamp ISO — negativo se já passou. */
+export function diasAte(dataISO: string): number {
+  return Math.ceil((new Date(dataISO).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+}
+
 /**
  * Timestamp (ms) da meia-noite de um dia (YYYY-MM-DD) no fuso de Brasília. O Brasil não usa
  * mais horário de verão desde 2019, então o offset é sempre UTC-3 fixo — dá pra calcular sem

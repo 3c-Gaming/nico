@@ -3,15 +3,11 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { StatusPlanoSendpulse } from '@/lib/integrações/sendpulse'
-
-const LIMIAR_DIAS = 5
+import { classificarPlanosSendpulse } from '@/lib/sendpulsePlanos'
+import { diasAte } from '@/lib/datas'
 
 function formatarData(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-}
-
-function diasParaExpirar(expiredAt: string): number {
-  return Math.ceil((new Date(expiredAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
 }
 
 export function AlertaPlanosSendpulse() {
@@ -26,10 +22,7 @@ export function AlertaPlanosSendpulse() {
     return () => { cancelado = true }
   }, [])
 
-  const expirados = planos.filter((p) => p.isExpired)
-  const expirandoLogo = planos.filter(
-    (p) => !p.isExpired && p.expiredAt && diasParaExpirar(p.expiredAt) <= LIMIAR_DIAS,
-  )
+  const { expirados, expirando: expirandoLogo } = classificarPlanosSendpulse(planos)
 
   if (!expirados.length && !expirandoLogo.length) return null
 
@@ -57,7 +50,7 @@ export function AlertaPlanosSendpulse() {
           <AlertTriangle size={14} className="shrink-0" />
           <span>
             <strong>Plano da SendPulse expirando</strong> — {p.contaNome}
-            {p.tariffCode ? ` (${p.tariffCode})` : ''} expira em {diasParaExpirar(p.expiredAt!)} dia(s) ({formatarData(p.expiredAt!)}).
+            {p.tariffCode ? ` (${p.tariffCode})` : ''} expira em {diasAte(p.expiredAt!)} dia(s) ({formatarData(p.expiredAt!)}).
           </span>
         </div>
       ))}
