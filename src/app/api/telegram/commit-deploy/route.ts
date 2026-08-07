@@ -51,6 +51,19 @@ function updateUrlParam(urlStr: string, paramName: string, newValue: string): st
   } catch { return urlStr }
 }
 
+function syncBtagWithSiteId(urlStr: string, newSiteId: string): string {
+  try {
+    const qIdx = urlStr.indexOf('?')
+    if (qIdx === -1) return urlStr
+    const base = urlStr.slice(0, qIdx)
+    const params = new URLSearchParams(urlStr.slice(qIdx + 1))
+    const btag = params.get('btag')
+    if (!btag || !btag.match(/^a_\d+b_/)) return urlStr
+    params.set('btag', btag.replace(/^a_\d+b_/, `a_${newSiteId}b_`))
+    return base + '?' + params.toString()
+  } catch { return urlStr }
+}
+
 export async function POST(req: Request) {
   let chatId: number | null = null
   let nome = ''
@@ -88,10 +101,12 @@ export async function POST(req: Request) {
           const config = extractLeadFlowConfig(content)
           if (!config) throw new Error('LEAD_FLOW_CONFIG não encontrado')
           config.redirectUrl = updateUrlParam(config.redirectUrl, paramName, valorAtual)
+          if (paramName === 'siteid') config.redirectUrl = syncBtagWithSiteId(config.redirectUrl, valorAtual)
           newContent = replaceLeadFlowConfig(content, config)
         } else {
           const oldUrl = extractRedirectUrl(content)
-          const newUrl = updateUrlParam(oldUrl, paramName, valorAtual)
+          let newUrl = updateUrlParam(oldUrl, paramName, valorAtual)
+          if (paramName === 'siteid') newUrl = syncBtagWithSiteId(newUrl, valorAtual)
           newContent = replaceRedirectUrl(content, newUrl)
         }
       } else if (tracking_file.includes('leadFlow')) {
