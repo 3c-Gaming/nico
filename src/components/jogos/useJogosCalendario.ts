@@ -5,7 +5,7 @@ import type { Jogo } from '@/types'
 import { gerarRangeDias, adicionarDias, isMesmaData, formatarData } from '@/lib/datas'
 
 const DIAS_ANTES = 2
-const DIAS_DEPOIS = 6
+const DIAS_DEPOIS = 13
 
 function chaveDia(d: Date): string {
   return formatarData(d, 'YYYY-MM-DD')
