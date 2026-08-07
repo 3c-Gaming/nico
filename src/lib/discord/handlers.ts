@@ -8,6 +8,7 @@ import {
   embedAjuda,
   embedResultadoTeste,
   embedResumoTestes,
+  embedStatusPlanosSendpulse,
 } from './embeds'
 import { sendChannelMessage } from './verify'
 
@@ -162,6 +163,16 @@ export async function handleAjuda(reply: ReplyFn) {
   await reply({ embeds: [embedAjuda()] })
 }
 
+export async function handleFatura(reply: ReplyFn) {
+  try {
+    const { buscarStatusPlanoTodasContas } = await import('@/lib/integrações/sendpulse')
+    const planos = await buscarStatusPlanoTodasContas(AbortSignal.timeout(15_000))
+    await reply({ embeds: [embedStatusPlanosSendpulse(planos)] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao buscar faturas: ${(err as Error).message}`)] })
+  }
+}
+
 export function dispatchCommand(
   name: string,
   options: { name: string; value: string }[] | undefined,
@@ -183,6 +194,8 @@ export function dispatchCommand(
           return await handleRelatorio(reply)
         case 'ajuda':
           return await handleAjuda(reply)
+        case 'fatura':
+          return await handleFatura(reply)
         default:
           return await reply({ embeds: [embedErro(`Comando desconhecido: \`${name}\``)] })
       }

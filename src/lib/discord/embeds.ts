@@ -1,3 +1,5 @@
+import { diasAte } from '@/lib/datas'
+
 export interface DiscordEmbed {
   title?: string
   description?: string
@@ -5,6 +7,53 @@ export interface DiscordEmbed {
   fields?: { name: string; value: string; inline?: boolean }[]
   footer?: { text: string }
   timestamp?: string
+}
+
+export function embedStatusPlanosSendpulse(
+  planos: { contaNome: string; tariffCode: string; isExpired: boolean; expiredAt: string | null; maxContacts: number }[],
+): DiscordEmbed {
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+  if (planos.length === 0) {
+    return {
+      title: '🧾 Faturas SendPulse',
+      description: 'Nenhuma conta SendPulse configurada.',
+      color: 0x64748b,
+      timestamp: new Date().toISOString(),
+    }
+  }
+
+  const algumExpirado = planos.some((p) => p.isExpired)
+  const algumExpirandoLogo = planos.some((p) => !p.isExpired && p.expiredAt && diasAte(p.expiredAt) <= 5)
+
+  const fields = planos.map((p) => {
+    const dias = p.expiredAt ? diasAte(p.expiredAt) : null
+    const icone = p.isExpired ? '🔴' : dias != null && dias <= 5 ? '🟡' : '🟢'
+    const statusTexto = p.isExpired
+      ? `**EXPIRADO** em ${p.expiredAt ? fmt(p.expiredAt) : '?'}`
+      : p.expiredAt
+        ? `Expira em ${fmt(p.expiredAt)} (${dias} dia${dias === 1 ? '' : 's'})`
+        : 'Sem data de expiração informada'
+
+    return {
+      name: `${icone} ${p.contaNome}`,
+      value: [
+        `Plano: **${p.tariffCode || '?'}**`,
+        statusTexto,
+        `Limite de contatos: ${p.maxContacts === -1 ? 'ilimitado' : p.maxContacts.toLocaleString('pt-BR')}`,
+      ].join('\n'),
+      inline: true,
+    }
+  })
+
+  return {
+    title: '🧾 Faturas SendPulse',
+    description: 'Data de expiração do plano de cada conta configurada.',
+    color: algumExpirado ? 0xef4444 : algumExpirandoLogo ? 0xf59e0b : 0x22c55e,
+    fields,
+    footer: { text: 'Nico Bot · dados direto da SendPulse' },
+    timestamp: new Date().toISOString(),
+  }
 }
 
 export function embedAlertaPlanoSendpulse(
@@ -174,6 +223,7 @@ export function embedAjuda(): DiscordEmbed {
       { name: '/testar `bot`', value: 'Executa um teste manual em um bot', inline: false },
       { name: '/testartodos', value: 'Testa todos os bots ativos de uma vez', inline: false },
       { name: '/relatorio', value: 'Gera um relatório completo de todos os bots', inline: false },
+      { name: '/fatura', value: 'Mostra quando os planos da SendPulse vão expirar', inline: false },
       { name: '/ajuda', value: 'Lista todos os comandos disponíveis', inline: false },
     ],
     footer: { text: 'Nico Bot · 3C' },

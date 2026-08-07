@@ -36,6 +36,10 @@ export const DISCORD_COMMANDS = [
     description: 'Lista todos os comandos disponíveis',
   },
   {
+    name: 'fatura',
+    description: 'Mostra quando os planos da SendPulse vão expirar',
+  },
+  {
     name: 'testartodos',
     description: 'Testa todos os bots ativos de uma vez',
   },
