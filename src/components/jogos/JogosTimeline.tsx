@@ -11,6 +11,7 @@ export function JogosTimeline() {
     hoje,
     diasVisiveis,
     jogosPorDia,
+    diasBloqueados,
     carregando,
     erro,
     ligasSelecionadas,
@@ -56,6 +57,7 @@ export function JogosTimeline() {
               data={data}
               hoje={hoje}
               jogos={jogosPorDia.get(chaveDia(data)) ?? []}
+              bloqueado={diasBloqueados.has(chaveDia(data))}
               index={index}
             />
           ))}
