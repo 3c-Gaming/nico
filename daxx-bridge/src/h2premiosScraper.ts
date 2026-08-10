@@ -146,7 +146,9 @@ function extrairNumero(texto: string): number {
 // scraper). A fonte confiável é a lista crua de compras (Financeiro > Compras), que não passa
 // por esse filtro de edição/período: paginamos ela e agrupamos por dia nós mesmos.
 const H2PREMIOS_FINANCEIRO_URL = `${H2PREMIOS_DASHBOARD_URL}/financial`
-const MAX_PAGINAS_COMPRAS = 50
+// Teto de segurança — o loop já para assim que uma página inteira fica fora da janela, então na
+// prática só chega perto disso num mês com volume bem alto (~10 compras/página).
+const MAX_PAGINAS_COMPRAS = 120
 
 interface LinhaCompra {
   data: string
@@ -253,20 +255,21 @@ async function abrirCompras(p: Page): Promise<void> {
 }
 
 /**
- * Vendas/faturamento por dia (últimos `diasAtras` dias), agrupados a partir da lista crua de
- * compras — não do card "Receita de vendas" do Dashboard, que se mostrou não confiável por data
- * (ver comentário acima). A lista vem ordenada da mais recente pra mais antiga, então paramos de
- * paginar assim que uma página inteira já está fora da janela.
+ * Vendas/faturamento por dia desde `desde` (YYYY-MM-DD, inclusive) até hoje, agrupados a partir
+ * da lista crua de compras — não do card "Receita de vendas" do Dashboard, que se mostrou não
+ * confiável por data (ver comentário acima). A lista vem ordenada da mais recente pra mais
+ * antiga, então paramos de paginar assim que uma página inteira já está fora da janela.
+ * `desde` normalmente é o primeiro dia do mês visível na tela — trazemos o mês todo de uma vez em
+ * vez de só o dia exato do disparo, pra cobrir vendas que ainda estão chegando de disparos
+ * anteriores no mesmo mês sem precisar de uma busca por disparo.
  */
-export async function buscarVendasGeraisPorDia(conta: ContaH2Premios, diasAtras = 14): Promise<VendasPorDia> {
+export async function buscarVendasGeraisPorDia(conta: ContaH2Premios, desde: string): Promise<VendasPorDia> {
   return comFilaDaConta(conta, async () => {
     const p = await ensureLoggedIn(conta)
     try {
       await abrirCompras(p)
 
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - diasAtras)
-      cutoff.setHours(0, 0, 0, 0)
+      const cutoff = new Date(`${desde}T00:00:00`)
 
       const porDia: VendasPorDia = {}
       let pagina = 1

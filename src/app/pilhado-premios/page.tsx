@@ -31,6 +31,23 @@ function hoje(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function primeiroDiaDoMesAtual(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function ultimoDiaDoMesAtual(): string {
+  const d = new Date()
+  const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`
+}
+
+function mensagemErroSync(err: unknown): string {
+  const msg = (err as Error).message || ''
+  if (/abort|timeout/i.test(msg)) return 'A sincronização demorou demais e foi interrompida — tente novamente em alguns instantes.'
+  return msg || 'Erro ao sincronizar'
+}
+
 interface FormManual {
   data: string
   painel: string
@@ -61,8 +78,11 @@ export default function PilhadoPremiosPage() {
   const [sincronizando, setSincronizando] = useState<Record<string, boolean>>({})
 
   const [filtroPaineis, setFiltroPaineis] = useState<string[]>([])
-  const [filtroDataInicio, setFiltroDataInicio] = useState('')
-  const [filtroDataFim, setFiltroDataFim] = useState('')
+  const [filtroDataInicio, setFiltroDataInicio] = useState(primeiroDiaDoMesAtual)
+  const [filtroDataFim, setFiltroDataFim] = useState(ultimoDiaDoMesAtual)
+
+  const [sincronizandoMes, setSincronizandoMes] = useState(false)
+  const [progressoSync, setProgressoSync] = useState<{ done: number; total: number } | null>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -206,9 +226,42 @@ export default function PilhadoPremiosPage() {
       if (!res.ok) throw new Error(data.error ?? 'Erro ao sincronizar com o painel')
       await carregar()
     } catch (err) {
-      setError((err as Error).message)
+      setError(mensagemErroSync(err))
     } finally {
       setSincronizando((s) => ({ ...s, [id]: false }))
+    }
+  }
+
+  async function sincronizarMes() {
+    const desde = filtroDataInicio || primeiroDiaDoMesAtual()
+    const paineisAlvo = filtroPaineis.length > 0 ? filtroPaineis : PAINEIS
+    setSincronizandoMes(true)
+    setError(null)
+    setProgressoSync({ done: 0, total: paineisAlvo.length })
+    try {
+      const erros: string[] = []
+      await Promise.all(
+        paineisAlvo.map(async (painel) => {
+          try {
+            const res = await fetch('/api/pilhado-premios/sincronizar-painel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ painel, desde }),
+            })
+            const data = await res.json()
+            if (!res.ok) erros.push(`${painel}: ${mensagemErroSync(new Error(data.error))}`)
+          } catch (err) {
+            erros.push(`${painel}: ${mensagemErroSync(err)}`)
+          } finally {
+            setProgressoSync((p) => (p ? { ...p, done: p.done + 1 } : p))
+          }
+        }),
+      )
+      if (erros.length > 0) setError(erros.join(' · '))
+      await carregar()
+    } finally {
+      setSincronizandoMes(false)
+      setProgressoSync(null)
     }
   }
 
@@ -254,6 +307,10 @@ export default function PilhadoPremiosPage() {
     { totalBase: 0, entregues: 0, lidas: 0, vendas: 0, faturamento: 0, custo: 0 },
   )
   const roiTotal = totais.custo > 0 ? totais.faturamento / totais.custo : null
+  const pctEntreguesTotal = totais.totalBase > 0 ? totais.entregues / totais.totalBase : null
+  const pctLidasTotal = totais.entregues > 0 ? totais.lidas / totais.entregues : null
+  const ticketMedioTotal = totais.vendas > 0 ? totais.faturamento / totais.vendas : null
+  const conversaoTotal = totais.lidas > 0 ? totais.vendas / totais.lidas : null
 
   return (
     <>
@@ -274,6 +331,16 @@ export default function PilhadoPremiosPage() {
             </Button>
             <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={carregar} disabled={loading}>
               Recarregar
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw size={14} className={sincronizandoMes ? 'animate-spin' : ''} />}
+              onClick={sincronizarMes}
+              disabled={sincronizandoMes}
+              title="Busca vendas/faturamento no painel h2premios pro período filtrado"
+            >
+              {sincronizandoMes ? 'Sincronizando...' : 'Sincronizar mês'}
             </Button>
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setModalNovoAberto(true)}>
               Novo disparo
@@ -318,16 +385,30 @@ export default function PilhadoPremiosPage() {
             />
           </div>
 
-          {(filtroPaineis.length > 0 || filtroDataInicio || filtroDataFim) && (
+          {(filtroPaineis.length > 0 || filtroDataInicio !== primeiroDiaDoMesAtual() || filtroDataFim !== ultimoDiaDoMesAtual()) && (
             <button
-              onClick={() => { setFiltroPaineis([]); setFiltroDataInicio(''); setFiltroDataFim('') }}
+              onClick={() => { setFiltroPaineis([]); setFiltroDataInicio(primeiroDiaDoMesAtual()); setFiltroDataFim(ultimoDiaDoMesAtual()) }}
               className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
               <X size={12} />
-              Limpar filtros
+              Limpar filtros (voltar pro mês atual)
             </button>
           )}
         </div>
+
+        {progressoSync && (
+          <div className="space-y-1">
+            <div className="w-full h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--d1)] transition-all duration-300 ease-out"
+                style={{ width: `${(progressoSync.done / progressoSync.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              Sincronizando painéis com o h2premios... {progressoSync.done}/{progressoSync.total}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
@@ -420,19 +501,19 @@ export default function PilhadoPremiosPage() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-[var(--glass-border)] font-semibold">
-                  <td className="py-2 px-3" colSpan={3}>Total ({disparosFiltrados.length})</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.totalBase)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.entregues)}</td>
-                  <td></td>
-                  <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.lidas)}</td>
-                  <td></td>
-                  <td className="py-2 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.custo)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatNumero(totais.vendas)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatMoeda(totais.faturamento)}</td>
-                  <td></td>
-                  <td></td>
-                  <td className="py-2 px-3 text-right font-mono">
+                <tr className="border-t-2 border-[var(--d1)]/40 bg-[var(--bg-elevated)] font-semibold">
+                  <td className="py-2.5 px-3" colSpan={3}>Total ({disparosFiltrados.length})</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.totalBase)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.entregues)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{pctEntreguesTotal != null ? formatPct(pctEntreguesTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.lidas)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{pctLidasTotal != null ? formatPct(pctLidasTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.custo)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.vendas)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.faturamento)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{ticketMedioTotal != null ? formatMoeda(ticketMedioTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{conversaoTotal != null ? formatPct(conversaoTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">
                     {roiTotal != null ? (
                       <span className={roiTotal >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(roiTotal)}</span>
                     ) : '—'}

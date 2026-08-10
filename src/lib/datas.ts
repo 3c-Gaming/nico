@@ -45,6 +45,16 @@ export function formatarData(date: Date, formato: 'DD/MM' | 'DD/MM/YYYY' | 'YYYY
   }
 }
 
+export function primeiroDiaDoMes(dataISO: string): string {
+  return `${dataISO.slice(0, 7)}-01`
+}
+
+export function ultimoDiaDoMes(dataISO: string): string {
+  const [ano, mes] = dataISO.slice(0, 7).split('-').map(Number)
+  const ultimoDia = new Date(ano, mes, 0).getDate()
+  return `${dataISO.slice(0, 7)}-${String(ultimoDia).padStart(2, '0')}`
+}
+
 export function adicionarDias(date: Date, dias: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + dias)

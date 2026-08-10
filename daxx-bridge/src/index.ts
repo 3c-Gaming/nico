@@ -87,12 +87,16 @@ const CONTAS_H2 = new Set(['kaue', 'thomas', 'gustavo'])
 app.get('/h2premios/vendas-por-dia', async (req, res) => {
   try {
     const conta = String(req.query.conta ?? '')
-    const dias = req.query.dias ? parseInt(String(req.query.dias), 10) : undefined
+    const desde = String(req.query.desde ?? '')
     if (!CONTAS_H2.has(conta)) {
       res.status(400).json({ error: 'Parametro "conta" deve ser kaue, thomas ou gustavo' })
       return
     }
-    const porDia = await buscarVendasGeraisPorDia(conta as ContaH2Premios, dias)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) {
+      res.status(400).json({ error: 'Parametro "desde" deve ser uma data YYYY-MM-DD' })
+      return
+    }
+    const porDia = await buscarVendasGeraisPorDia(conta as ContaH2Premios, desde)
     res.json({ conta, porDia })
   } catch (err) {
     console.error('[h2premios] /h2premios/vendas-por-dia error:', (err as Error).message)
