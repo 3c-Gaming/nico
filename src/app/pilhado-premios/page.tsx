@@ -8,7 +8,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { calcularMetricasPilhado, formatPct } from '@/lib/resultadoPilhado'
-import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
+import { formatNumero, formatMoeda, formatRoi } from '@/lib/resultadoDisparo'
 import { PAINEIS_PILHADO } from '@/lib/pilhadoPremios'
 import type { DisparoPilhado, DisparoDaxx, PilhadoPremiosConfig } from '@/types'
 
@@ -300,6 +300,12 @@ export default function PilhadoPremiosPage() {
     return disparos.filter((d) => filtroPaineis.length === 0 || filtroPaineis.includes(d.painel))
   }, [disparos, filtroPaineis])
 
+  const configPorPainel = useMemo(() => {
+    const mapa = new Map<string, PilhadoPremiosConfig>()
+    for (const c of configs) mapa.set(c.painel, c)
+    return mapa
+  }, [configs])
+
   const totais = disparosFiltrados.reduce(
     (acc, d) => {
       acc.totalBase += d.totalBase
@@ -313,11 +319,14 @@ export default function PilhadoPremiosPage() {
   const pctEntreguesTotal = totais.totalBase > 0 ? totais.entregues / totais.totalBase : null
   const pctLidasTotal = totais.entregues > 0 ? totais.lidas / totais.entregues : null
 
-  const configPorPainel = useMemo(() => {
-    const mapa = new Map<string, PilhadoPremiosConfig>()
-    for (const c of configs) mapa.set(c.painel, c)
-    return mapa
-  }, [configs])
+  // Faturamento/ticket médio/ROI não são por disparo (vêm do resumo do painel/edição) — o total
+  // soma a Receita de vendas de cada painel ÚNICO presente no filtro, não por linha, senão um
+  // painel com 3 disparos contaria o mesmo faturamento 3 vezes.
+  const paineisFiltrados = useMemo(() => [...new Set(disparosFiltrados.map((d) => d.painel))], [disparosFiltrados])
+  const faturamentoTotal = paineisFiltrados.reduce((soma, p) => soma + (configPorPainel.get(p)?.receitaVendas ?? 0), 0)
+  const comprasTotal = paineisFiltrados.reduce((soma, p) => soma + (configPorPainel.get(p)?.quantidadeCompras ?? 0), 0)
+  const ticketMedioTotal = comprasTotal > 0 ? faturamentoTotal / comprasTotal : null
+  const roiTotal = totais.custo > 0 ? faturamentoTotal / totais.custo : null
 
   return (
     <>
@@ -470,6 +479,9 @@ export default function PilhadoPremiosPage() {
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">% Lidas</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Tkt Médio</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Faturamento</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
                   <th className="text-left py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Atualizado</th>
                   <th className="text-right py-2 px-3"></th>
                 </tr>
@@ -477,6 +489,10 @@ export default function PilhadoPremiosPage() {
               <tbody>
                 {disparosFiltrados.map((d) => {
                   const m = calcularMetricasPilhado(d)
+                  const config = configPorPainel.get(d.painel)
+                  const faturamento = config?.receitaVendas ?? null
+                  const ticketMedio = config?.ticketMedio ?? null
+                  const roi = faturamento != null && m.custo > 0 ? faturamento / m.custo : null
                   return (
                     <tr key={d.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
                       <td className="py-2 px-3 text-[var(--text-primary)] whitespace-nowrap">{d.data}</td>
@@ -492,6 +508,13 @@ export default function PilhadoPremiosPage() {
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(d.lidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.pctLidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-emerald-400">{formatMoeda(m.custo)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{ticketMedio != null ? formatMoeda(ticketMedio) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-emerald-400">{faturamento != null ? formatMoeda(faturamento) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono font-semibold">
+                        {roi != null ? (
+                          <span className={roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(roi)}</span>
+                        ) : '—'}
+                      </td>
                       <td className="py-2 px-3 text-[10px] text-[var(--text-muted)] whitespace-nowrap">{formatarTempoRelativo(d.atualizadoEm)}</td>
                       <td className="py-2 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -516,6 +539,13 @@ export default function PilhadoPremiosPage() {
                   <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.lidas)}</td>
                   <td className="py-2.5 px-3 text-right font-mono">{pctLidasTotal != null ? formatPct(pctLidasTotal) : '—'}</td>
                   <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.custo)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{ticketMedioTotal != null ? formatMoeda(ticketMedioTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(faturamentoTotal)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">
+                    {roiTotal != null ? (
+                      <span className={roiTotal >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(roiTotal)}</span>
+                    ) : '—'}
+                  </td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -692,7 +722,7 @@ export default function PilhadoPremiosPage() {
               </div>
             </div>
             <p className="text-[10px] text-[var(--text-muted)]">
-              A data acima é só informativa (dia em que o disparo saiu) — vendas e faturamento não têm mais atribuição por disparo, ficam no resumo por painel no topo da tela.
+              A data acima é só informativa (dia em que o disparo saiu). Faturamento/ticket médio/ROI na tabela vêm do resumo do painel (mesma edição pra todos os disparos daquele painel), não são calculados por disparo individual.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={() => setEditando(null)}>
