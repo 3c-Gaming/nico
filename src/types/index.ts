@@ -100,9 +100,10 @@ export interface DisparoDaxx {
 export type OrigemDisparoPilhado = 'daxx' | 'manual'
 
 /** Braço "Pilhado Prêmios" — disparos que ou vêm de uma campanha DAXX pontual (nome contém
- * "PILHADO PREMIOS", sem D1/D3/D5/D7) ou são só avisados manualmente ao longo do dia. Vendas e
- * faturamento vêm do painel h2premios (por conta/painel); custo, %, ticket médio, conversão e
- * ROI são sempre calculados no app, nunca armazenados. */
+ * "PILHADO PREMIOS", sem D1/D3/D5/D7) ou são só avisados manualmente ao longo do dia. `data` é só
+ * informativa (dia em que o disparo saiu) — não dá pra atribuir vendas a um disparo específico,
+ * então vendas/faturamento vivem em PilhadoPremiosConfig, por painel/edição, não aqui. Custo e %
+ * são sempre calculados no app a partir de totalBase/entregues/lidas, nunca armazenados. */
 export interface DisparoPilhado {
   id: string
   data: string
@@ -113,9 +114,23 @@ export interface DisparoPilhado {
   totalBase: number
   entregues: number
   lidas: number
-  vendas?: number | null
-  faturamento?: number | null
   criadoEm: string
+  atualizadoEm: string
+}
+
+/** Resultado de vendas do painel h2premios por conta (kaue/thomas/gustavo), lido da Edição
+ * selecionada no Dashboard — não por dia (o painel não filtra vendas por dia de forma confiável;
+ * confirmado ao vivo, os cards não mudam ao trocar o período). A edição é escolhida manualmente
+ * (não dá pra saber com certeza qual edição está "ativa" só olhando a lista — a mais nova pode
+ * estar zerada) e fica salva aqui até o usuário trocar. */
+export interface PilhadoPremiosConfig {
+  painel: string
+  edicaoId: string
+  edicaoLabel?: string | null
+  receitaVendas?: number | null
+  ticketMedio?: number | null
+  quantidadeCompras?: number | null
+  clientesCaptados?: number | null
   atualizadoEm: string
 }
 

@@ -52,13 +52,19 @@ function comFilaDaConta<T>(conta: ContaH2Premios, fn: () => Promise<T>): Promise
   return proxima
 }
 
-export interface ResultadoH2Premios {
-  vendas: number
-  faturamento: number
+export interface EdicaoH2Premios {
+  id: string
+  label: string
 }
 
-// chave "YYYY-MM-DD" -> resultado do dia
-export type VendasPorDia = Record<string, ResultadoH2Premios>
+export interface ResultadoEdicaoH2Premios {
+  edicaoId: string
+  edicaoLabel: string
+  receitaVendas: number
+  ticketMedio: number
+  quantidadeCompras: number
+  clientesCaptados: number
+}
 
 async function debugSnapshot(p: Page, nome: string): Promise<void> {
   try {
@@ -140,171 +146,139 @@ function extrairNumero(texto: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
-// O filtro de período do Dashboard ("Receita de vendas" por dia) se mostrou não confiável —
-// os números batem certo pro "Total da Edição" mas dão zero quando se filtra por uma data
-// específica (confirmado ao vivo, reproduzindo manualmente no navegador — não é bug do
-// scraper). A fonte confiável é a lista crua de compras (Financeiro > Compras), que não passa
-// por esse filtro de edição/período: paginamos ela e agrupamos por dia nós mesmos.
-const H2PREMIOS_FINANCEIRO_URL = `${H2PREMIOS_DASHBOARD_URL}/financial`
-// Teto de segurança — o loop já para assim que uma página inteira fica fora da janela, então na
-// prática só chega perto disso num mês com volume bem alto (~10 compras/página).
-const MAX_PAGINAS_COMPRAS = 120
+// O filtro de período do Dashboard (Hoje/7 dias/30 dias/Este mês, e os botões do gráfico) não
+// funciona de verdade — confirmado ao vivo: clicar neles muda a URL da chamada de API por trás,
+// mas os cards e o gráfico na tela continuam mostrando os mesmos números de antes. A única coisa
+// que realmente refiltra os cards "Minhas vendas" é trocar a Edição no seletor do topo — cada
+// edição é um sorteio (ex: "#2 - CONCORRA A UMA BMW...") com Receita de vendas/Ticket
+// médio/Quantidade de compras acumulados da edição inteira, não por dia. Não dá pra saber sozinho
+// qual edição está "ativa" (a mais nova pode estar zerada, uma edição nova sem vendas ainda) —
+// por isso a edição é escolhida manualmente pelo usuário no app, não detectada aqui.
+const H2PREMIOS_DASHBOARD_PATH = H2PREMIOS_DASHBOARD_URL
 
-interface LinhaCompra {
-  data: string
-  valor: string
-  status: string
+async function abrirDashboard(p: Page): Promise<void> {
+  await p.goto(H2PREMIOS_DASHBOARD_PATH, { waitUntil: 'load', timeout: 30000 })
+  await p.waitForSelector('select', { timeout: 15000 })
 }
 
 // page.evaluate recebe uma STRING aqui, não uma função — passar a função direto faz o tsx/esbuild
 // injetar um helper `__name(...)` no corpo serializado (usado internamente pra preservar nomes de
 // função), e esse helper não existe no escopo do browser onde o Playwright roda o código,
 // estourando "ReferenceError: __name is not defined". Confirmado ao vivo contra o painel real.
-const LER_LINHAS_COMPRAS_JS = `
+const LISTAR_EDICOES_JS = `
 (function () {
-  var rows = Array.prototype.slice.call(document.querySelectorAll('table tbody tr'));
-  return rows.map(function (r) {
-    var cells = Array.prototype.slice.call(r.querySelectorAll('td'));
-    return {
-      data: cells[2] ? cells[2].innerText.trim() : '',
-      valor: cells[4] ? cells[4].innerText.trim() : '',
-      status: cells[5] ? cells[5].innerText.trim() : '',
-    };
+  var select = document.querySelector('select');
+  if (!select) return [];
+  return Array.prototype.slice.call(select.options).map(function (o) {
+    return { id: o.value, label: o.textContent.trim() };
   });
 })()
 `
 
-async function lerLinhasCompras(p: Page): Promise<LinhaCompra[]> {
-  return p.evaluate<LinhaCompra[]>(LER_LINHAS_COMPRAS_JS)
+/** Lista as edições disponíveis no seletor do Dashboard (id + label), pra o usuário escolher qual
+ * está ativa na configuração do app. Confirmado ao vivo: é um <select> nativo único na página. */
+export async function listarEdicoes(conta: ContaH2Premios): Promise<EdicaoH2Premios[]> {
+  return comFilaDaConta(conta, async () => {
+    const p = await ensureLoggedIn(conta)
+    await abrirDashboard(p)
+    return p.evaluate<EdicaoH2Premios[]>(LISTAR_EDICOES_JS)
+  })
 }
 
-/** "DD/MM/YYYY às HH:mm" -> Date. Confirmado ao vivo contra o painel real (formato exato da
- * coluna DATA da lista de compras). */
-function parseDataHoraBR(texto: string): Date | null {
-  const m = texto.match(/(\d{2})\/(\d{2})\/(\d{4})\D+(\d{2}):(\d{2})/)
-  if (!m) return null
-  const [, dd, mm, yyyy, hh, mi] = m
-  const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:00`)
-  return Number.isNaN(d.getTime()) ? null : d
-}
+// Acha o card pelo texto do label (ex: "Receita de vendas") e lê o <p> com o valor dentro do
+// mesmo container — confirmado ao vivo contra o painel real (label e valor vivem na mesma div,
+// então pegar o <p> mais próximo do menor container que começa com o texto do label funciona
+// mesmo sem depender de classes CSS, que não têm nome semântico nesse app).
+const VALOR_DO_CARD_FN = `
+  function valorDoCard(labelText) {
+    var divs = Array.prototype.slice.call(document.querySelectorAll('div'));
+    var candidatos = divs.filter(function (d) {
+      return d.textContent.trim().indexOf(labelText) === 0 && d.querySelector('p');
+    });
+    candidatos.sort(function (a, b) { return a.textContent.length - b.textContent.length; });
+    var container = candidatos[0];
+    var p = container ? container.querySelector('p') : null;
+    return p ? p.textContent.trim() : null;
+  }
+`
 
-function dataParaChave(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** Avança pra próxima página da tabela de compras — o botão "Próxima" não tem aria-label
- * (só "Primeira página"/"Última página" têm), então acha ele pela posição: penúltimo botão
- * dentro do mesmo container do botão "Última página". Confirmado ao vivo contra o painel real. */
-async function irProximaPaginaCompras(p: Page): Promise<boolean> {
-  const container = p.locator('button[aria-label="Última página"]').locator('..')
-  const botoes = container.locator('button')
-  const total = await botoes.count()
-  if (total < 2) return false
-  const proxima = botoes.nth(total - 2)
-  if (await proxima.isDisabled()) return false
-
-  const primeiraLinhaAntes = await p.locator('table tbody tr').first().innerText().catch(() => '')
-  await proxima.click()
-  await p.waitForFunction(
-    (anterior) => {
-      const tr = document.querySelector('table tbody tr')
-      return !!tr && tr.textContent !== anterior
-    },
-    primeiraLinhaAntes,
-    { timeout: 10000 },
-  ).catch(() => {})
-  return true
-}
-
-// page.evaluate recebe uma STRING aqui pelo mesmo motivo do LER_LINHAS_COMPRAS_JS acima.
-const CLICAR_COMPRAS_JS = `
+const LER_CARDS_MINHAS_VENDAS_JS = `
 (function () {
-  var btns = Array.prototype.slice.call(document.querySelectorAll('button'));
-  var alvo = btns.filter(function (b) { return b.textContent && b.textContent.trim() === 'Compras'; })[0];
-  if (alvo) { alvo.click(); return true; }
-  return false;
+  ${VALOR_DO_CARD_FN}
+  return {
+    receitaVendas: valorDoCard('Receita de vendas'),
+    ticketMedio: valorDoCard('Ticket médio'),
+    quantidadeCompras: valorDoCard('Quantidade de compras'),
+    clientesCaptados: valorDoCard('Clientes captados'),
+  };
 })()
 `
 
-/** Tenta abrir a aba "Compras" uma vez. O clique do Playwright às vezes trava (checagens de
- * actionability passam mas o clique nunca "pega") — visto ao vivo em produção, provavelmente o
- * React re-renderiza o botão bem na janela entre mousedown/mouseup logo após a navegação. Cai pro
- * clique nativo via JS (dispara o evento direto no elemento, sem esperar actionability) quando
- * isso acontece. */
-async function tentarAbrirComprasUmaVez(p: Page): Promise<boolean> {
-  try {
-    await p.getByRole('button', { name: 'Compras', exact: true }).click({ timeout: 8000 })
-  } catch {
-    await p.evaluate<boolean>(CLICAR_COMPRAS_JS).catch(() => false)
-  }
-  return p
-    .waitForSelector('table tbody tr', { timeout: 8000 })
-    .then(() => true)
-    .catch(() => false)
+interface CardsMinhasVendas {
+  receitaVendas: string | null
+  ticketMedio: string | null
+  quantidadeCompras: string | null
+  clientesCaptados: string | null
 }
 
-async function abrirCompras(p: Page): Promise<void> {
-  await p.goto(H2PREMIOS_FINANCEIRO_URL, { waitUntil: 'load', timeout: 30000 })
-  await p.waitForSelector('button:has-text("Compras")', { state: 'visible', timeout: 15000 }).catch(() => {})
-
-  for (let tentativa = 1; tentativa <= 2; tentativa++) {
-    if (await tentarAbrirComprasUmaVez(p)) return
-    if (tentativa < 2) await p.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {})
-  }
-  throw new Error('Não foi possível abrir a aba "Compras" do financeiro após múltiplas tentativas')
+function esperarReceitaMudarJs(anteriorJson: string): string {
+  return `
+(function () {
+  ${VALOR_DO_CARD_FN}
+  return valorDoCard('Receita de vendas') !== ${anteriorJson};
+})()
+`
 }
 
 /**
- * Vendas/faturamento por dia desde `desde` (YYYY-MM-DD, inclusive) até hoje, agrupados a partir
- * da lista crua de compras — não do card "Receita de vendas" do Dashboard, que se mostrou não
- * confiável por data (ver comentário acima). A lista vem ordenada da mais recente pra mais
- * antiga, então paramos de paginar assim que uma página inteira já está fora da janela.
- * `desde` normalmente é o primeiro dia do mês visível na tela — trazemos o mês todo de uma vez em
- * vez de só o dia exato do disparo, pra cobrir vendas que ainda estão chegando de disparos
- * anteriores no mesmo mês sem precisar de uma busca por disparo.
+ * Lê os cards "Minhas vendas" (Receita de vendas, Ticket médio, Quantidade de compras, Clientes
+ * captados) do Dashboard pra uma Edição específica. `edicaoId` vem da configuração salva pelo
+ * usuário (ver listarEdicoes) — não tentamos adivinhar qual edição está ativa.
  */
-export async function buscarVendasGeraisPorDia(conta: ContaH2Premios, desde: string): Promise<VendasPorDia> {
+export async function buscarResultadoEdicao(conta: ContaH2Premios, edicaoId: string): Promise<ResultadoEdicaoH2Premios> {
   return comFilaDaConta(conta, async () => {
     const p = await ensureLoggedIn(conta)
     try {
-      await abrirCompras(p)
+      await abrirDashboard(p)
 
-      const cutoff = new Date(`${desde}T00:00:00`)
+      const antes = await p.evaluate<CardsMinhasVendas>(LER_CARDS_MINHAS_VENDAS_JS)
+      await p.selectOption('select', edicaoId)
+      // espera o card mudar de valor antes de ler — evita pegar um valor stale da edição anterior
+      // enquanto a nova ainda está carregando. Se o valor já for igual (mesma edição selecionada
+      // de novo), o timeout é só um custo fixo, não um erro. 20s porque a primeira troca depois de
+      // um login novo pode demorar mais que o normal pra buscar os dados (visto ao vivo: 8s não
+      // bastava e a leitura ficava presa no valor zerado de antes de trocar).
+      await p.waitForFunction(esperarReceitaMudarJs(JSON.stringify(antes.receitaVendas)), null, { timeout: 20000 }).catch(() => {})
 
-      const porDia: VendasPorDia = {}
-      let pagina = 1
+      const selecionada = await p.evaluate<{ label: string } | null>(`
+        (function () {
+          var select = document.querySelector('select');
+          if (!select) return null;
+          var opt = select.options[select.selectedIndex];
+          return opt ? { label: opt.textContent.trim() } : null;
+        })()
+      `)
 
-      while (pagina <= MAX_PAGINAS_COMPRAS) {
-        const linhas = await lerLinhasCompras(p)
-        if (linhas.length === 0) break
-
-        let algumaDentroDaJanela = false
-        for (const linha of linhas) {
-          const data = parseDataHoraBR(linha.data)
-          if (!data) continue
-          if (data < cutoff) continue
-          algumaDentroDaJanela = true
-          if (linha.status !== 'Finalizado') continue
-          const chave = dataParaChave(data)
-          if (!porDia[chave]) porDia[chave] = { vendas: 0, faturamento: 0 }
-          porDia[chave].vendas++
-          porDia[chave].faturamento += extrairNumero(linha.valor)
-        }
-
-        if (!algumaDentroDaJanela) break
-
-        const avancou = await irProximaPaginaCompras(p)
-        if (!avancou) break
-        pagina++
+      // Às vezes a troca de edição passa por um instante em que os cards somem da tela (skeleton
+      // de loading) — se a leitura cair bem nesse instante, vem tudo null. Tenta de novo mais
+      // algumas vezes antes de desistir, em vez de devolver zero errado.
+      let cards: CardsMinhasVendas = { receitaVendas: null, ticketMedio: null, quantidadeCompras: null, clientesCaptados: null }
+      for (let tentativa = 1; tentativa <= 4; tentativa++) {
+        await p.waitForTimeout(1500)
+        cards = await p.evaluate<CardsMinhasVendas>(LER_CARDS_MINHAS_VENDAS_JS)
+        if (cards.receitaVendas != null) break
       }
 
-      for (const chave of Object.keys(porDia)) {
-        porDia[chave].faturamento = Math.round((porDia[chave].faturamento + Number.EPSILON) * 100) / 100
+      return {
+        edicaoId,
+        edicaoLabel: selecionada?.label ?? '',
+        receitaVendas: extrairNumero(cards.receitaVendas ?? ''),
+        ticketMedio: extrairNumero(cards.ticketMedio ?? ''),
+        quantidadeCompras: Math.round(extrairNumero(cards.quantidadeCompras ?? '')),
+        clientesCaptados: Math.round(extrairNumero(cards.clientesCaptados ?? '')),
       }
-
-      return porDia
     } catch (err) {
-      await debugSnapshot(p, `compras-falhou-${conta}`)
+      await debugSnapshot(p, `edicao-falhou-${conta}`)
       throw err
     }
   })

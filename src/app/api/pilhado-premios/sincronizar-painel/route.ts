@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server'
-import { sincronizarPainelDesde } from '@/lib/pilhadoPremiosSync'
+import { sincronizarPainel } from '@/lib/pilhadoPremiosSync'
 
-// Mesmo motivo do maxDuration na rota de sincronizar por id — scrape de um mês inteiro passa do
-// timeout padrão da Vercel.
-export const maxDuration = 280
+// Login + trocar edição + ler os cards é bem mais rápido que a paginação de compras que isso
+// substituiu, mas ainda folgado o bastante pra cobrir um login lento sem estourar o padrão da
+// Vercel.
+export const maxDuration = 120
 
 export async function POST(request: Request) {
-  const { painel, desde } = await request.json()
-  if (!painel || !desde) {
-    return NextResponse.json({ error: 'Parâmetros obrigatórios: painel, desde' }, { status: 400 })
+  const { painel } = await request.json()
+  if (!painel) {
+    return NextResponse.json({ error: 'Parâmetro obrigatório: painel' }, { status: 400 })
   }
 
-  const resultado = await sincronizarPainelDesde(painel, desde)
+  const resultado = await sincronizarPainel(painel)
   if (!resultado.ok) {
     return NextResponse.json({ error: resultado.erro ?? 'Erro ao sincronizar painel' }, { status: 502 })
   }

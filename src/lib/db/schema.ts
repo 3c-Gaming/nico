@@ -37,9 +37,20 @@ export const disparosPilhado = pgTable('disparos_pilhado', {
   totalBase: integer('total_base').notNull().default(0),
   entregues: integer('entregues').notNull().default(0),
   lidas: integer('lidas').notNull().default(0),
-  vendas: integer('vendas'),
-  faturamento: real('faturamento'),
   criadoEm: text('criado_em').notNull(),
+  atualizadoEm: text('atualizado_em').notNull(),
+})
+
+// Resultado de vendas do h2premios por painel, lido da Edição selecionada no Dashboard (não por
+// dia — ver comentário em PilhadoPremiosConfig no types/index.ts).
+export const pilhadoPremiosConfig = pgTable('pilhado_premios_config', {
+  painel: text('painel').primaryKey(),
+  edicaoId: text('edicao_id').notNull(),
+  edicaoLabel: text('edicao_label'),
+  receitaVendas: real('receita_vendas'),
+  ticketMedio: real('ticket_medio'),
+  quantidadeCompras: integer('quantidade_compras'),
+  clientesCaptados: integer('clientes_captados'),
   atualizadoEm: text('atualizado_em').notNull(),
 })
 

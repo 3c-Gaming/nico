@@ -1,18 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, Pen, Trash2, Upload, RefreshCw, X, AlertTriangle, Check } from 'lucide-react'
+import { Plus, Pen, Trash2, Upload, RefreshCw, X, AlertTriangle, Check, Settings2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { calcularMetricasPilhado, formatPct } from '@/lib/resultadoPilhado'
-import { formatNumero, formatMoeda, formatRoi } from '@/lib/resultadoDisparo'
+import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
 import { PAINEIS_PILHADO } from '@/lib/pilhadoPremios'
-import type { DisparoPilhado, DisparoDaxx } from '@/types'
+import type { DisparoPilhado, DisparoDaxx, PilhadoPremiosConfig } from '@/types'
 
 const PAINEIS = PAINEIS_PILHADO
+
+interface Edicao {
+  id: string
+  label: string
+}
 
 function formatarTempoRelativo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -29,17 +34,6 @@ function formatarTempoRelativo(iso: string | null | undefined): string {
 function hoje(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function primeiroDiaDoMesAtual(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-function ultimoDiaDoMesAtual(): string {
-  const d = new Date()
-  const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`
 }
 
 function mensagemErroSync(err: unknown): string {
@@ -63,6 +57,14 @@ export default function PilhadoPremiosPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const [configs, setConfigs] = useState<PilhadoPremiosConfig[]>([])
+  const [sincronizandoPainel, setSincronizandoPainel] = useState<Record<string, boolean>>({})
+
+  const [seletorEdicaoPainel, setSeletorEdicaoPainel] = useState<string | null>(null)
+  const [edicoesDisponiveis, setEdicoesDisponiveis] = useState<Edicao[]>([])
+  const [carregandoEdicoes, setCarregandoEdicoes] = useState(false)
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
+
   const [modalNovoAberto, setModalNovoAberto] = useState(false)
   const [modoNovo, setModoNovo] = useState<'daxx' | 'manual'>('manual')
   const [daxxDisponiveis, setDaxxDisponiveis] = useState<DisparoDaxx[]>([])
@@ -75,14 +77,8 @@ export default function PilhadoPremiosPage() {
 
   const [importando, setImportando] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [sincronizando, setSincronizando] = useState<Record<string, boolean>>({})
 
   const [filtroPaineis, setFiltroPaineis] = useState<string[]>([])
-  const [filtroDataInicio, setFiltroDataInicio] = useState(primeiroDiaDoMesAtual)
-  const [filtroDataFim, setFiltroDataFim] = useState(ultimoDiaDoMesAtual)
-
-  const [sincronizandoMes, setSincronizandoMes] = useState(false)
-  const [progressoSync, setProgressoSync] = useState<{ done: number; total: number } | null>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -99,7 +95,19 @@ export default function PilhadoPremiosPage() {
     }
   }, [])
 
+  const carregarConfigs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/pilhado-premios/config')
+      if (!res.ok) return
+      const data = await res.json()
+      setConfigs(data.configs ?? [])
+    } catch {
+      // resumo por painel é complementar — falha aqui não deve travar a tela toda
+    }
+  }, [])
+
   useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { carregarConfigs() }, [carregarConfigs])
 
   useEffect(() => {
     if (!modalNovoAberto || modoNovo !== 'daxx' || daxxDisponiveis.length > 0) return
@@ -217,51 +225,54 @@ export default function PilhadoPremiosPage() {
     if (res.ok) await carregar()
   }
 
-  async function sincronizarPainel(id: string) {
-    setSincronizando((s) => ({ ...s, [id]: true }))
+  async function sincronizarPainelAgora(painel: string) {
+    setSincronizandoPainel((s) => ({ ...s, [painel]: true }))
     setError(null)
     try {
-      const res = await fetch(`/api/pilhado-premios/${id}/sincronizar`, { method: 'POST' })
+      const res = await fetch('/api/pilhado-premios/sincronizar-painel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ painel }),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erro ao sincronizar com o painel')
-      await carregar()
+      await carregarConfigs()
     } catch (err) {
       setError(mensagemErroSync(err))
     } finally {
-      setSincronizando((s) => ({ ...s, [id]: false }))
+      setSincronizandoPainel((s) => ({ ...s, [painel]: false }))
     }
   }
 
-  async function sincronizarMes() {
-    const desde = filtroDataInicio || primeiroDiaDoMesAtual()
-    const paineisAlvo = filtroPaineis.length > 0 ? filtroPaineis : PAINEIS
-    setSincronizandoMes(true)
+  function abrirSeletorEdicao(painel: string) {
+    setSeletorEdicaoPainel(painel)
+    setEdicoesDisponiveis([])
+    setCarregandoEdicoes(true)
+    fetch(`/api/pilhado-premios/edicoes?painel=${encodeURIComponent(painel)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Erro ao buscar edições'))))
+      .then((data) => setEdicoesDisponiveis(data.edicoes ?? []))
+      .catch((err) => setError(mensagemErroSync(err)))
+      .finally(() => setCarregandoEdicoes(false))
+  }
+
+  async function escolherEdicao(edicao: Edicao) {
+    if (!seletorEdicaoPainel) return
+    setSalvandoEdicao(true)
     setError(null)
-    setProgressoSync({ done: 0, total: paineisAlvo.length })
     try {
-      const erros: string[] = []
-      await Promise.all(
-        paineisAlvo.map(async (painel) => {
-          try {
-            const res = await fetch('/api/pilhado-premios/sincronizar-painel', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ painel, desde }),
-            })
-            const data = await res.json()
-            if (!res.ok) erros.push(`${painel}: ${mensagemErroSync(new Error(data.error))}`)
-          } catch (err) {
-            erros.push(`${painel}: ${mensagemErroSync(err)}`)
-          } finally {
-            setProgressoSync((p) => (p ? { ...p, done: p.done + 1 } : p))
-          }
-        }),
-      )
-      if (erros.length > 0) setError(erros.join(' · '))
-      await carregar()
+      const res = await fetch('/api/pilhado-premios/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ painel: seletorEdicaoPainel, edicaoId: edicao.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao salvar edição')
+      setSeletorEdicaoPainel(null)
+      await carregarConfigs()
+    } catch (err) {
+      setError(mensagemErroSync(err))
     } finally {
-      setSincronizandoMes(false)
-      setProgressoSync(null)
+      setSalvandoEdicao(false)
     }
   }
 
@@ -286,31 +297,27 @@ export default function PilhadoPremiosPage() {
   }
 
   const disparosFiltrados = useMemo(() => {
-    return disparos.filter((d) => {
-      if (filtroPaineis.length > 0 && !filtroPaineis.includes(d.painel)) return false
-      if (filtroDataInicio && d.data < filtroDataInicio) return false
-      if (filtroDataFim && d.data > filtroDataFim) return false
-      return true
-    })
-  }, [disparos, filtroPaineis, filtroDataInicio, filtroDataFim])
+    return disparos.filter((d) => filtroPaineis.length === 0 || filtroPaineis.includes(d.painel))
+  }, [disparos, filtroPaineis])
 
   const totais = disparosFiltrados.reduce(
     (acc, d) => {
       acc.totalBase += d.totalBase
       acc.entregues += d.entregues
       acc.lidas += d.lidas
-      acc.vendas += d.vendas ?? 0
-      acc.faturamento += d.faturamento ?? 0
       acc.custo += calcularMetricasPilhado(d).custo
       return acc
     },
-    { totalBase: 0, entregues: 0, lidas: 0, vendas: 0, faturamento: 0, custo: 0 },
+    { totalBase: 0, entregues: 0, lidas: 0, custo: 0 },
   )
-  const roiTotal = totais.custo > 0 ? totais.faturamento / totais.custo : null
   const pctEntreguesTotal = totais.totalBase > 0 ? totais.entregues / totais.totalBase : null
   const pctLidasTotal = totais.entregues > 0 ? totais.lidas / totais.entregues : null
-  const ticketMedioTotal = totais.vendas > 0 ? totais.faturamento / totais.vendas : null
-  const conversaoTotal = totais.lidas > 0 ? totais.vendas / totais.lidas : null
+
+  const configPorPainel = useMemo(() => {
+    const mapa = new Map<string, PilhadoPremiosConfig>()
+    for (const c of configs) mapa.set(c.painel, c)
+    return mapa
+  }, [configs])
 
   return (
     <>
@@ -332,16 +339,6 @@ export default function PilhadoPremiosPage() {
             <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={carregar} disabled={loading}>
               Recarregar
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<RefreshCw size={14} className={sincronizandoMes ? 'animate-spin' : ''} />}
-              onClick={sincronizarMes}
-              disabled={sincronizandoMes}
-              title="Busca vendas/faturamento no painel h2premios pro período filtrado"
-            >
-              {sincronizandoMes ? 'Sincronizando...' : 'Sincronizar mês'}
-            </Button>
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setModalNovoAberto(true)}>
               Novo disparo
             </Button>
@@ -350,6 +347,68 @@ export default function PilhadoPremiosPage() {
       />
 
       <div className="p-6 space-y-4">
+        {/* Resumo por painel — vendas/faturamento vêm da Edição escolhida manualmente no h2premios,
+            não têm atribuição por dia/disparo (ver nota no modal de editar disparo). */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PAINEIS.map((painel) => {
+            const config = configPorPainel.get(painel)
+            const sincronizando = !!sincronizandoPainel[painel]
+            return (
+              <div key={painel} className="glass bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-mono text-[var(--text-muted)] truncate">{painel}</div>
+                    <div className="text-xs text-[var(--text-primary)] truncate mt-0.5" title={config?.edicaoLabel ?? undefined}>
+                      {config?.edicaoLabel ?? 'Nenhuma edição configurada'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => sincronizarPainelAgora(painel)}
+                      disabled={sincronizando || !config}
+                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
+                      title="Sincronizar com o h2premios"
+                    >
+                      <RefreshCw size={13} className={sincronizando ? 'animate-spin' : ''} />
+                    </button>
+                    <button
+                      onClick={() => abrirSeletorEdicao(painel)}
+                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                      title="Escolher edição"
+                    >
+                      <Settings2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] text-[var(--text-muted)]">Receita de vendas</div>
+                  <div className="text-xl font-semibold text-emerald-400">
+                    {config?.receitaVendas != null ? formatMoeda(config.receitaVendas) : '—'}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[10px] text-[var(--text-muted)]">Ticket médio</div>
+                    <div className="text-sm font-mono text-[var(--text-primary)]">
+                      {config?.ticketMedio != null ? formatMoeda(config.ticketMedio) : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-[var(--text-muted)]">Compras</div>
+                    <div className="text-sm font-mono text-[var(--text-primary)]">
+                      {config?.quantidadeCompras != null ? formatNumero(config.quantidadeCompras) : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-[var(--text-muted)]">Atualizado {formatarTempoRelativo(config?.atualizadoEm)}</div>
+              </div>
+            )
+          })}
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <Dropdown label={`Painel${filtroPaineis.length > 0 ? ` (${filtroPaineis.length})` : ''}`}>
             <div className="p-1 min-w-[200px]">
@@ -369,46 +428,16 @@ export default function PilhadoPremiosPage() {
             </div>
           </Dropdown>
 
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={filtroDataInicio}
-              onChange={(e) => setFiltroDataInicio(e.target.value)}
-              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-            />
-            <span className="text-xs text-[var(--text-muted)]">até</span>
-            <input
-              type="date"
-              value={filtroDataFim}
-              onChange={(e) => setFiltroDataFim(e.target.value)}
-              className="h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
-            />
-          </div>
-
-          {(filtroPaineis.length > 0 || filtroDataInicio !== primeiroDiaDoMesAtual() || filtroDataFim !== ultimoDiaDoMesAtual()) && (
+          {filtroPaineis.length > 0 && (
             <button
-              onClick={() => { setFiltroPaineis([]); setFiltroDataInicio(primeiroDiaDoMesAtual()); setFiltroDataFim(ultimoDiaDoMesAtual()) }}
+              onClick={() => setFiltroPaineis([])}
               className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             >
               <X size={12} />
-              Limpar filtros (voltar pro mês atual)
+              Limpar filtro
             </button>
           )}
         </div>
-
-        {progressoSync && (
-          <div className="space-y-1">
-            <div className="w-full h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[var(--d1)] transition-all duration-300 ease-out"
-                style={{ width: `${(progressoSync.done / progressoSync.total) * 100}%` }}
-              />
-            </div>
-            <p className="text-xs text-[var(--text-muted)]">
-              Sincronizando painéis com o h2premios... {progressoSync.done}/{progressoSync.total}
-            </p>
-          </div>
-        )}
 
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
@@ -441,11 +470,6 @@ export default function PilhadoPremiosPage() {
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Lidas</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">% Lidas</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Vendas</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Faturamento</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Tkt Médio</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Conv.</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
                   <th className="text-left py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Atualizado</th>
                   <th className="text-right py-2 px-3"></th>
                 </tr>
@@ -468,26 +492,9 @@ export default function PilhadoPremiosPage() {
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(d.lidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.pctLidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-emerald-400">{formatMoeda(m.custo)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{d.vendas != null ? formatNumero(d.vendas) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-emerald-400">{d.faturamento != null ? formatMoeda(d.faturamento) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{m.ticketMedio != null ? formatMoeda(m.ticketMedio) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.conversao)}</td>
-                      <td className="py-2 px-3 text-right font-mono font-semibold">
-                        {m.roi != null ? (
-                          <span className={m.roi >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(m.roi)}</span>
-                        ) : '—'}
-                      </td>
                       <td className="py-2 px-3 text-[10px] text-[var(--text-muted)] whitespace-nowrap">{formatarTempoRelativo(d.atualizadoEm)}</td>
                       <td className="py-2 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => sincronizarPainel(d.id)}
-                            disabled={sincronizando[d.id]}
-                            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
-                            title="Atualizar vendas/faturamento do painel h2premios"
-                          >
-                            <RefreshCw size={13} className={sincronizando[d.id] ? 'animate-spin' : ''} />
-                          </button>
                           <button onClick={() => abrirEdicao(d)} className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors" title="Editar">
                             <Pen size={13} />
                           </button>
@@ -509,15 +516,6 @@ export default function PilhadoPremiosPage() {
                   <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.lidas)}</td>
                   <td className="py-2.5 px-3 text-right font-mono">{pctLidasTotal != null ? formatPct(pctLidasTotal) : '—'}</td>
                   <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.custo)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(totais.vendas)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.faturamento)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">{ticketMedioTotal != null ? formatMoeda(ticketMedioTotal) : '—'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">{conversaoTotal != null ? formatPct(conversaoTotal) : '—'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    {roiTotal != null ? (
-                      <span className={roiTotal >= 1 ? 'text-[var(--success)]' : 'text-[var(--error)]'}>{formatRoi(roiTotal)}</span>
-                    ) : '—'}
-                  </td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -694,7 +692,7 @@ export default function PilhadoPremiosPage() {
               </div>
             </div>
             <p className="text-[10px] text-[var(--text-muted)]">
-              Vendas e faturamento são sincronizados do painel h2premios pelo botão de atualizar (ícone de refresh na linha) ou automaticamente a cada hora.
+              A data acima é só informativa (dia em que o disparo saiu) — vendas e faturamento não têm mais atribuição por disparo, ficam no resumo por painel no topo da tela.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={() => setEditando(null)}>
@@ -706,6 +704,33 @@ export default function PilhadoPremiosPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal: escolher edição do painel */}
+      <Modal open={!!seletorEdicaoPainel} onClose={() => setSeletorEdicaoPainel(null)} title={`Escolher edição — ${seletorEdicaoPainel ?? ''}`} width="480px">
+        <div className="space-y-2">
+          <p className="text-xs text-[var(--text-muted)]">
+            O painel h2premios não indica qual edição está ativa — a mais nova pode ainda estar zerada. Escolha manualmente qual edição usar pra este painel.
+          </p>
+          {carregandoEdicoes ? (
+            <div className="flex justify-center py-8"><Spinner size={24} /></div>
+          ) : edicoesDisponiveis.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)]/60 italic py-4 text-center">Nenhuma edição encontrada.</p>
+          ) : (
+            <div className="max-h-[360px] overflow-y-auto space-y-1.5">
+              {edicoesDisponiveis.map((edicao) => (
+                <button
+                  key={edicao.id}
+                  onClick={() => escolherEdicao(edicao)}
+                  disabled={salvandoEdicao}
+                  className="w-full text-left p-2.5 rounded border border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-surface)] transition-colors disabled:opacity-50 text-xs text-[var(--text-primary)]"
+                >
+                  {edicao.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
     </>
   )

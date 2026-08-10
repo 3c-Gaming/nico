@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -21,15 +21,21 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   cpaPainelId: 'cpa_painel_id',
   criadaEm: 'criado_em',
   criadoEm: 'criado_em',
+  clientesCaptados: 'clientes_captados',
   daxxCampanhaId: 'daxx_campanha_id',
   dataConclusao: 'data_conclusao',
   dataCriacao: 'data_criacao',
   dataDisparo: 'data_disparo',
   discordId: 'discord_id',
+  edicaoId: 'edicao_id',
+  edicaoLabel: 'edicao_label',
   esteiraPaiId: 'esteira_pai_id',
   flowId: 'flow_id',
   flowIds: 'flow_ids',
   lpUrl: 'lp_url',
+  quantidadeCompras: 'quantidade_compras',
+  receitaVendas: 'receita_vendas',
+  ticketMedio: 'ticket_medio',
   numeroSendpulse: 'numero_sendpulse',
   offsetDias: 'offset_dias',
   funilIds: 'funil_ids',
@@ -116,6 +122,12 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   public_token: 'publicToken',
   site_id: 'siteId',
   utms_extras: 'utmsExtras',
+  clientes_captados: 'clientesCaptados',
+  edicao_id: 'edicaoId',
+  edicao_label: 'edicaoLabel',
+  quantidade_compras: 'quantidadeCompras',
+  receita_vendas: 'receitaVendas',
+  ticket_medio: 'ticketMedio',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -274,6 +286,27 @@ export async function deletarDisparoPilhado(id: string): Promise<boolean> {
 export async function bulkInsertDisparosPilhado(disparos: DisparoPilhado[]): Promise<DisparoPilhado[]> {
   const { data } = await tb('disparos_pilhado').insert(disparos.map((d) => toSnakeCase(d as any))).select()
   return rows<DisparoPilhado>(data)
+}
+
+// --- Pilhado Prêmios: config de vendas por painel (edição escolhida manualmente) ---
+
+export async function listarConfigsPilhadoPremios(): Promise<PilhadoPremiosConfig[]> {
+  const { data } = await tb('pilhado_premios_config').select('*')
+  return rows<PilhadoPremiosConfig>(data)
+}
+
+export async function getConfigPilhadoPremios(painel: string): Promise<PilhadoPremiosConfig | null> {
+  const { data } = await tb('pilhado_premios_config').select('*').eq('painel', painel).maybeSingle()
+  return row<PilhadoPremiosConfig>(data)
+}
+
+export async function upsertConfigPilhadoPremios(config: PilhadoPremiosConfig): Promise<PilhadoPremiosConfig> {
+  const { data, error } = await tb('pilhado_premios_config')
+    .upsert(toSnakeCase(config as any))
+    .select()
+    .single()
+  if (error) throw new Error(`Erro ao salvar config pilhado premios: ${error.message}`)
+  return row<PilhadoPremiosConfig>(data)!
 }
 
 // --- Esteiras ---

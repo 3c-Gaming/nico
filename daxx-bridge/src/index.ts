@@ -1,7 +1,7 @@
 import express from 'express'
 import { listarCampanhas, getTemplateLink, baixarBaseCSV, invalidateCache, close } from './scraper.js'
 import { buscarResultadoAcid, closeSuperbet } from './superbetScraper.js'
-import { buscarVendasGeraisPorDia, closeH2Premios, type ContaH2Premios } from './h2premiosScraper.js'
+import { listarEdicoes, buscarResultadoEdicao, closeH2Premios, type ContaH2Premios } from './h2premiosScraper.js'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3334', 10)
@@ -84,22 +84,37 @@ app.get('/superbet/acid', async (req, res) => {
 
 const CONTAS_H2 = new Set(['kaue', 'thomas', 'gustavo'])
 
-app.get('/h2premios/vendas-por-dia', async (req, res) => {
+app.get('/h2premios/edicoes', async (req, res) => {
   try {
     const conta = String(req.query.conta ?? '')
-    const desde = String(req.query.desde ?? '')
     if (!CONTAS_H2.has(conta)) {
       res.status(400).json({ error: 'Parametro "conta" deve ser kaue, thomas ou gustavo' })
       return
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) {
-      res.status(400).json({ error: 'Parametro "desde" deve ser uma data YYYY-MM-DD' })
+    const edicoes = await listarEdicoes(conta as ContaH2Premios)
+    res.json({ conta, edicoes })
+  } catch (err) {
+    console.error('[h2premios] /h2premios/edicoes error:', (err as Error).message)
+    res.status(502).json({ error: (err as Error).message })
+  }
+})
+
+app.get('/h2premios/resultado-edicao', async (req, res) => {
+  try {
+    const conta = String(req.query.conta ?? '')
+    const edicaoId = String(req.query.edicaoId ?? '')
+    if (!CONTAS_H2.has(conta)) {
+      res.status(400).json({ error: 'Parametro "conta" deve ser kaue, thomas ou gustavo' })
       return
     }
-    const porDia = await buscarVendasGeraisPorDia(conta as ContaH2Premios, desde)
-    res.json({ conta, porDia })
+    if (!edicaoId) {
+      res.status(400).json({ error: 'Parametro "edicaoId" obrigatorio' })
+      return
+    }
+    const resultado = await buscarResultadoEdicao(conta as ContaH2Premios, edicaoId)
+    res.json(resultado)
   } catch (err) {
-    console.error('[h2premios] /h2premios/vendas-por-dia error:', (err as Error).message)
+    console.error('[h2premios] /h2premios/resultado-edicao error:', (err as Error).message)
     res.status(502).json({ error: (err as Error).message })
   }
 })
