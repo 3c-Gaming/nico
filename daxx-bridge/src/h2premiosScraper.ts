@@ -214,10 +214,42 @@ async function irProximaPaginaCompras(p: Page): Promise<boolean> {
   return true
 }
 
+// page.evaluate recebe uma STRING aqui pelo mesmo motivo do LER_LINHAS_COMPRAS_JS acima.
+const CLICAR_COMPRAS_JS = `
+(function () {
+  var btns = Array.prototype.slice.call(document.querySelectorAll('button'));
+  var alvo = btns.filter(function (b) { return b.textContent && b.textContent.trim() === 'Compras'; })[0];
+  if (alvo) { alvo.click(); return true; }
+  return false;
+})()
+`
+
+/** Tenta abrir a aba "Compras" uma vez. O clique do Playwright às vezes trava (checagens de
+ * actionability passam mas o clique nunca "pega") — visto ao vivo em produção, provavelmente o
+ * React re-renderiza o botão bem na janela entre mousedown/mouseup logo após a navegação. Cai pro
+ * clique nativo via JS (dispara o evento direto no elemento, sem esperar actionability) quando
+ * isso acontece. */
+async function tentarAbrirComprasUmaVez(p: Page): Promise<boolean> {
+  try {
+    await p.getByRole('button', { name: 'Compras', exact: true }).click({ timeout: 8000 })
+  } catch {
+    await p.evaluate<boolean>(CLICAR_COMPRAS_JS).catch(() => false)
+  }
+  return p
+    .waitForSelector('table tbody tr', { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false)
+}
+
 async function abrirCompras(p: Page): Promise<void> {
   await p.goto(H2PREMIOS_FINANCEIRO_URL, { waitUntil: 'load', timeout: 30000 })
-  await p.getByRole('button', { name: 'Compras', exact: true }).click()
-  await p.waitForSelector('table tbody tr', { timeout: 15000 }).catch(() => {})
+  await p.waitForSelector('button:has-text("Compras")', { state: 'visible', timeout: 15000 }).catch(() => {})
+
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    if (await tentarAbrirComprasUmaVez(p)) return
+    if (tentativa < 2) await p.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {})
+  }
+  throw new Error('Não foi possível abrir a aba "Compras" do financeiro após múltiplas tentativas')
 }
 
 /**
