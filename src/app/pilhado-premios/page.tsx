@@ -480,6 +480,7 @@ export default function PilhadoPremiosPage() {
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">% Lidas</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Tkt Médio</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Compras</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Faturamento</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-[var(--text-muted)]">ROI</th>
                   <th className="text-left py-2 px-3 text-xs font-medium text-[var(--text-muted)]">Atualizado</th>
@@ -492,6 +493,7 @@ export default function PilhadoPremiosPage() {
                   const config = configPorPainel.get(d.painel)
                   const faturamento = config?.receitaVendas ?? null
                   const ticketMedio = config?.ticketMedio ?? null
+                  const compras = config?.quantidadeCompras ?? null
                   const roi = faturamento != null && m.custo > 0 ? faturamento / m.custo : null
                   return (
                     <tr key={d.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -509,6 +511,7 @@ export default function PilhadoPremiosPage() {
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{formatPct(m.pctLidas)}</td>
                       <td className="py-2 px-3 text-right font-mono text-emerald-400">{formatMoeda(m.custo)}</td>
                       <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{ticketMedio != null ? formatMoeda(ticketMedio) : '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-primary)]">{compras != null ? formatNumero(compras) : '—'}</td>
                       <td className="py-2 px-3 text-right font-mono text-emerald-400">{faturamento != null ? formatMoeda(faturamento) : '—'}</td>
                       <td className="py-2 px-3 text-right font-mono font-semibold">
                         {roi != null ? (
@@ -540,6 +543,7 @@ export default function PilhadoPremiosPage() {
                   <td className="py-2.5 px-3 text-right font-mono">{pctLidasTotal != null ? formatPct(pctLidasTotal) : '—'}</td>
                   <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(totais.custo)}</td>
                   <td className="py-2.5 px-3 text-right font-mono">{ticketMedioTotal != null ? formatMoeda(ticketMedioTotal) : '—'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono">{formatNumero(comprasTotal)}</td>
                   <td className="py-2.5 px-3 text-right font-mono text-emerald-400">{formatMoeda(faturamentoTotal)}</td>
                   <td className="py-2.5 px-3 text-right font-mono">
                     {roiTotal != null ? (
