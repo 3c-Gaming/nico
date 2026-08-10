@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, Pen, Trash2, Upload, RefreshCw, X, AlertTriangle, Check, Settings2 } from 'lucide-react'
+import { Plus, Pen, Trash2, Upload, Download, MessageCircle, RefreshCw, X, AlertTriangle, Check, Settings2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -328,6 +328,75 @@ export default function PilhadoPremiosPage() {
   const ticketMedioTotal = comprasTotal > 0 ? faturamentoTotal / comprasTotal : null
   const roiTotal = totais.custo > 0 ? faturamentoTotal / totais.custo : null
 
+  function exportarCsv() {
+    const cabecalho = ['Data', 'Painel', 'Origem', 'Base', 'Entregues', '% Entregues', 'Lidas', '% Lidas', 'Custo', 'Tkt Médio', 'Compras', 'Faturamento', 'ROI', 'Atualizado']
+    const linhas = disparosFiltrados.map((d) => {
+      const m = calcularMetricasPilhado(d)
+      const config = configPorPainel.get(d.painel)
+      const faturamento = config?.receitaVendas ?? null
+      const ticketMedio = config?.ticketMedio ?? null
+      const compras = config?.quantidadeCompras ?? null
+      const roi = faturamento != null && m.custo > 0 ? faturamento / m.custo : null
+      return [
+        d.data,
+        d.painel,
+        d.origem === 'daxx' ? 'DAXX' : 'Manual',
+        formatNumero(d.totalBase),
+        formatNumero(d.entregues),
+        formatPct(m.pctEntregues),
+        formatNumero(d.lidas),
+        formatPct(m.pctLidas),
+        formatMoeda(m.custo),
+        ticketMedio != null ? formatMoeda(ticketMedio) : '',
+        compras != null ? formatNumero(compras) : '',
+        faturamento != null ? formatMoeda(faturamento) : '',
+        roi != null ? formatRoi(roi) : '',
+        d.atualizadoEm,
+      ]
+    })
+
+    // Ponto-e-vírgula como separador (não vírgula) — os valores já vêm formatados em pt-BR
+    // (ex: "R$ 3.312,03"), que usa vírgula como separador decimal; com vírgula como delimitador
+    // o Excel quebraria essas colunas ao meio.
+    const csvEscape = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+    const csv = [cabecalho, ...linhas].map((linha) => linha.map(csvEscape).join(';')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pilhado-premios-${hoje()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportarWhatsApp() {
+    const blocos = PAINEIS.map((painel) => {
+      const config = configPorPainel.get(painel)
+      if (!config) return `*${painel}*\nNenhuma edição configurada`
+      return [
+        `*${painel}*`,
+        config.edicaoLabel ? `Edição: ${config.edicaoLabel}` : null,
+        `Receita de vendas: ${config.receitaVendas != null ? formatMoeda(config.receitaVendas) : '—'}`,
+        `Ticket médio: ${config.ticketMedio != null ? formatMoeda(config.ticketMedio) : '—'}`,
+        `Compras: ${config.quantidadeCompras != null ? formatNumero(config.quantidadeCompras) : '—'}`,
+        `Atualizado: ${formatarTempoRelativo(config.atualizadoEm)}`,
+      ].filter(Boolean).join('\n')
+    })
+
+    const mensagem = [
+      // Sem emoji aqui: confirmado que o redirect do wa.me corrompe caracteres fora do plano
+      // básico (emoji) no parâmetro "text", trocando por U+FFFD — reproduzido isolado, direto no
+      // wa.me, sem nada do nosso código envolvido.
+      '*Pilhado Prêmios* — Resumo por painel',
+      '',
+      blocos.join('\n\n'),
+      '',
+      `Total: ${formatMoeda(faturamentoTotal)} · ${formatNumero(comprasTotal)} compras`,
+    ].join('\n')
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensagem)}`, '_blank')
+  }
+
   return (
     <>
       <PageHeader
@@ -347,6 +416,12 @@ export default function PilhadoPremiosPage() {
             </Button>
             <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={carregar} disabled={loading}>
               Recarregar
+            </Button>
+            <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exportarCsv} disabled={disparosFiltrados.length === 0}>
+              Exportar CSV
+            </Button>
+            <Button variant="secondary" size="sm" icon={<MessageCircle size={14} />} onClick={exportarWhatsApp}>
+              Exportar via WhatsApp
             </Button>
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setModalNovoAberto(true)}>
               Novo disparo
