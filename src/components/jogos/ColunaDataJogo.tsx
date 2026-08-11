@@ -8,11 +8,10 @@ interface ColunaDataJogoProps {
   data: Date
   hoje: Date
   jogos: Jogo[]
-  bloqueado?: boolean
   index: number
 }
 
-export function ColunaDataJogo({ data, hoje, jogos, bloqueado, index }: ColunaDataJogoProps) {
+export function ColunaDataJogo({ data, hoje, jogos, index }: ColunaDataJogoProps) {
   const isHoje = isMesmaData(data, hoje)
   const isFimDeSemana = data.getDay() === 0 || data.getDay() === 6
 
@@ -45,16 +44,7 @@ export function ColunaDataJogo({ data, hoje, jogos, bloqueado, index }: ColunaDa
 
       <div className="p-2 space-y-2 min-h-[200px]">
         {jogos.length === 0 ? (
-          bloqueado ? (
-            <p
-              className="text-[10px] text-[var(--text-muted)]/40 italic px-1 pt-2"
-              title="O plano atual da API-Football só permite consultar hoje ± 1 dia"
-            >
-              Fora do período do plano
-            </p>
-          ) : (
-            <p className="text-[10px] text-[var(--text-muted)]/40 italic px-1 pt-2">Sem jogos</p>
-          )
+          <p className="text-[10px] text-[var(--text-muted)]/40 italic px-1 pt-2">Sem jogos</p>
         ) : (
           jogos.map((j) => <CardJogo key={j.id} jogo={j} />)
         )}

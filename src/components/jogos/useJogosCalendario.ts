@@ -18,7 +18,6 @@ export function useJogosCalendario() {
   })
   const [referencia, setReferencia] = useState(hoje)
   const [jogosPorDia, setJogosPorDia] = useState<Map<string, Jogo[]>>(new Map())
-  const [diasBloqueados, setDiasBloqueados] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [ligasSelecionadas, setLigasSelecionadas] = useState<number[]>([])
@@ -42,24 +41,18 @@ export function useJogosCalendario() {
             const res = await fetch(`/api/jogos/fixtures?date=${key}`)
             if (!res.ok) throw new Error('Erro ao buscar jogos')
             const json = await res.json()
-            return { key, jogos: (json.jogos ?? []) as Jogo[], bloqueado: !!json.bloqueadoPeloPlano }
+            return { key, jogos: (json.jogos ?? []) as Jogo[] }
           }),
         )
         if (cancelado) return
 
         const mapa = new Map<string, Jogo[]>()
-        const bloqueados = new Set<string>()
         let algumErro = false
         for (const r of resultados) {
-          if (r.status === 'fulfilled') {
-            mapa.set(r.value.key, r.value.jogos)
-            if (r.value.bloqueado) bloqueados.add(r.value.key)
-          } else {
-            algumErro = true
-          }
+          if (r.status === 'fulfilled') mapa.set(r.value.key, r.value.jogos)
+          else algumErro = true
         }
         setJogosPorDia(mapa)
-        setDiasBloqueados(bloqueados)
         if (algumErro) setErro('Alguns dias não carregaram — tente recarregar')
       } finally {
         if (!cancelado) setCarregando(false)
@@ -100,7 +93,6 @@ export function useJogosCalendario() {
     hoje,
     diasVisiveis,
     jogosPorDia: jogosPorDiaFiltrado,
-    diasBloqueados,
     carregando,
     erro,
     ligasSelecionadas,

@@ -2,6 +2,7 @@ import express from 'express'
 import { listarCampanhas, getTemplateLink, baixarBaseCSV, invalidateCache, close } from './scraper.js'
 import { buscarResultadoAcid, closeSuperbet } from './superbetScraper.js'
 import { listarEdicoes, buscarResultadoEdicao, closeH2Premios, type ContaH2Premios } from './h2premiosScraper.js'
+import { buscarJogosPorData, closeSofascore } from './sofascoreScraper.js'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3334', 10)
@@ -119,10 +120,26 @@ app.get('/h2premios/resultado-edicao', async (req, res) => {
   }
 })
 
+app.get('/sofascore/fixtures', async (req, res) => {
+  try {
+    const date = String(req.query.date ?? '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      res.status(400).json({ error: 'Parametro "date" obrigatorio (YYYY-MM-DD)' })
+      return
+    }
+    const jogos = await buscarJogosPorData(date)
+    res.json({ jogos })
+  } catch (err) {
+    console.error('[sofascore] /sofascore/fixtures error:', (err as Error).message)
+    res.status(502).json({ error: (err as Error).message })
+  }
+})
+
 process.on('SIGTERM', async () => {
   console.log('[daxx] SIGTERM received, closing browser')
   await closeSuperbet()
   await closeH2Premios()
+  await closeSofascore()
   await close()
   process.exit(0)
 })
@@ -131,6 +148,7 @@ process.on('SIGINT', async () => {
   console.log('[daxx] SIGINT received, closing browser')
   await closeSuperbet()
   await closeH2Premios()
+  await closeSofascore()
   await close()
   process.exit(0)
 })

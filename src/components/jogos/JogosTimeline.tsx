@@ -11,7 +11,6 @@ export function JogosTimeline() {
     hoje,
     diasVisiveis,
     jogosPorDia,
-    diasBloqueados,
     carregando,
     erro,
     ligasSelecionadas,
@@ -25,27 +24,31 @@ export function JogosTimeline() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)]">
-        <div className="flex items-center gap-3">
-          <JogosFiltros selecionadas={ligasSelecionadas} onChange={setLigasSelecionadas} />
-          {carregando && <RefreshCw size={14} className="animate-spin text-[var(--text-muted)]" />}
-          {erro && (
-            <span className="flex items-center gap-1 text-xs text-[var(--error)]">
-              <AlertTriangle size={12} />
-              {erro}
-            </span>
-          )}
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            {carregando && <RefreshCw size={14} className="animate-spin text-[var(--text-muted)]" />}
+            {erro && (
+              <span className="flex items-center gap-1 text-xs text-[var(--error)]">
+                <AlertTriangle size={12} />
+                {erro}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={recuar} icon={<ChevronLeft size={16} />}>
+              Anterior
+            </Button>
+            <Button variant="secondary" size="sm" onClick={irParaHoje}>
+              Hoje
+            </Button>
+            <Button variant="ghost" size="sm" onClick={avancar} icon={<ChevronRight size={16} />}>
+              Próximo
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={recuar} icon={<ChevronLeft size={16} />}>
-            Anterior
-          </Button>
-          <Button variant="secondary" size="sm" onClick={irParaHoje}>
-            Hoje
-          </Button>
-          <Button variant="ghost" size="sm" onClick={avancar} icon={<ChevronRight size={16} />}>
-            Próximo
-          </Button>
+        <div className="px-4 pb-2.5">
+          <JogosFiltros selecionadas={ligasSelecionadas} onChange={setLigasSelecionadas} />
         </div>
       </div>
 
@@ -57,7 +60,6 @@ export function JogosTimeline() {
               data={data}
               hoje={hoje}
               jogos={jogosPorDia.get(chaveDia(data)) ?? []}
-              bloqueado={diasBloqueados.has(chaveDia(data))}
               index={index}
             />
           ))}
