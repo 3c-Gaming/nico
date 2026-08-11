@@ -95,7 +95,9 @@ async function ensurePage(): Promise<Page> {
     page = await context.newPage()
     await page.goto(SOFASCORE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
     lastNav = Date.now()
-    console.log('[sofascore] session ready')
+    const titulo = await page.title().catch(() => '')
+    const url = page.url()
+    console.log(`[sofascore] session ready — url=${url} title="${titulo}"`)
     return page
   })()
 
@@ -183,6 +185,7 @@ export async function buscarJogosPorData(dataISO: string): Promise<Jogo[]> {
         for (const d of datasJanela) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const r = await p.evaluate<any>(buscarJogosLigaJs(ligaId, d))
+          console.log(`[sofascore] DEBUG liga=${ligaId} data=${d} ok=${r.ok} status=${r.status ?? ''} events=${r.events?.length ?? 'n/a'}`)
           if (!r.ok) continue
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           for (const e of r.events as any[]) eventosPorId.set(e.id, e)
