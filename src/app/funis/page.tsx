@@ -10,6 +10,7 @@ import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
+import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
 function csvCampo(valor: string): string {
@@ -431,10 +432,10 @@ function FunisPageInner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ botId: row.botId, tags: row.tags, refresh: true }),
         }),
-        fetch('/api/leadhub/contagem-por-tag', {
+        fetch('/api/sendpulse/contagem-intervalo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tags: row.tags, data: trackingDataInicio, dataFim: trackingDataFim, refresh: true }),
+          body: JSON.stringify({ botId: row.botId, tags: row.tags, dataInicio: trackingDataInicio, dataFim: trackingDataFim, refresh: true }),
         }),
       ])
       if (hojeRes.ok) {
@@ -454,28 +455,22 @@ function FunisPageInner() {
   useEffect(() => { carregarDados() }, [saveVersion])
 
   // Total de leads no intervalo filtrado (todas as tags de todos os fluxos, não só os com UTM —
-  // "Total" na tela precisa disso pra qualquer fluxo com tag configurada). Uma chamada só com
-  // todas as tags e o intervalo inteiro (o endpoint já filtra o range direto na fonte), não uma
-  // por dia — bem mais leve que o fluxo de exportação por intervalo, que precisa dia a dia.
+  // "Total" na tela precisa disso pra qualquer fluxo com tag configurada). Direto na SendPulse
+  // (getByTag paginado), agrupado por bot — não usa mais o LeadHub (~60-70s fixos por chamada,
+  // bem mais lento que paginar direto na fonte).
   useEffect(() => {
     let cancelado = false
 
     async function carregarTotalIntervalo() {
       const configs = getState().flowTagConfigs
-      const tagsUnicas = [...new Set(Object.values(configs).flatMap((c) => c.tags ?? []))]
-      if (!tagsUnicas.length) return
+      const grupos = agruparTagsPorBot(Object.values(configs).map((c) => ({ botId: c.botId, tags: c.tags ?? [] })))
+      if (!grupos.length) return
 
       setCarregandoIntervalo(true)
+      setContagensIntervalo({})
       try {
-        const res = await fetch('/api/leadhub/contagem-por-tag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tags: tagsUnicas, data: trackingDataInicio, dataFim: trackingDataFim }),
-        })
-        if (res.ok && !cancelado) {
-          const data = await res.json()
-          setContagensIntervalo(data.leads ?? {})
-        }
+        const leads = await contarLeadsIntervalo(grupos, trackingDataInicio, trackingDataFim)
+        if (!cancelado) setContagensIntervalo(leads)
       } catch {
         // Total no intervalo é complementar — falha aqui não deve travar o resto da tela
       } finally {
@@ -675,28 +670,23 @@ function FunisPageInner() {
   }
 
   // Resultado (registros/FTDs por casa + leads por tag) de um dia específico. Registros/FTDs
-  // vêm do tracking 3CGG (rápido, ~1s). Leads por tag só têm fonte histórica via LeadHub — o
-  // endpoint novo direto na SendPulse só cobre "hoje" — e essa rota é lenta (~60s fixos por
-  // chamada, não por quantidade de tags), então cada dia do intervalo dispara UMA chamada só
-  // (todas as tags juntas) e os dias rodam em paralelo entre si.
-  async function buscarResultadosDoDia(data: string, tagsUnicas: string[]) {
-    const [superbetRes, betmgmRes, leadsRes] = await Promise.all([
+  // vêm do tracking 3CGG (rápido, ~1s). Leads por tag direto na SendPulse (getByTag paginado,
+  // agrupado por bot) — cada dia do intervalo dispara uma chamada por bot, e os dias rodam em
+  // paralelo entre si.
+  async function buscarResultadosDoDia(data: string, gruposBotTags: ReturnType<typeof agruparTagsPorBot>) {
+    const [superbetRes, betmgmRes, leadsPorTag] = await Promise.all([
       fetch(`/api/tracking/export?casa=superbet&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
       fetch(`/api/tracking/export?casa=betmgm&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
-      tagsUnicas.length === 0
-        ? Promise.resolve({ leads: {} as Record<string, number> })
-        : fetch('/api/leadhub/contagem-por-tag', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags: tagsUnicas, data }),
-          }).then((r) => (r.ok ? r.json() : { leads: {} })).catch(() => ({ leads: {} })),
+      gruposBotTags.length === 0
+        ? Promise.resolve({} as Record<string, number>)
+        : contarLeadsIntervalo(gruposBotTags, data, data),
     ])
     return {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       superbetEvents: (superbetRes as any)?.data ?? [],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       betmgmEvents: (betmgmRes as any)?.data ?? [],
-      leadsPorTag: (leadsRes as { leads?: Record<string, number> })?.leads ?? {},
+      leadsPorTag,
     }
   }
 
@@ -713,11 +703,11 @@ function FunisPageInner() {
     setExportando(true)
     setExportProgresso(`0 / ${datas.length} dia(s)...`)
     try {
-      const tagsUnicas = [...new Set(linhasParaExportar.flatMap((r) => r.tags))]
+      const gruposBotTags = agruparTagsPorBot(linhasParaExportar.map((r) => ({ botId: r.botId, tags: r.tags })))
       const resultadosPorDia = new Map<string, Awaited<ReturnType<typeof buscarResultadosDoDia>>>()
       let concluidos = 0
       await Promise.all(datas.map(async (data) => {
-        const resultado = await buscarResultadosDoDia(data, tagsUnicas)
+        const resultado = await buscarResultadosDoDia(data, gruposBotTags)
         resultadosPorDia.set(data, resultado)
         concluidos++
         setExportProgresso(`${concluidos} / ${datas.length} dia(s)...`)

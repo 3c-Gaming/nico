@@ -134,13 +134,11 @@ export interface ContagemTagHoje {
 }
 
 /**
- * Busca direto na API da SendPulse (getByTag) em vez do LeadHub (função externa) — bem mais
- * rápido: `meta.total` já vem certo mesmo pedindo poucos registros, e os contatos voltam
- * ordenados do mais recente pro mais antigo, então os de hoje sempre estão no topo da lista
- * (sem risco de "sumir" mesmo em tags com milhares de contatos acumulados).
- * Só serve pra "hoje" — não tem filtro de data pra consultar dias passados/futuros, porque
- * pra isso precisaria baixar a lista inteira da tag (poderia ser bem mais lento que o LeadHub,
- * que filtra a data no servidor).
+ * Busca direto na API da SendPulse (getByTag) — `meta.total` já vem certo mesmo pedindo poucos
+ * registros, e os contatos voltam ordenados do mais recente pro mais antigo, então os de hoje
+ * sempre estão no topo da lista (sem risco de "sumir" mesmo em tags com milhares de contatos
+ * acumulados), sem precisar paginar. Pra intervalos de mais de um dia, ver
+ * `contarPorTagIntervaloSendpulse` — mesma ideia, mas pagina até cobrir o intervalo inteiro.
  */
 export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiKey: string, signal?: AbortSignal): Promise<ContagemTagHoje> {
   const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=1000`
@@ -163,6 +161,63 @@ export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiK
   }
 
   return { total, hoje, ultimoLeadAt }
+}
+
+export interface ContagemTagIntervalo {
+  total: number
+  ultimoLeadAt: string | null
+}
+
+const TAMANHO_PAGINA_GETBYTAG = 1000
+// Teto de segurança pra paginação — 30 * 1000 = 30 mil contatos revisados no pior caso (intervalo
+// bem antigo numa tag com muito volume desde então). Intervalos recentes (o uso normal) param bem
+// antes disso.
+const MAX_PAGINAS_GETBYTAG = 30
+
+/**
+ * Conta quantos contatos de uma tag entraram dentro de [dataInicio, dataFim] (datas YYYY-MM-DD,
+ * fuso de Brasília, inclusive nos dois extremos) — direto na API da SendPulse (getByTag), sem
+ * passar pelo LeadHub (função externa que filtrava a data no servidor, mas levava ~60-70s fixos
+ * por chamada — muito mais lento que paginar aqui, confirmado ao vivo). A lista vem ordenada do
+ * mais recente pro mais antigo (`skip` pagina por 1000, o máximo que a API aceita); paramos assim
+ * que uma página inteira já é mais velha que `dataInicio` — não precisa varrer o histórico
+ * inteiro da tag pra intervalos recentes, que é o uso normal.
+ */
+export async function contarPorTagIntervaloSendpulse(
+  botId: string,
+  tag: string,
+  apiKey: string,
+  dataInicio: string,
+  dataFim: string,
+  signal?: AbortSignal,
+): Promise<ContagemTagIntervalo> {
+  let total = 0
+  let ultimoLeadAt: string | null = null
+
+  for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
+    const skip = pagina * TAMANHO_PAGINA_GETBYTAG
+    const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
+    const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+    if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+    const json = await res.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contatos = (json.data ?? []) as any[]
+    if (contatos.length === 0) break
+
+    for (const contato of contatos) {
+      const createdAt = String(contato.created_at ?? '')
+      if (!createdAt) continue
+      if (!ultimoLeadAt || createdAt > ultimoLeadAt) ultimoLeadAt = createdAt
+      const dia = dataParaBrasilISO(createdAt)
+      if (dia >= dataInicio && dia <= dataFim) total++
+    }
+
+    const maisVelhoDaPagina = dataParaBrasilISO(String(contatos[contatos.length - 1].created_at ?? ''))
+    if (maisVelhoDaPagina < dataInicio) break // resto é só mais antigo — nenhuma página seguinte vai ter algo no intervalo
+    if (contatos.length < TAMANHO_PAGINA_GETBYTAG) break // acabou a lista da tag
+  }
+
+  return { total, ultimoLeadAt }
 }
 
 export async function enviarMensagem(params: {

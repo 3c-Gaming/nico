@@ -9,9 +9,9 @@ const TTL_HOJE = 60_000
  * POST /api/leadhub/contagem-hoje-sendpulse
  * body: { botId: string; tags: string[]; refresh?: boolean }
  *
- * Alternativa ao /api/leadhub/contagem-por-tag pra contagem de HOJE: em vez de passar pela
- * função externa do LeadHub, busca direto na API da SendPulse (getByTag). Só serve pra "hoje" —
- * pra datas passadas/futuras use o endpoint antigo, que filtra data no servidor.
+ * Contagem de leads de HOJE, direto na API da SendPulse (getByTag) — sem paginar, já que "hoje"
+ * está sempre no topo da lista (ordenada do mais recente pro mais antigo). Pra um intervalo de
+ * mais de um dia, use /api/sendpulse/contagem-intervalo.
  */
 export async function POST(request: NextRequest) {
   try {

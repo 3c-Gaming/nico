@@ -18,6 +18,7 @@ import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { useToast } from '@/components/ui/Toast'
 import { calcularDataFilho } from '@/lib/esteira'
 import { getState } from '@/lib/store'
+import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
 import { ArrowLeft, Trash2, Pencil, X, Check, Copy, Link as LinkIcon, Play, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { StepNumero } from '@/components/disparos/StepNumero'
@@ -121,17 +122,12 @@ export default function DetalheDisparoPage() {
     const flowIds = disparo?.flowIds ?? (disparo?.flowId ? [disparo.flowId] : [])
     if (!disparo?.numerosSendpulse?.length || !disparo.dataDisparo || !flowIds.length) return
     const configs = getState().flowTagConfigs
-    const tags = [...new Set(flowIds.flatMap((fid) => configs[fid]?.tags ?? []))]
-    if (!tags.length) return
+    const grupos = agruparTagsPorBot(flowIds.map((fid) => ({ botId: configs[fid]?.botId, tags: configs[fid]?.tags ?? [] })))
+    if (!grupos.length) return
     setCarregandoLeads(true)
-    fetch('/api/leadhub/contagem-por-tag', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags, data: disparo.dataDisparo }),
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        const total = Object.values(json.leads as Record<string, number>).reduce((s, v) => s + v, 0)
+    contarLeadsIntervalo(grupos, disparo.dataDisparo, disparo.dataDisparo)
+      .then((leads) => {
+        const total = Object.values(leads).reduce((s, v) => s + v, 0)
         if (total !== disparo.conversao?.leadsFluxo) {
           update(id, {
             conversao: {
@@ -150,18 +146,13 @@ export default function DetalheDisparoPage() {
   useEffect(() => {
     if (!modoEdicao || !formData.dataDisparo || !formData.flowIds.length) return
     const configs = getState().flowTagConfigs
-    const tags = [...new Set(formData.flowIds.flatMap((fid) => configs[fid]?.tags ?? []))]
-    if (!tags.length) return
+    const grupos = agruparTagsPorBot(formData.flowIds.map((fid) => ({ botId: configs[fid]?.botId, tags: configs[fid]?.tags ?? [] })))
+    if (!grupos.length) return
     setCarregandoLeads(true)
     const timer = setTimeout(() => {
-      fetch('/api/leadhub/contagem-por-tag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags, data: formData.dataDisparo }),
-      })
-        .then((res) => res.json())
-        .then((json) => {
-          const total = Object.values(json.leads as Record<string, number>).reduce((s, v) => s + v, 0)
+      contarLeadsIntervalo(grupos, formData.dataDisparo, formData.dataDisparo)
+        .then((leads) => {
+          const total = Object.values(leads).reduce((s, v) => s + v, 0)
           setFormData((prev) => ({ ...prev, leadsFluxo: total }))
         })
         .catch(() => {})
