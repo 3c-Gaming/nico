@@ -83,24 +83,29 @@ async function contarTagsSendpulseTotal(tags: string[]): Promise<Record<string, 
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as { tags: string[]; data?: string; refresh?: boolean }
+    const body = await request.json() as { tags: string[]; data?: string; dataFim?: string; refresh?: boolean }
     if (!body.tags || !Array.isArray(body.tags) || body.tags.length === 0) {
       return NextResponse.json({ error: 'tags é obrigatório' }, { status: 400 })
     }
 
+    const dataInicio = body.data ?? hojeBrasilISO()
+    const dataFim = body.dataFim ?? dataInicio
+
     if (body.refresh) {
       for (const tag of body.tags) {
-        invalidate('leadhub-hoje-v2', tag)
+        invalidate('leadhub-contagem-v2', `${tag}:${dataInicio}:${dataFim}`)
       }
       invalidate('sendpulse-tags-por-bot')
     }
 
-    const hoje = body.data ?? hojeBrasilISO()
     const [totais, resultadosHoje] = await Promise.all([
       contarTagsSendpulseTotal(body.tags).catch(() => ({} as Record<string, number>)),
       Promise.allSettled(
         body.tags.map(async (tag) => {
-          const hojeResult = await getOrFetch('leadhub-hoje-v2', tag, TTL_TODAY, () => contarTag(tag, hoje, hoje))
+          // Chave de cache inclui o intervalo — a mesma tag é consultada tanto pro dia único
+          // (export por dia, "hoje") quanto por um intervalo maior (Total da tela) e são
+          // contagens diferentes, não podem compartilhar a mesma entrada de cache.
+          const hojeResult = await getOrFetch('leadhub-contagem-v2', `${tag}:${dataInicio}:${dataFim}`, TTL_TODAY, () => contarTag(tag, dataInicio, dataFim))
           return { tag, leads: hojeResult.count, ultimoLead: hojeResult.ultimoLeadAt }
         }),
       ),

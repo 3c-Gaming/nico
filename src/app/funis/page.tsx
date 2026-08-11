@@ -57,6 +57,7 @@ interface FlowRow {
   total: number
   ultimoLeadAt: string | null
   carregandoContagens: boolean
+  carregandoTotal: boolean
 }
 
 function chaveLinha(row: FlowRow): string {
@@ -324,8 +325,12 @@ function FunisPageInner() {
   const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [fluxosMap, setFluxosMap] = useState<Record<string, FluxoSendpulse[]>>({})
   const [contagens, setContagens] = useState<Record<string, number>>({})
-  const [contagensTotal, setContagensTotal] = useState<Record<string, number>>({})
   const [ultimoLeadMap, setUltimoLeadMap] = useState<Record<string, string | null>>({})
+  // Total de leads dentro do intervalo filtrado (trackingDataInicio..trackingDataFim) — não é
+  // mais o total histórico da tag, é a soma real do período selecionado (mesma fonte/lógica que
+  // já usávamos pra exportar por intervalo, só que aplicada direto na tela em vez de só no CSV).
+  const [contagensIntervalo, setContagensIntervalo] = useState<Record<string, number>>({})
+  const [carregandoIntervalo, setCarregandoIntervalo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -396,7 +401,6 @@ function FunisPageInner() {
             if (res.ok) {
               const data = await res.json()
               setContagens((prev) => ({ ...prev, ...data.leads }))
-              setContagensTotal((prev) => ({ ...prev, ...data.totais }))
               setUltimoLeadMap((prev) => ({ ...prev, ...data.ultimoLead }))
             }
           } finally {
@@ -421,16 +425,26 @@ function FunisPageInner() {
     if (!row.tags.length || recarregandoTag[key]) return
     setRecarregandoTag((prev) => ({ ...prev, [key]: true }))
     try {
-      const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ botId: row.botId, tags: row.tags, refresh: true }),
-      })
-      if (res.ok) {
-        const data = await res.json()
+      const [hojeRes, intervaloRes] = await Promise.all([
+        fetch('/api/leadhub/contagem-hoje-sendpulse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botId: row.botId, tags: row.tags, refresh: true }),
+        }),
+        fetch('/api/leadhub/contagem-por-tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: row.tags, data: trackingDataInicio, dataFim: trackingDataFim, refresh: true }),
+        }),
+      ])
+      if (hojeRes.ok) {
+        const data = await hojeRes.json()
         setContagens((prev) => ({ ...prev, ...data.leads }))
-        setContagensTotal((prev) => ({ ...prev, ...data.totais }))
         setUltimoLeadMap((prev) => ({ ...prev, ...data.ultimoLead }))
+      }
+      if (intervaloRes.ok) {
+        const data = await intervaloRes.json()
+        setContagensIntervalo((prev) => ({ ...prev, ...data.leads }))
       }
     } catch {} finally {
       setRecarregandoTag((prev) => ({ ...prev, [key]: false }))
@@ -438,6 +452,40 @@ function FunisPageInner() {
   }
 
   useEffect(() => { carregarDados() }, [saveVersion])
+
+  // Total de leads no intervalo filtrado (todas as tags de todos os fluxos, não só os com UTM —
+  // "Total" na tela precisa disso pra qualquer fluxo com tag configurada). Uma chamada só com
+  // todas as tags e o intervalo inteiro (o endpoint já filtra o range direto na fonte), não uma
+  // por dia — bem mais leve que o fluxo de exportação por intervalo, que precisa dia a dia.
+  useEffect(() => {
+    let cancelado = false
+
+    async function carregarTotalIntervalo() {
+      const configs = getState().flowTagConfigs
+      const tagsUnicas = [...new Set(Object.values(configs).flatMap((c) => c.tags ?? []))]
+      if (!tagsUnicas.length) return
+
+      setCarregandoIntervalo(true)
+      try {
+        const res = await fetch('/api/leadhub/contagem-por-tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: tagsUnicas, data: trackingDataInicio, dataFim: trackingDataFim }),
+        })
+        if (res.ok && !cancelado) {
+          const data = await res.json()
+          setContagensIntervalo(data.leads ?? {})
+        }
+      } catch {
+        // Total no intervalo é complementar — falha aqui não deve travar o resto da tela
+      } finally {
+        if (!cancelado) setCarregandoIntervalo(false)
+      }
+    }
+
+    carregarTotalIntervalo()
+    return () => { cancelado = true }
+  }, [trackingDataInicio, trackingDataFim, saveVersion])
 
   // Busca tracking 3CGG para todos os flows que têm utm
   useEffect(() => {
@@ -523,7 +571,7 @@ function FunisPageInner() {
         const tags = configs[flow.id]?.tags ?? []
         const funil = configs[flow.id]?.funil
         const leads = tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
-        const total = tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+        const total = tags.reduce((acc, t) => acc + (contagensIntervalo[t] ?? 0), 0)
         const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
           const ts = ultimoLeadMap[t] ?? null
           if (!ts) return best
@@ -550,6 +598,7 @@ function FunisPageInner() {
           total,
           ultimoLeadAt,
           carregandoContagens: tags.length > 0 && carregandoFlows.has(flow.id),
+          carregandoTotal: tags.length > 0 && carregandoIntervalo,
         })
       }
     }
@@ -559,7 +608,7 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensTotal, ultimoLeadMap, carregandoFlows, filtroBot, filtroBusca, filtroCasas, filtroTipo])
+  }, [numeros, fluxosMap, contagens, contagensIntervalo, ultimoLeadMap, carregandoFlows, carregandoIntervalo, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
@@ -1096,7 +1145,7 @@ function FunisPageInner() {
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          {row.carregandoContagens ? (
+                          {row.carregandoTotal ? (
                             <Spinner size={12} />
                           ) : !row.tags.length ? (
                             <span className="text-xs text-[var(--text-muted)]/40">—</span>
