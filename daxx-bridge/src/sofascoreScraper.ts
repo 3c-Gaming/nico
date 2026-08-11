@@ -185,7 +185,6 @@ export async function buscarJogosPorData(dataISO: string): Promise<Jogo[]> {
         for (const d of datasJanela) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const r = await p.evaluate<any>(buscarJogosLigaJs(ligaId, d))
-          console.log(`[sofascore] DEBUG liga=${ligaId} data=${d} ok=${r.ok} status=${r.status ?? ''} events=${r.events?.length ?? 'n/a'}`)
           if (!r.ok) continue
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           for (const e of r.events as any[]) eventosPorId.set(e.id, e)
