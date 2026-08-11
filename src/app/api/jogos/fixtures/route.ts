@@ -5,6 +5,11 @@ import { hojeBrasilISO } from '@/lib/datas'
 
 const UM_DIA = 24 * 60 * 60 * 1000
 
+// O scraper serializa as buscas (uma data de cada vez, pra não sobrecarregar a página
+// compartilhada do Playwright) — um dia que cai no fim da fila de uma carga de calendário inteira
+// (até 16 dias de uma vez) pode esperar bem mais que os 30s de antes.
+export const maxDuration = 200
+
 /**
  * TTL por tipo de data — cachear bem evita reabrir sessão/refazer os 7 fetches (um por liga) no
  * scraper a cada navegação no calendário:
@@ -29,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const jogos = await getOrFetch('jogos-fixtures-sofascore', date, ttlParaData(date), () =>
-      buscarJogosPorData(date, AbortSignal.timeout(30_000)),
+      buscarJogosPorData(date, AbortSignal.timeout(180_000)),
     )
     return NextResponse.json({ jogos })
   } catch (err) {

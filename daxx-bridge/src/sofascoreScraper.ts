@@ -57,6 +57,18 @@ let lastNav = 0
 const SESSION_TTL = 30 * 60 * 1000
 let sessaoPromise: Promise<Page> | null = null
 
+// Serializa as buscas — disparar várias datas em paralelo significa dezenas de page.evaluate()
+// concorrentes na mesma página compartilhada, e isso derrubou a instância no Render (reinício
+// por instância, respostas vazias no meio de uma rajada de requests). Uma data de cada vez é bem
+// mais lento por request, mas não derruba o serviço.
+let filaSofascore: Promise<unknown> = Promise.resolve()
+
+function comFila<T>(fn: () => Promise<T>): Promise<T> {
+  const proxima = filaSofascore.then(fn, fn)
+  filaSofascore = proxima.then(() => {}, () => {})
+  return proxima
+}
+
 /** Sem login (dados públicos) — só precisa de uma sessão de navegador de verdade (cookies +
  * fingerprint TLS do Chrome) pra passar pela proteção anti-bot. Confirmado ao vivo: chamar a API
  * direto de fora de um navegador (curl, headers de navegador falsos) dá 403; a mesma chamada
@@ -156,35 +168,36 @@ function mapearEvento(e: any, ligaId: number): Jogo {
  * nele.
  */
 export async function buscarJogosPorData(dataISO: string): Promise<Jogo[]> {
-  const p = await ensurePage()
-  const ligaIds = Object.keys(LIGAS_SOFASCORE).map(Number)
-  const datasJanela = [diaSeguinte(dataISO, -1), dataISO, diaSeguinte(dataISO, 1)]
+  return comFila(async () => {
+    const p = await ensurePage()
+    const ligaIds = Object.keys(LIGAS_SOFASCORE).map(Number)
+    const datasJanela = [diaSeguinte(dataISO, -1), dataISO, diaSeguinte(dataISO, 1)]
 
-  const resultados = await Promise.all(
-    ligaIds.map(async (ligaId) => {
+    // Sequencial por liga (não Promise.all) — de propósito, pra não empilhar 21 evaluates
+    // concorrentes na mesma página numa instância pequena.
+    const todosJogos: Jogo[] = []
+    for (const ligaId of ligaIds) {
       try {
-        const porData = await Promise.all(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          datasJanela.map((d) => p.evaluate<any>(buscarJogosLigaJs(ligaId, d))),
-        )
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventosPorId = new Map<number, any>()
-        for (const r of porData) {
+        for (const d of datasJanela) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const r = await p.evaluate<any>(buscarJogosLigaJs(ligaId, d))
           if (!r.ok) continue
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           for (const e of r.events as any[]) eventosPorId.set(e.id, e)
         }
-        return [...eventosPorId.values()]
+        const jogosDaLiga = [...eventosPorId.values()]
           .filter((e) => dataBrasilISO(e.startTimestamp ?? 0) === dataISO)
           .map((e) => mapearEvento(e, ligaId))
+        todosJogos.push(...jogosDaLiga)
       } catch (err) {
         console.error(`[sofascore] erro liga ${ligaId}:`, (err as Error).message)
-        return []
       }
-    }),
-  )
+    }
 
-  return resultados.flat().sort((a, b) => a.date.localeCompare(b.date))
+    return todosJogos.sort((a, b) => a.date.localeCompare(b.date))
+  })
 }
 
 export async function closeSofascore(): Promise<void> {
