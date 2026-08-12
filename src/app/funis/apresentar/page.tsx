@@ -5,7 +5,12 @@ import { useSearchParams } from 'next/navigation'
 import { Loader2, Trophy, ChevronDown } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
+import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
+import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
+import { BarraComparativa } from '@/components/resultados-junho/BarraComparativa'
 import type { FlowTagConfig } from '@/types'
+
+const PALETA_CORES = ['var(--d1)', 'var(--pontual)', 'var(--d3)', 'var(--d5)', 'var(--d7)', 'var(--success)']
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
 
@@ -21,6 +26,11 @@ function formatDataExtenso(data: string): string {
   const d = new Date(`${data}T00:00:00`)
   const texto = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
   return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+function formatDataCurta(data: string): string {
+  const [, mes, dia] = data.split('-')
+  return `${dia}/${mes}`
 }
 
 interface LinhaConfig extends FlowTagConfig {
@@ -154,6 +164,47 @@ function FunisApresentarInner() {
     [totaisPorFunil],
   )
 
+  const serieDiaria = useMemo(() => {
+    if (!linhas) return { registros: [], ftds: [] }
+    const registros: { label: string; valor: number }[] = []
+    const ftds: { label: string; valor: number }[] = []
+    for (const data of datas) {
+      const dia = resultadosPorDia.get(data)
+      if (!dia) continue
+      let r = 0
+      let f = 0
+      for (const linha of linhas) {
+        const res = calcularResultadoLinhaNoDia(linha, dia)
+        r += res.registros
+        f += res.ftds
+      }
+      const label = formatDataCurta(data)
+      registros.push({ label, valor: r })
+      ftds.push({ label, valor: f })
+    }
+    return { registros, ftds }
+  }, [linhas, datas, resultadosPorDia])
+
+  const serieLeadsPorFunil = useMemo<SerieLinha[]>(() => {
+    if (!linhas) return []
+    const diasComDados = datas.filter((d) => resultadosPorDia.has(d))
+    return linhas.map((linha, i) => ({
+      nome: linha.nomeFunil,
+      cor: PALETA_CORES[i % PALETA_CORES.length],
+      pontos: diasComDados.map((data) => {
+        const dia = resultadosPorDia.get(data)!
+        const r = calcularResultadoLinhaNoDia(linha, dia)
+        return { label: formatDataCurta(data), valor: r.leads }
+      }),
+    }))
+  }, [linhas, datas, resultadosPorDia])
+
+  const itensComparativo = totaisPorFunil.map((f) => ({ label: f.nomeFunil, valorA: f.registros, valorB: f.ftds }))
+
+  const itensRankingConversao = [...totaisPorFunil]
+    .sort((a, b) => (b.convFtd ?? 0) - (a.convFtd ?? 0))
+    .map((f) => ({ label: f.nomeFunil, valor: f.convFtd ?? 0, cor: 'var(--success)' }))
+
   if (erro || erroIntervalo) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -209,6 +260,39 @@ function FunisApresentarInner() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {serieDiaria.registros.length > 0 && (
+          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Evolução no período</h3>
+            <GraficoLinha
+              series={[
+                { nome: 'Registros', cor: 'var(--d1)', pontos: serieDiaria.registros },
+                { nome: 'FTDs', cor: 'var(--pontual)', pontos: serieDiaria.ftds },
+              ]}
+              formatarValor={formatInt}
+            />
+          </div>
+        )}
+
+        {serieLeadsPorFunil.length > 0 && serieLeadsPorFunil[0].pontos.length > 0 && (
+          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por dia, por funil</h3>
+            <GraficoLinha series={serieLeadsPorFunil} formatarValor={formatInt} />
+          </div>
+        )}
+
+        {itensComparativo.length > 0 && serieDiaria.registros.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Registros vs FTDs por funil</h3>
+              <GraficoBarraDupla itens={itensComparativo} nomeA="Registros" nomeB="FTDs" formatarValor={formatInt} />
+            </div>
+            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Ranking de conversão (FTD %)</h3>
+              <BarraComparativa itens={itensRankingConversao} formatarValor={(v) => `${v.toFixed(1)}%`} />
+            </div>
           </div>
         )}
 
