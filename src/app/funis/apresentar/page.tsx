@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Trophy, ChevronDown } from 'lucide-react'
+import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
 import { GraficoLinha } from '@/components/ui/GraficoLinha'
@@ -29,6 +29,25 @@ function formatDataExtenso(data: string): string {
 function formatDataCurta(data: string): string {
   const [, mes, dia] = data.split('-')
   return `${dia}/${mes}`
+}
+
+function csvCampo(valor: string): string {
+  if (valor.includes(',') || valor.includes('"') || valor.includes('\n')) {
+    return `"${valor.replace(/"/g, '""')}"`
+  }
+  return valor
+}
+
+function baixarCsv(conteudo: string, nomeArquivo: string) {
+  // BOM UTF-8 na frente: sem isso o Google Sheets/Excel às vezes erram a detecção de encoding
+  // em CSVs com acentos.
+  const blob = new Blob(['\uFEFF' + conteudo], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nomeArquivo
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 interface LinhaConfig extends FlowTagConfig {
@@ -181,6 +200,29 @@ function FunisApresentarInner() {
     .sort((a, b) => (b.convFtd ?? 0) - (a.convFtd ?? 0))
     .map((f) => ({ label: f.nomeFunil, valor: f.convFtd ?? 0, cor: 'var(--success)' }))
 
+  function exportarCsv() {
+    if (!linhas) return
+    const header = ['Data', 'Funil', 'Registros', 'FTDs', 'Conv. FTD %']
+    const linhasCsv: string[] = []
+    for (const data of datas) {
+      const dia = resultadosPorDia.get(data)
+      if (!dia) continue
+      let totalRegistros = 0
+      let totalFtds = 0
+      for (const linha of linhas) {
+        const r = calcularResultadoLinhaNoDia(linha, dia)
+        const convFtd = r.registros > 0 ? ((r.ftds / r.registros) * 100).toFixed(1) : ''
+        totalRegistros += r.registros
+        totalFtds += r.ftds
+        linhasCsv.push([data, linha.nomeFunil, String(r.registros), String(r.ftds), convFtd].map(csvCampo).join(','))
+      }
+      const totalConvFtd = totalRegistros > 0 ? ((totalFtds / totalRegistros) * 100).toFixed(1) : ''
+      linhasCsv.push([data, 'Total', String(totalRegistros), String(totalFtds), totalConvFtd].map(csvCampo).join(','))
+    }
+    const sufixo = inicio === fim ? inicio : `${inicio}_a_${fim}`
+    baixarCsv([header.join(','), ...linhasCsv].join('\n'), `funis-apresentacao-${sufixo}.csv`)
+  }
+
   if (erro || erroIntervalo) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -201,11 +243,22 @@ function FunisApresentarInner() {
   return (
     <div className="min-h-full w-full px-4 py-8 md:px-10 md:py-10">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">
-            Resultado — {linhas.length} funi{linhas.length === 1 ? 'l' : 's'}
-          </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Período: {periodoLabel}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">
+              Resultado — {linhas.length} funi{linhas.length === 1 ? 'l' : 's'}
+            </h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">Período: {periodoLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={exportarCsv}
+            disabled={resultadosPorDia.size === 0}
+            className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors shrink-0"
+          >
+            <Download size={14} />
+            Exportar CSV
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
