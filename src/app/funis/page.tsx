@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
@@ -11,6 +11,7 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
+import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
 function csvCampo(valor: string): string {
@@ -30,12 +31,6 @@ function baixarCsv(conteudo: string, nomeArquivo: string) {
   a.download = nomeArquivo
   a.click()
   URL.revokeObjectURL(url)
-}
-
-// Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
-// diferentes) — soma os resultados de todas ao invés de só olhar a principal.
-function utmsDoFluxo(c: { utm?: string | null; utmsExtras?: string[] }): string[] {
-  return [c.utm, ...(c.utmsExtras ?? [])].filter((u): u is string => !!u)
 }
 
 function getLocalDate(): string {
@@ -320,6 +315,8 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
     </div>
   )
 }
+
+const MAX_DIAS_EXPORT_INTERVALO = 31
 
 function FunisPageInner() {
   const searchParams = useSearchParams()
@@ -658,40 +655,6 @@ function FunisPageInner() {
     baixarCsv([header.join(','), ...linhas].join('\n'), `funis-resultados-${dataLabel}.csv`)
   }
 
-  function gerarRangeDatas(inicio: string, fim: string): string[] {
-    const datas: string[] = []
-    const atual = new Date(`${inicio}T00:00:00`)
-    const fimDate = new Date(`${fim}T00:00:00`)
-    while (atual <= fimDate) {
-      datas.push(`${atual.getFullYear()}-${String(atual.getMonth() + 1).padStart(2, '0')}-${String(atual.getDate()).padStart(2, '0')}`)
-      atual.setDate(atual.getDate() + 1)
-    }
-    return datas
-  }
-
-  // Resultado (registros/FTDs por casa + leads por tag) de um dia específico. Registros/FTDs
-  // vêm do tracking 3CGG (rápido, ~1s). Leads por tag direto na SendPulse (getByTag paginado,
-  // agrupado por bot) — cada dia do intervalo dispara uma chamada por bot, e os dias rodam em
-  // paralelo entre si.
-  async function buscarResultadosDoDia(data: string, gruposBotTags: ReturnType<typeof agruparTagsPorBot>) {
-    const [superbetRes, betmgmRes, leadsPorTag] = await Promise.all([
-      fetch(`/api/tracking/export?casa=superbet&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
-      fetch(`/api/tracking/export?casa=betmgm&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
-      gruposBotTags.length === 0
-        ? Promise.resolve({} as Record<string, number>)
-        : contarLeadsIntervalo(gruposBotTags, data, data),
-    ])
-    return {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      superbetEvents: (superbetRes as any)?.data ?? [],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      betmgmEvents: (betmgmRes as any)?.data ?? [],
-      leadsPorTag,
-    }
-  }
-
-  const MAX_DIAS_EXPORT_INTERVALO = 31
-
   async function exportarCsvIntervalo() {
     const datas = gerarRangeDatas(exportInicio, exportFim)
     if (datas.length === 0) { setExportErro('Intervalo inválido'); return }
@@ -721,26 +684,9 @@ function FunisPageInner() {
         if (!dia) continue
         for (const row of linhasParaExportar) {
           const cfg = getState().flowTagConfigs[row.flow.id]
-          const utms = utmsDoFluxo(cfg ?? {})
-          let registros = 0
-          let ftds = 0
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const item of dia.superbetEvents as any[]) {
-            if (utms.some((utm) => String(item.acid).includes(utm))) {
-              registros += item.registrations ?? 0
-              ftds += item.ftds ?? 0
-            }
-          }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const item of dia.betmgmEvents as any[]) {
-            if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
-              registros += item.registrations ?? 0
-              ftds += item.ftds ?? 0
-            }
-          }
-          const leads = row.tags.reduce((acc, t) => acc + (dia.leadsPorTag[t] ?? 0), 0)
-          const convFtd = leads > 0 ? ((ftds / leads) * 100).toFixed(1) : ''
-          const convReg = leads > 0 ? ((registros / leads) * 100).toFixed(1) : ''
+          const { leads, registros, ftds, convFtd: convFtdNum, convReg: convRegNum } = calcularResultadoLinhaNoDia(cfg ?? {}, dia)
+          const convFtd = convFtdNum !== null ? convFtdNum.toFixed(1) : ''
+          const convReg = convRegNum !== null ? convRegNum.toFixed(1) : ''
           linhas.push([
             data,
             row.funil ?? '',
@@ -858,6 +804,23 @@ function FunisPageInner() {
                 </button>
               </div>
             </Dropdown>
+            <button
+              onClick={() => {
+                const flowIds = linhasParaExportar.map((r) => r.flow.id)
+                if (flowIds.length === 0) return
+                const params = new URLSearchParams({
+                  flows: flowIds.join(','),
+                  inicio: trackingDataInicio,
+                  fim: trackingDataFim,
+                })
+                window.open(`/funis/apresentar?${params.toString()}`, '_blank')
+              }}
+              disabled={linhasParaExportar.length === 0}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+            >
+              <Presentation size={14} />
+              Apresentar dados
+            </button>
             <button
               onClick={() => setSaveVersion((v) => v + 1)}
               disabled={refreshing}

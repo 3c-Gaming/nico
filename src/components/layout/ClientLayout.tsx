@@ -7,7 +7,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { DataInitializer } from '@/components/DataInitializer'
 
 function isTelaCheia(pathname: string): boolean {
-  return pathname.startsWith('/r/') || /^\/resultados\/[^/]+\/apresentar/.test(pathname)
+  return pathname.startsWith('/r/') || pathname.startsWith('/funis/apresentar') || /^\/resultados\/[^/]+\/apresentar/.test(pathname)
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
