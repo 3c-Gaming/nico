@@ -1,16 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
+import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
-import { GraficoLinha } from '@/components/ui/GraficoLinha'
+import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { BarraComparativa } from '@/components/resultados-junho/BarraComparativa'
 import type { FlowTagConfig } from '@/types'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
+const PALETA_CORES = ['var(--d1)', 'var(--pontual)', 'var(--d3)', 'var(--d5)', 'var(--d7)', 'var(--success)']
 
 function formatInt(n: number): string {
   return n.toLocaleString('pt-BR')
@@ -89,6 +91,9 @@ function FunisApresentarInner() {
   const [erro, setErro] = useState<string | null>(null)
   const [resultadosPorDia, setResultadosPorDia] = useState<Map<string, ResultadoDia>>(new Map())
   const [carregandoConfig, setCarregandoConfig] = useState(true)
+  const [leadsPorTagPorDia, setLeadsPorTagPorDia] = useState<Record<string, Record<string, number>>>({})
+  const [leadHubConcluido, setLeadHubConcluido] = useState(false)
+  const [leadHubProgresso, setLeadHubProgresso] = useState<ProgressoLeadHub | null>(null)
 
   const datas = useMemo(() => {
     if (!inicio || !fim) return []
@@ -136,19 +141,44 @@ function FunisApresentarInner() {
     return () => { ativo = false }
   }, [linhas, datas, erroIntervalo])
 
+  const tagsUnicas = useMemo(() => (linhas ? [...new Set(linhas.flatMap((l) => l.tags))] : []), [linhas])
+  const leadHubCarregando = tagsUnicas.length > 0 && !leadHubConcluido
+
+  useEffect(() => {
+    if (!linhas || linhas.length === 0 || datas.length === 0 || erroIntervalo || tagsUnicas.length === 0) return
+    let ativo = true
+    buscarLeadsPorDiaLeadHub(tagsUnicas, inicio, fim, (p) => {
+      if (ativo) setLeadHubProgresso(p)
+    }).then((resultado) => {
+      if (!ativo) return
+      setLeadsPorTagPorDia(resultado)
+      setLeadHubConcluido(true)
+    })
+    return () => { ativo = false }
+  }, [linhas, datas, tagsUnicas, inicio, fim, erroIntervalo])
+
+  const leadsDoFunilNoDia = useCallback(
+    (linha: LinhaConfig, data: string) => linha.tags.reduce((acc, tag) => acc + (leadsPorTagPorDia[tag]?.[data] ?? 0), 0),
+    [leadsPorTagPorDia],
+  )
+
   const totais = useMemo(() => {
-    if (!linhas) return { registros: 0, ftds: 0 }
+    if (!linhas) return { leads: 0, registros: 0, ftds: 0 }
+    let leads = 0
     let registros = 0
     let ftds = 0
-    for (const dia of resultadosPorDia.values()) {
+    for (const data of datas) {
+      const dia = resultadosPorDia.get(data)
+      if (!dia) continue
       for (const linha of linhas) {
         const r = calcularResultadoLinhaNoDia(linha, dia)
+        leads += leadsDoFunilNoDia(linha, data)
         registros += r.registros
         ftds += r.ftds
       }
     }
-    return { registros, ftds }
-  }, [linhas, resultadosPorDia])
+    return { leads, registros, ftds }
+  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
 
   const convFtdMedia = totais.registros > 0 ? (totais.ftds / totais.registros) * 100 : null
   const periodoLabel = inicio === fim ? inicio : `${inicio} até ${fim}`
@@ -156,17 +186,21 @@ function FunisApresentarInner() {
   const totaisPorFunil = useMemo(() => {
     if (!linhas) return []
     return linhas.map((linha) => {
+      let leads = 0
       let registros = 0
       let ftds = 0
-      for (const dia of resultadosPorDia.values()) {
+      for (const data of datas) {
+        const dia = resultadosPorDia.get(data)
+        if (!dia) continue
         const r = calcularResultadoLinhaNoDia(linha, dia)
+        leads += leadsDoFunilNoDia(linha, data)
         registros += r.registros
         ftds += r.ftds
       }
       const convFtd = registros > 0 ? (ftds / registros) * 100 : null
-      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, registros, ftds, convFtd }
+      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd }
     })
-  }, [linhas, resultadosPorDia])
+  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
 
   const rankingPeriodo = useMemo(
     () => rankearFunis(totaisPorFunil).filter((r) => r.score > 0).slice(0, 2),
@@ -194,6 +228,16 @@ function FunisApresentarInner() {
     return { registros, ftds }
   }, [linhas, datas, resultadosPorDia])
 
+  const serieLeadsPorFunil = useMemo<SerieLinha[]>(() => {
+    if (!linhas) return []
+    const diasComDados = datas.filter((d) => resultadosPorDia.has(d))
+    return linhas.map((linha, i) => ({
+      nome: linha.nomeFunil,
+      cor: PALETA_CORES[i % PALETA_CORES.length],
+      pontos: diasComDados.map((data) => ({ label: formatDataCurta(data), valor: leadsDoFunilNoDia(linha, data) })),
+    }))
+  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
+
   const itensComparativo = totaisPorFunil.map((f) => ({ label: f.nomeFunil, valorA: f.registros, valorB: f.ftds }))
 
   const itensRankingConversao = [...totaisPorFunil]
@@ -202,22 +246,25 @@ function FunisApresentarInner() {
 
   function exportarCsv() {
     if (!linhas) return
-    const header = ['Data', 'Funil', 'Registros', 'FTDs', 'Conv. FTD %']
+    const header = ['Data', 'Funil', 'Leads', 'Registros', 'FTDs', 'Conv. FTD %']
     const linhasCsv: string[] = []
     for (const data of datas) {
       const dia = resultadosPorDia.get(data)
       if (!dia) continue
+      let totalLeads = 0
       let totalRegistros = 0
       let totalFtds = 0
       for (const linha of linhas) {
         const r = calcularResultadoLinhaNoDia(linha, dia)
+        const leads = leadsDoFunilNoDia(linha, data)
         const convFtd = r.registros > 0 ? ((r.ftds / r.registros) * 100).toFixed(1) : ''
+        totalLeads += leads
         totalRegistros += r.registros
         totalFtds += r.ftds
-        linhasCsv.push([data, linha.nomeFunil, String(r.registros), String(r.ftds), convFtd].map(csvCampo).join(','))
+        linhasCsv.push([data, linha.nomeFunil, String(leads), String(r.registros), String(r.ftds), convFtd].map(csvCampo).join(','))
       }
       const totalConvFtd = totalRegistros > 0 ? ((totalFtds / totalRegistros) * 100).toFixed(1) : ''
-      linhasCsv.push([data, 'Total', String(totalRegistros), String(totalFtds), totalConvFtd].map(csvCampo).join(','))
+      linhasCsv.push([data, 'Total', String(totalLeads), String(totalRegistros), String(totalFtds), totalConvFtd].map(csvCampo).join(','))
     }
     const sufixo = inicio === fim ? inicio : `${inicio}_a_${fim}`
     baixarCsv([header.join(','), ...linhasCsv].join('\n'), `funis-apresentacao-${sufixo}.csv`)
@@ -249,6 +296,12 @@ function FunisApresentarInner() {
               Resultado — {linhas.length} funi{linhas.length === 1 ? 'l' : 's'}
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">Período: {periodoLabel}</p>
+            {leadHubCarregando && (
+              <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" />
+                Carregando leads (LeadHub){leadHubProgresso ? ` — ${leadHubProgresso.concluidos}/${leadHubProgresso.total} tags` : '...'}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -261,7 +314,8 @@ function FunisApresentarInner() {
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <ResumoTile label="Leads" value={totais.leads} loading={leadHubCarregando} />
           <ResumoTile label="Registros" value={totais.registros} />
           <ResumoTile label="FTDs" value={totais.ftds} />
           <ResumoTile label="Conv. FTD" value={convFtdMedia === null ? 0 : convFtdMedia} suffix="%" decimals={1} />
@@ -304,6 +358,13 @@ function FunisApresentarInner() {
           </div>
         )}
 
+        {!leadHubCarregando && serieLeadsPorFunil.length > 0 && serieLeadsPorFunil[0].pontos.length > 0 && (
+          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por dia, por funil</h3>
+            <GraficoLinha series={serieLeadsPorFunil} formatarValor={formatInt} />
+          </div>
+        )}
+
         {itensComparativo.length > 0 && serieDiaria.registros.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
@@ -320,7 +381,16 @@ function FunisApresentarInner() {
         <div className="space-y-4">
           {datas.map((data) => {
             const dia = resultadosPorDia.get(data)
-            return <BlocoDia key={data} data={data} dia={dia} linhas={linhas} />
+            return (
+              <BlocoDia
+                key={data}
+                data={data}
+                dia={dia}
+                linhas={linhas}
+                leadsPorTagPorDia={leadsPorTagPorDia}
+                leadHubCarregando={leadHubCarregando}
+              />
+            )
           })}
         </div>
       </div>
@@ -328,30 +398,47 @@ function FunisApresentarInner() {
   )
 }
 
-function ResumoTile({ label, value, suffix, decimals }: { label: string; value: number; suffix?: string; decimals?: number }) {
+function ResumoTile({ label, value, suffix, decimals, loading }: { label: string; value: number; suffix?: string; decimals?: number; loading?: boolean }) {
   return (
     <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 text-center flex flex-col items-center gap-1">
-      <span className="text-xl md:text-2xl font-bold text-[var(--text-primary)]">
-        {decimals ? value.toFixed(decimals) : formatInt(value)}
-        {suffix ?? ''}
-      </span>
+      {loading ? (
+        <Loader2 size={20} className="animate-spin text-[var(--text-muted)] my-1" />
+      ) : (
+        <span className="text-xl md:text-2xl font-bold text-[var(--text-primary)]">
+          {decimals ? value.toFixed(decimals) : formatInt(value)}
+          {suffix ?? ''}
+        </span>
+      )}
       <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
     </div>
   )
 }
 
-function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | undefined; linhas: LinhaConfig[] }) {
+function BlocoDia({
+  data,
+  dia,
+  linhas,
+  leadsPorTagPorDia,
+  leadHubCarregando,
+}: {
+  data: string
+  dia: ResultadoDia | undefined
+  linhas: LinhaConfig[]
+  leadsPorTagPorDia: Record<string, Record<string, number>>
+  leadHubCarregando: boolean
+}) {
   const [aberto, setAberto] = useState(true)
   const linhasComResultado = dia
     ? linhas.map((l) => {
         const r = calcularResultadoLinhaNoDia(l, dia)
         const convFtd = r.registros > 0 ? (r.ftds / r.registros) * 100 : null
-        return { linha: l, registros: r.registros, ftds: r.ftds, convFtd }
+        const leads = l.tags.reduce((acc, tag) => acc + (leadsPorTagPorDia[tag]?.[data] ?? 0), 0)
+        return { linha: l, leads, registros: r.registros, ftds: r.ftds, convFtd }
       })
     : []
   const totalDia = linhasComResultado.reduce(
-    (acc, { registros, ftds }) => ({ registros: acc.registros + registros, ftds: acc.ftds + ftds }),
-    { registros: 0, ftds: 0 },
+    (acc, { leads, registros, ftds }) => ({ leads: acc.leads + leads, registros: acc.registros + registros, ftds: acc.ftds + ftds }),
+    { leads: 0, registros: 0, ftds: 0 },
   )
   const totalConvFtd = totalDia.registros > 0 ? (totalDia.ftds / totalDia.registros) * 100 : null
 
@@ -373,7 +460,7 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
         </span>
         {dia ? (
           <span className="text-xs text-[var(--text-muted)]">
-            {formatInt(totalDia.registros)} reg · {formatInt(totalDia.ftds)} FTDs
+            {leadHubCarregando ? '…' : formatInt(totalDia.leads)} leads · {formatInt(totalDia.registros)} reg · {formatInt(totalDia.ftds)} FTDs
           </span>
         ) : (
           <Loader2 size={14} className="animate-spin text-[var(--text-muted)]" />
@@ -385,13 +472,14 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
             <thead>
               <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] tracking-wide">
                 <th className="px-4 py-2 font-medium">Funil</th>
+                <th className="px-4 py-2 font-medium text-right">Leads</th>
                 <th className="px-4 py-2 font-medium text-right">Registros</th>
                 <th className="px-4 py-2 font-medium text-right">FTDs</th>
                 <th className="px-4 py-2 font-medium text-right">Conv. FTD %</th>
               </tr>
             </thead>
             <tbody>
-              {linhasComResultado.map(({ linha, registros, ftds, convFtd }) => {
+              {linhasComResultado.map(({ linha, leads, registros, ftds, convFtd }) => {
                 const melhor = linha.flowId === melhorFlowId
                 return (
                   <tr
@@ -405,6 +493,9 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
                         {linha.nomeFunil}
                       </span>
                     </td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">
+                      {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatInt(leads)}
+                    </td>
                     <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(registros)}</td>
                     <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(ftds)}</td>
                     <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(convFtd)}</td>
@@ -415,6 +506,9 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
             <tfoot>
               <tr className="border-t-2 border-[var(--glass-border)] font-semibold">
                 <td className="px-4 py-2 text-[var(--text-primary)]">Total</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">
+                  {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatInt(totalDia.leads)}
+                </td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.registros)}</td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.ftds)}</td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(totalConvFtd)}</td>
