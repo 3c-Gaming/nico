@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 export interface PontoLinha {
   label: string
@@ -21,21 +21,36 @@ interface GraficoLinhaProps {
   altura?: number
 }
 
-const LARGURA = 600
+const LARGURA_PADRAO = 600
 const PAD_TOP = 16
-const PAD_BOTTOM = 26
-const PAD_X = 16
+const PAD_BOTTOM = 28
+const PAD_X = 26
 
 export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor, altura = 160 }: GraficoLinhaProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const [largura, setLargura] = useState(LARGURA_PADRAO)
   const svgRef = useRef<SVGSVGElement>(null)
+
+  // Mede a largura real do container e usa isso como viewBox — sem isso, viewBox fixo em 600
+  // faz o navegador escalar tudo (texto, pontos) de forma não-uniforme quando o card é bem mais
+  // largo que 600px, distorcendo texto/círculos em vez de só esticar a linha horizontalmente.
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const largura = entries[0]?.contentRect.width
+      if (largura && largura > 0) setLargura(largura)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const todasSeries: SerieLinha[] = series ?? [{ nome: '', cor, pontos: pontos ?? [] }]
   const labels = todasSeries[0]?.pontos.map((p) => p.label) ?? []
   const multiSeries = todasSeries.length > 1
 
   const max = Math.max(...todasSeries.flatMap((s) => s.pontos.map((p) => p.valor)), 1)
-  const plotW = LARGURA - PAD_X * 2
+  const plotW = largura - PAD_X * 2
   const plotH = altura - PAD_TOP - PAD_BOTTOM
   const fmt = formatarValor ?? ((v: number) => String(v))
 
@@ -52,7 +67,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
     const svg = svgRef.current
     if (!svg || !labels.length) return
     const rect = svg.getBoundingClientRect()
-    const xRel = ((clientX - rect.left) / rect.width) * LARGURA
+    const xRel = ((clientX - rect.left) / rect.width) * largura
     let nearest = 0
     let menorDist = Infinity
     seriesCoords[0].coords.forEach((c, i) => {
@@ -71,7 +86,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
   return (
     <div className="relative w-full">
       {multiSeries && (
-        <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)] mb-2">
+        <div className="flex items-center gap-4 text-xs lg:text-sm text-[var(--text-secondary)] mb-2">
           {todasSeries.map((s) => (
             <span key={s.nome} className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-[2px] rounded" style={{ backgroundColor: s.cor }} />
@@ -83,8 +98,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
 
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${LARGURA} ${altura}`}
-        preserveAspectRatio="none"
+        viewBox={`0 0 ${largura} ${altura}`}
         className="w-full"
         style={{ height: altura, display: 'block' }}
         onPointerMove={(e) => atualizarHover(e.clientX)}
@@ -98,7 +112,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
             <line
               key={i}
               x1={PAD_X}
-              x2={LARGURA - PAD_X}
+              x2={largura - PAD_X}
               y1={y}
               y2={y}
               stroke="var(--border)"
@@ -124,7 +138,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
             d={s.coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ')}
             fill="none"
             stroke={s.cor}
-            strokeWidth={2}
+            strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -137,7 +151,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
                 key={i}
                 cx={c.x}
                 cy={c.y}
-                r={hoverIdx === i ? 5 : 4}
+                r={hoverIdx === i ? 6 : 5}
                 fill={s.cor}
                 stroke="var(--bg-surface)"
                 strokeWidth={2}
@@ -152,7 +166,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
             x={c.x}
             y={altura - 8}
             textAnchor="middle"
-            fontSize={11}
+            fontSize={12}
             style={{ fill: 'var(--text-muted)' }}
           >
             {c.label}
@@ -162,9 +176,9 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
 
       {hoverIdx !== null && hoverX != null && (
         <div
-          className="absolute px-2 py-1 rounded-md text-xs border shadow-sm pointer-events-none whitespace-nowrap space-y-0.5"
+          className="absolute px-2 py-1 rounded-md text-xs lg:text-sm border shadow-sm pointer-events-none whitespace-nowrap space-y-0.5"
           style={{
-            left: `${(hoverX / LARGURA) * 100}%`,
+            left: `${(hoverX / largura) * 100}%`,
             top: 0,
             transform: 'translate(-50%, -100%)',
             backgroundColor: 'var(--bg-elevated)',

@@ -358,19 +358,24 @@ function FunisApresentarInner() {
         {serieConversaoPorFunil.length > 0 && serieConversaoPorFunil[0].pontos.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
             <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Conversão de fluxo dos funis</h3>
-            <GraficoLinha series={serieConversaoPorFunil} formatarValor={(v) => `${v.toFixed(1)}%`} />
+            <GraficoLinha series={serieConversaoPorFunil} formatarValor={(v) => `${v.toFixed(1)}%`} altura={220} />
           </div>
         )}
 
         {!leadHubCarregando && leadsPorFunilOrdenado.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
-            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Leads por funil</h3>
+            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)]">Resultado geral</h3>
+            <p className="text-xs lg:text-sm text-[var(--text-muted)] mb-3 lg:mb-4">
+              Consolidado de {formatDataCurta(inicio)} até {formatDataCurta(fim)} ({datas.length} dia{datas.length === 1 ? '' : 's'})
+            </p>
             <table className="w-full text-xs md:text-sm lg:text-base">
               <thead>
                 <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide">
                   <th className="px-3 py-2 lg:py-3 font-medium">Funil</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Leads</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">% Leads</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">Registros</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">FTDs</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Lead → Reg %</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Reg → FTD %</th>
                 </tr>
@@ -383,6 +388,8 @@ function FunisApresentarInner() {
                     <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">
                       {totais.leads > 0 ? `${((f.leads / totais.leads) * 100).toFixed(1)}%` : '—'}
                     </td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.registros)}</td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.ftds)}</td>
                     <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convLeadReg)}</td>
                     <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convFtd)}</td>
                   </tr>
