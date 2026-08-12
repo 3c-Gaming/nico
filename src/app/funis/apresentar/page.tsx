@@ -8,6 +8,7 @@ import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLe
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
 import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
 import type { FlowTagConfig } from '@/types'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
@@ -182,6 +183,15 @@ function FunisApresentarInner() {
   const convFtdMedia = totais.registros > 0 ? (totais.ftds / totais.registros) * 100 : null
   const periodoLabel = inicio === fim ? inicio : `${inicio} até ${fim}`
 
+  const { list: casasList } = useCasasAposta()
+  const casasDosFunis = useMemo(() => {
+    if (!linhas) return []
+    const idsUnicos = [...new Set(linhas.flatMap((l) => l.casas ?? []))]
+    return idsUnicos
+      .map((id) => casasList.find((c) => c.id === id))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+  }, [linhas, casasList])
+
   const totaisPorFunil = useMemo(() => {
     if (!linhas) return []
     return linhas.map((linha) => {
@@ -305,9 +315,22 @@ function FunisApresentarInner() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">
-              Resultado — {linhas.length} funi{linhas.length === 1 ? 'l' : 's'}
+              Comparação de Funis — {linhas.length} funi{linhas.length === 1 ? 'l' : 's'}
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">Período: {periodoLabel}</p>
+            {casasDosFunis.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {casasDosFunis.map((casa) => (
+                  <span
+                    key={casa.id}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] lg:text-xs font-medium border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: casa.cor }} />
+                    {casa.nome}
+                  </span>
+                ))}
+              </div>
+            )}
             {leadHubCarregando && (
               <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1.5">
                 <Loader2 size={12} className="animate-spin" />
