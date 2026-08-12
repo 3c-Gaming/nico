@@ -8,10 +8,11 @@ import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLe
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
 import { GraficoLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
-import { BarraComparativa } from '@/components/resultados-junho/BarraComparativa'
+import { GraficoPizza } from '@/components/ui/GraficoPizza'
 import type { FlowTagConfig } from '@/types'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
+const PALETA_CORES = ['var(--d1)', 'var(--pontual)', 'var(--d3)', 'var(--d5)', 'var(--d7)', 'var(--success)']
 
 function formatInt(n: number): string {
   return n.toLocaleString('pt-BR')
@@ -236,13 +237,15 @@ function FunisApresentarInner() {
 
   const itensComparativo = totaisPorFunil.map((f) => ({ label: f.nomeFunil, valorA: f.registros, valorB: f.ftds }))
 
-  const itensRankingConversao = [...totaisPorFunil]
-    .sort((a, b) => (b.convFtd ?? 0) - (a.convFtd ?? 0))
-    .map((f) => ({ label: f.nomeFunil, valor: f.convFtd ?? 0, cor: 'var(--success)' }))
-
   const itensLeadsPorFunil = [...totaisPorFunil]
     .sort((a, b) => b.leads - a.leads)
-    .map((f) => ({ label: f.nomeFunil, valor: f.leads, cor: 'var(--d1)' }))
+    .map((f, i) => ({ label: f.nomeFunil, valor: f.leads, cor: PALETA_CORES[i % PALETA_CORES.length] }))
+
+  const melhorConvFlowId = totaisPorFunil.reduce<{ flowId: string; convFtd: number } | null>((best, f) => {
+    if (f.convFtd === null) return best
+    if (!best || f.convFtd > best.convFtd) return { flowId: f.flowId, convFtd: f.convFtd }
+    return best
+  }, null)?.flowId ?? null
 
   function exportarCsv() {
     if (!linhas) return
@@ -359,7 +362,7 @@ function FunisApresentarInner() {
         {!leadHubCarregando && itensLeadsPorFunil.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por funil</h3>
-            <BarraComparativa itens={itensLeadsPorFunil} formatarValor={formatInt} />
+            <GraficoPizza itens={itensLeadsPorFunil} formatarValor={formatInt} />
           </div>
         )}
 
@@ -370,8 +373,28 @@ function FunisApresentarInner() {
               <GraficoBarraDupla itens={itensComparativo} nomeA="Registros" nomeB="FTDs" formatarValor={formatInt} />
             </div>
             <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Ranking de conversão (FTD %)</h3>
-              <BarraComparativa itens={itensRankingConversao} formatarValor={(v) => `${v.toFixed(1)}%`} />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Conversão Registro → FTD por funil</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {totaisPorFunil.map((f) => {
+                  const melhor = f.flowId === melhorConvFlowId
+                  return (
+                    <div
+                      key={f.flowId}
+                      className="rounded-lg p-2.5 text-center flex flex-col items-center gap-0.5 border"
+                      style={
+                        melhor
+                          ? { borderColor: 'var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 12%, transparent)' }
+                          : { borderColor: 'var(--border)' }
+                      }
+                    >
+                      <span className="text-base font-bold" style={{ color: melhor ? 'var(--success)' : 'var(--text-primary)' }}>
+                        {formatPercent(f.convFtd)}
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide truncate w-full">{f.nomeFunil}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
