@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Trophy } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
 import type { FlowTagConfig } from '@/types'
@@ -25,6 +25,34 @@ function formatDataExtenso(data: string): string {
 
 interface LinhaConfig extends FlowTagConfig {
   nomeFunil: string
+}
+
+interface MetricasFunil {
+  flowId: string
+  registros: number
+  ftds: number
+  convFtd: number | null
+  convReg: number | null
+}
+
+// "Melhor funil" não é uma métrica só — o usuário quer o que mais tem registro, mais FTD, melhor
+// conversão de FTD e melhor conversão de registro juntos. Score = soma de cada métrica normalizada
+// pelo melhor valor do grupo (0 a 1 cada, 4 no total) — não depende de volume de leads.
+function rankearFunis<T extends MetricasFunil>(itens: T[]): (T & { score: number })[] {
+  const maxRegistros = Math.max(0, ...itens.map((i) => i.registros))
+  const maxFtds = Math.max(0, ...itens.map((i) => i.ftds))
+  const maxConvFtd = Math.max(0, ...itens.map((i) => i.convFtd ?? 0))
+  const maxConvReg = Math.max(0, ...itens.map((i) => i.convReg ?? 0))
+  return itens
+    .map((item) => ({
+      ...item,
+      score:
+        (maxRegistros > 0 ? item.registros / maxRegistros : 0) +
+        (maxFtds > 0 ? item.ftds / maxFtds : 0) +
+        (maxConvFtd > 0 ? (item.convFtd ?? 0) / maxConvFtd : 0) +
+        (maxConvReg > 0 ? (item.convReg ?? 0) / maxConvReg : 0),
+    }))
+    .sort((a, b) => b.score - a.score)
 }
 
 function FunisApresentarInner() {
@@ -103,6 +131,29 @@ function FunisApresentarInner() {
   const convFtdMedia = totais.leads > 0 ? (totais.ftds / totais.leads) * 100 : null
   const periodoLabel = inicio === fim ? inicio : `${inicio} até ${fim}`
 
+  const totaisPorFunil = useMemo(() => {
+    if (!linhas) return []
+    return linhas.map((linha) => {
+      let leads = 0
+      let registros = 0
+      let ftds = 0
+      for (const dia of resultadosPorDia.values()) {
+        const r = calcularResultadoLinhaNoDia(linha, dia)
+        leads += r.leads
+        registros += r.registros
+        ftds += r.ftds
+      }
+      const convFtd = leads > 0 ? (ftds / leads) * 100 : null
+      const convReg = leads > 0 ? (registros / leads) * 100 : null
+      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd, convReg }
+    })
+  }, [linhas, resultadosPorDia])
+
+  const rankingPeriodo = useMemo(
+    () => rankearFunis(totaisPorFunil).filter((r) => r.score > 0).slice(0, 2),
+    [totaisPorFunil],
+  )
+
   if (erro || erroIntervalo) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -137,6 +188,30 @@ function FunisApresentarInner() {
           <ResumoTile label="Conv. FTD" value={convFtdMedia === null ? 0 : convFtdMedia} suffix="%" decimals={1} />
         </div>
 
+        {rankingPeriodo.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {rankingPeriodo.map((r, i) => (
+              <div
+                key={r.flowId}
+                className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 flex items-center gap-3"
+                style={{ borderLeft: `3px solid ${i === 0 ? '#F59E0B' : '#9CA3AF'}` }}
+              >
+                <Trophy size={20} style={{ color: i === 0 ? '#F59E0B' : '#9CA3AF' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">
+                    {i === 0 ? 'Melhor funil do período' : '2º melhor funil do período'}
+                  </div>
+                  <div className="text-sm md:text-base font-semibold text-[var(--text-primary)] truncate">{r.nomeFunil}</div>
+                </div>
+                <div className="text-right text-xs text-[var(--text-secondary)] leading-relaxed">
+                  <div>{formatInt(r.registros)} reg · {formatInt(r.ftds)} FTDs</div>
+                  <div>{formatPercent(r.convFtd)} conv. FTD · {formatPercent(r.convReg)} conv. reg</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-4">
           {datas.map((data) => {
             const dia = resultadosPorDia.get(data)
@@ -166,6 +241,13 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
     (acc, { r }) => ({ leads: acc.leads + r.leads, registros: acc.registros + r.registros, ftds: acc.ftds + r.ftds }),
     { leads: 0, registros: 0, ftds: 0 },
   )
+  const totalConvFtd = totalDia.leads > 0 ? (totalDia.ftds / totalDia.leads) * 100 : null
+  const totalConvReg = totalDia.leads > 0 ? (totalDia.registros / totalDia.leads) * 100 : null
+
+  const rankingDia = rankearFunis(
+    linhasComResultado.map(({ linha, r }) => ({ flowId: linha.flowId, registros: r.registros, ftds: r.ftds, convFtd: r.convFtd, convReg: r.convReg })),
+  )
+  const melhorFlowId = rankingDia.length > 0 && rankingDia[0].score > 0 ? rankingDia[0].flowId : null
 
   return (
     <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] overflow-hidden">
@@ -193,17 +275,39 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
               </tr>
             </thead>
             <tbody>
-              {linhasComResultado.map(({ linha, r }) => (
-                <tr key={linha.flowId} className="border-t border-[var(--glass-border)]">
-                  <td className="px-4 py-2 text-[var(--text-primary)] font-medium">{linha.nomeFunil}</td>
-                  <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.leads)}</td>
-                  <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.registros)}</td>
-                  <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.ftds)}</td>
-                  <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(r.convFtd)}</td>
-                  <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(r.convReg)}</td>
-                </tr>
-              ))}
+              {linhasComResultado.map(({ linha, r }) => {
+                const melhor = linha.flowId === melhorFlowId
+                return (
+                  <tr
+                    key={linha.flowId}
+                    className="border-t border-[var(--glass-border)]"
+                    style={melhor ? { backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)' } : undefined}
+                  >
+                    <td className="px-4 py-2 text-[var(--text-primary)] font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {melhor && <Trophy size={12} style={{ color: 'var(--success)' }} />}
+                        {linha.nomeFunil}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.leads)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.registros)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(r.ftds)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(r.convFtd)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(r.convReg)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[var(--glass-border)] font-semibold">
+                <td className="px-4 py-2 text-[var(--text-primary)]">Total</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.leads)}</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.registros)}</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.ftds)}</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(totalConvFtd)}</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(totalConvReg)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
