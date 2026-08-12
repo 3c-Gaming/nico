@@ -1,5 +1,5 @@
 import type { DisparoPilhado } from '@/types'
-import { CUSTO_POR_ENTREGUE } from './resultadoDisparo'
+import { custoPorEntregueDoPainel } from './pilhadoPremios'
 
 export interface MetricasPilhado {
   custo: number
@@ -9,13 +9,13 @@ export interface MetricasPilhado {
 
 /**
  * Custo/% nunca são armazenados — sempre recalculados a partir de totalBase/entregues/lidas.
- * Custo = totalBase × CUSTO_POR_ENTREGUE — confirmado batendo exato com o CSV histórico do
- * Pilhado Prêmios linha a linha (não é sobre entregues aqui, é sobre a base enviada). Vendas e
- * faturamento não têm mais atribuição por disparo — ver PilhadoPremiosConfig.
+ * Custo = entregues × custo-por-entregue do painel — o custo por entregue não é fixo entre os 3
+ * painéis (ver custoPorEntregueDoPainel em pilhadoPremios.ts). Vendas e faturamento não têm mais
+ * atribuição por disparo — ver PilhadoPremiosConfig.
  */
 export function calcularMetricasPilhado(disparo: DisparoPilhado): MetricasPilhado {
   const { totalBase, entregues, lidas } = disparo
-  const custo = totalBase * CUSTO_POR_ENTREGUE
+  const custo = entregues * custoPorEntregueDoPainel(disparo.painel)
 
   return {
     custo,
