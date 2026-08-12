@@ -34,6 +34,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { atualizarFunilComparacao } = await import('@/lib/db/supabase')
+    const body = await request.json() as { id: string; titulo: string }
+    if (!body.id || !body.titulo) {
+      return NextResponse.json({ error: 'id e titulo são obrigatórios' }, { status: 400 })
+    }
+    const comparacao = await atualizarFunilComparacao(body.id, body.titulo)
+    return NextResponse.json({ comparacao })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Erro' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const { deletarFunilComparacao } = await import('@/lib/db/supabase')

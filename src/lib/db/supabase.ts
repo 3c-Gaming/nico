@@ -574,6 +574,12 @@ export async function criarFunilComparacao(comparacao: FunilComparacao): Promise
   return row<FunilComparacao>(data)!
 }
 
+export async function atualizarFunilComparacao(id: string, titulo: string): Promise<FunilComparacao | null> {
+  const { data, error } = await tb('funis_comparacoes').update({ titulo }).eq('id', id).select().single()
+  if (error) return null
+  return row<FunilComparacao>(data)
+}
+
 export async function deletarFunilComparacao(id: string): Promise<boolean> {
   const { error } = await tb('funis_comparacoes').delete().eq('id', id)
   return !error

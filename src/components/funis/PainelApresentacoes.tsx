@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ExternalLink, Trash2 } from 'lucide-react'
+import { X, ExternalLink, Trash2, Pencil, Check } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import type { FunilComparacao } from '@/types'
 
@@ -30,6 +30,8 @@ interface PainelApresentacoesProps {
 export function PainelApresentacoes({ aberto, onClose }: PainelApresentacoesProps) {
   const [comparacoes, setComparacoes] = useState<FunilComparacao[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [editandoValor, setEditandoValor] = useState('')
 
   useEffect(() => {
     if (!aberto) return
@@ -60,6 +62,23 @@ export function PainelApresentacoes({ aberto, onClose }: PainelApresentacoesProp
   async function excluir(id: string) {
     setComparacoes((prev) => prev.filter((c) => c.id !== id))
     await fetch(`/api/funis-comparacoes?id=${id}`, { method: 'DELETE' }).catch(() => {})
+  }
+
+  function iniciarEdicao(c: FunilComparacao) {
+    setEditandoId(c.id)
+    setEditandoValor(c.titulo)
+  }
+
+  async function salvarEdicao(id: string) {
+    const titulo = editandoValor.trim()
+    setEditandoId(null)
+    if (!titulo) return
+    setComparacoes((prev) => prev.map((c) => (c.id === id ? { ...c, titulo } : c)))
+    await fetch('/api/funis-comparacoes', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, titulo }),
+    }).catch(() => {})
   }
 
   return (
@@ -96,39 +115,76 @@ export function PainelApresentacoes({ aberto, onClose }: PainelApresentacoesProp
               ) : comparacoes.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhuma apresentação salva ainda.</p>
               ) : (
-                comparacoes.map((c) => (
-                  <div
-                    key={c.id}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 group"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <button
-                        onClick={() => abrir(c)}
-                        className="flex-1 min-w-0 text-left flex items-start gap-1.5"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-1.5">
-                            {c.titulo}
-                            <ExternalLink size={11} className="text-[var(--text-muted)] shrink-0" />
+                comparacoes.map((c) => {
+                  const editando = editandoId === c.id
+                  return (
+                    <div
+                      key={c.id}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        {editando ? (
+                          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={editandoValor}
+                              onChange={(e) => setEditandoValor(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') salvarEdicao(c.id)
+                                if (e.key === 'Escape') setEditandoId(null)
+                              }}
+                              autoFocus
+                              className="flex-1 min-w-0 h-7 px-2 text-sm bg-[var(--bg-base)] border border-[var(--border-strong)] rounded text-[var(--text-primary)] outline-none"
+                            />
+                            <button
+                              onClick={() => salvarEdicao(c.id)}
+                              className="text-[var(--success)] shrink-0"
+                              title="Salvar"
+                            >
+                              <Check size={16} />
+                            </button>
                           </div>
-                          <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
-                            {c.funis.join(', ') || `${c.flowIds.length} funil(is)`}
+                        ) : (
+                          <button
+                            onClick={() => abrir(c)}
+                            className="flex-1 min-w-0 text-left flex items-start gap-1.5"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-1.5">
+                                {c.titulo}
+                                <ExternalLink size={11} className="text-[var(--text-muted)] shrink-0" />
+                              </div>
+                              <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                                {c.funis.join(', ') || `${c.flowIds.length} funil(is)`}
+                              </div>
+                              <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                                {c.inicio === c.fim ? c.inicio : `${c.inicio} até ${c.fim}`} · {formatarTempoRelativo(c.criadoEm)}
+                              </div>
+                            </div>
+                          </button>
+                        )}
+                        {!editando && (
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <button
+                              onClick={() => iniciarEdicao(c)}
+                              className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                              title="Renomear"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => excluir(c.id)}
+                              className="text-[var(--text-muted)] hover:text-[var(--error)]"
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                          <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                            {c.inicio === c.fim ? c.inicio : `${c.inicio} até ${c.fim}`} · {formatarTempoRelativo(c.criadoEm)}
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => excluir(c.id)}
-                        className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--error)] transition-opacity shrink-0"
-                        title="Excluir"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </motion.div>
