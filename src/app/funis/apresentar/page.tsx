@@ -292,7 +292,7 @@ function FunisApresentarInner() {
 
   return (
     <div className="min-h-full w-full px-4 py-8 md:px-10 md:py-10">
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto space-y-6 lg:space-y-8">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">
@@ -329,17 +329,17 @@ function FunisApresentarInner() {
             {rankingPeriodo.map((r, i) => (
               <div
                 key={r.flowId}
-                className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 flex items-center gap-3"
+                className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6 flex items-center gap-3 lg:gap-4"
                 style={{ borderLeft: `3px solid ${i === 0 ? '#F59E0B' : '#9CA3AF'}` }}
               >
-                <Trophy size={20} style={{ color: i === 0 ? '#F59E0B' : '#9CA3AF' }} />
+                <Trophy size={20} className="lg:w-8 lg:h-8" style={{ color: i === 0 ? '#F59E0B' : '#9CA3AF' }} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">
+                  <div className="text-[10px] lg:text-xs text-[var(--text-muted)] uppercase tracking-wide">
                     {i === 0 ? 'Melhor funil do período' : '2º melhor funil do período'}
                   </div>
-                  <div className="text-sm md:text-base font-semibold text-[var(--text-primary)] truncate">{r.nomeFunil}</div>
+                  <div className="text-sm md:text-base lg:text-xl font-semibold text-[var(--text-primary)] truncate">{r.nomeFunil}</div>
                 </div>
-                <div className="text-right text-xs text-[var(--text-secondary)] leading-relaxed">
+                <div className="text-right text-xs lg:text-sm text-[var(--text-secondary)] leading-relaxed">
                   <div>{formatInt(r.registros)} reg · {formatInt(r.ftds)} FTDs</div>
                   <div>{formatPercent(r.convFtd)} conv. FTD</div>
                 </div>
@@ -349,8 +349,8 @@ function FunisApresentarInner() {
         )}
 
         {serieConversaoDiaria.length > 0 && (
-          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Evolução da conversão no período</h3>
+          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
+            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Evolução da conversão no período</h3>
             <GraficoLinha
               pontos={serieConversaoDiaria}
               cor="var(--success)"
@@ -360,37 +360,37 @@ function FunisApresentarInner() {
         )}
 
         {!leadHubCarregando && itensLeadsPorFunil.length > 0 && (
-          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por funil</h3>
+          <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
+            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Leads por funil</h3>
             <GraficoPizza itens={itensLeadsPorFunil} formatarValor={formatInt} />
           </div>
         )}
 
         {itensComparativo.length > 0 && serieDiaria.registros.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Registros vs FTDs por funil</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
+              <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Registros vs FTDs por funil</h3>
               <GraficoBarraDupla itens={itensComparativo} nomeA="Registros" nomeB="FTDs" formatarValor={formatInt} />
             </div>
-            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Conversão Registro → FTD por funil</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
+              <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Conversão Registro → FTD por funil</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 lg:gap-4">
                 {totaisPorFunil.map((f) => {
                   const melhor = f.flowId === melhorConvFlowId
                   return (
                     <div
                       key={f.flowId}
-                      className="rounded-lg p-2.5 text-center flex flex-col items-center gap-0.5 border"
+                      className="rounded-lg p-2.5 lg:p-5 text-center flex flex-col items-center gap-0.5 lg:gap-1.5 border"
                       style={
                         melhor
                           ? { borderColor: 'var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 12%, transparent)' }
                           : { borderColor: 'var(--border)' }
                       }
                     >
-                      <span className="text-base font-bold" style={{ color: melhor ? 'var(--success)' : 'var(--text-primary)' }}>
+                      <span className="text-base lg:text-3xl font-bold" style={{ color: melhor ? 'var(--success)' : 'var(--text-primary)' }}>
                         {formatPercent(f.convFtd)}
                       </span>
-                      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide truncate w-full">{f.nomeFunil}</span>
+                      <span className="text-[10px] lg:text-sm text-[var(--text-muted)] uppercase tracking-wide truncate w-full">{f.nomeFunil}</span>
                     </div>
                   )
                 })}
@@ -421,16 +421,16 @@ function FunisApresentarInner() {
 
 function ResumoTile({ label, value, suffix, decimals, loading }: { label: string; value: number; suffix?: string; decimals?: number; loading?: boolean }) {
   return (
-    <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 text-center flex flex-col items-center gap-1">
+    <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6 text-center flex flex-col items-center gap-1 lg:gap-2">
       {loading ? (
-        <Loader2 size={20} className="animate-spin text-[var(--text-muted)] my-1" />
+        <Loader2 size={20} className="lg:w-7 lg:h-7 animate-spin text-[var(--text-muted)] my-1" />
       ) : (
-        <span className="text-xl md:text-2xl font-bold text-[var(--text-primary)]">
+        <span className="text-xl md:text-2xl lg:text-4xl font-bold text-[var(--text-primary)]">
           {decimals ? value.toFixed(decimals) : formatInt(value)}
           {suffix ?? ''}
         </span>
       )}
-      <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <span className="text-xs lg:text-sm text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
     </div>
   )
 }
