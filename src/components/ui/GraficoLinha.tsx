@@ -84,6 +84,7 @@ export function GraficoLinha({ pontos, cor = 'var(--d1)', series, formatarValor,
       <svg
         ref={svgRef}
         viewBox={`0 0 ${LARGURA} ${altura}`}
+        preserveAspectRatio="none"
         className="w-full"
         style={{ height: altura, display: 'block' }}
         onPointerMove={(e) => atualizarHover(e.clientX)}

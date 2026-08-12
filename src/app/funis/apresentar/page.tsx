@@ -6,9 +6,8 @@ import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
-import { GraficoLinha } from '@/components/ui/GraficoLinha'
+import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
-import { GraficoPizza } from '@/components/ui/GraficoPizza'
 import type { FlowTagConfig } from '@/types'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
@@ -198,7 +197,8 @@ function FunisApresentarInner() {
         ftds += r.ftds
       }
       const convFtd = registros > 0 ? (ftds / registros) * 100 : null
-      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd }
+      const convLeadReg = leads > 0 ? (registros / leads) * 100 : null
+      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd, convLeadReg }
     })
   }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
 
@@ -228,18 +228,25 @@ function FunisApresentarInner() {
     return { registros, ftds }
   }, [linhas, datas, resultadosPorDia])
 
-  // Registros e FTDs numa linha só ficam ilegíveis (FTD sempre bem menor que registro) — mostra a
-  // proporção entre eles (conversão) evoluindo dia a dia, em vez dos valores absolutos.
-  const serieConversaoDiaria = serieDiaria.registros.map((r, i) => {
-    const ftds = serieDiaria.ftds[i]?.valor ?? 0
-    return { label: r.label, valor: r.valor > 0 ? (ftds / r.valor) * 100 : 0 }
-  })
+  // Uma linha só de conversão agregada não deixa ver qual funil está indo melhor — uma linha por
+  // funil (mesma cor/legenda do resto da tela) deixa comparar a conversão de cada um dia a dia.
+  const serieConversaoPorFunil = useMemo<SerieLinha[]>(() => {
+    if (!linhas) return []
+    const diasComDados = datas.filter((d) => resultadosPorDia.has(d))
+    return linhas.map((linha, i) => ({
+      nome: linha.nomeFunil,
+      cor: PALETA_CORES[i % PALETA_CORES.length],
+      pontos: diasComDados.map((data) => {
+        const dia = resultadosPorDia.get(data)!
+        const r = calcularResultadoLinhaNoDia(linha, dia)
+        return { label: formatDataCurta(data), valor: r.registros > 0 ? (r.ftds / r.registros) * 100 : 0 }
+      }),
+    }))
+  }, [linhas, datas, resultadosPorDia])
 
   const itensComparativo = totaisPorFunil.map((f) => ({ label: f.nomeFunil, valorA: f.registros, valorB: f.ftds }))
 
-  const itensLeadsPorFunil = [...totaisPorFunil]
-    .sort((a, b) => b.leads - a.leads)
-    .map((f, i) => ({ label: f.nomeFunil, valor: f.leads, cor: PALETA_CORES[i % PALETA_CORES.length] }))
+  const leadsPorFunilOrdenado = [...totaisPorFunil].sort((a, b) => b.leads - a.leads)
 
   const melhorConvFlowId = totaisPorFunil.reduce<{ flowId: string; convFtd: number } | null>((best, f) => {
     if (f.convFtd === null) return best
@@ -348,21 +355,40 @@ function FunisApresentarInner() {
           </div>
         )}
 
-        {serieConversaoDiaria.length > 0 && (
+        {serieConversaoPorFunil.length > 0 && serieConversaoPorFunil[0].pontos.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
-            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Evolução da conversão no período</h3>
-            <GraficoLinha
-              pontos={serieConversaoDiaria}
-              cor="var(--success)"
-              formatarValor={(v) => `${v.toFixed(1)}%`}
-            />
+            <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Conversão de fluxo dos funis</h3>
+            <GraficoLinha series={serieConversaoPorFunil} formatarValor={(v) => `${v.toFixed(1)}%`} />
           </div>
         )}
 
-        {!leadHubCarregando && itensLeadsPorFunil.length > 0 && (
+        {!leadHubCarregando && leadsPorFunilOrdenado.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
             <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Leads por funil</h3>
-            <GraficoPizza itens={itensLeadsPorFunil} formatarValor={formatInt} />
+            <table className="w-full text-xs md:text-sm lg:text-base">
+              <thead>
+                <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide">
+                  <th className="px-3 py-2 lg:py-3 font-medium">Funil</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">Leads</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">% Leads</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Lead → Reg %</th>
+                  <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Reg → FTD %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadsPorFunilOrdenado.map((f) => (
+                  <tr key={f.flowId} className="border-t border-[var(--glass-border)]">
+                    <td className="px-3 py-2 lg:py-3 text-[var(--text-primary)] font-medium">{f.nomeFunil}</td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.leads)}</td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">
+                      {totais.leads > 0 ? `${((f.leads / totais.leads) * 100).toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convLeadReg)}</td>
+                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convFtd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -374,27 +400,39 @@ function FunisApresentarInner() {
             </div>
             <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6">
               <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Conversão Registro → FTD por funil</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 lg:gap-4">
-                {totaisPorFunil.map((f) => {
-                  const melhor = f.flowId === melhorConvFlowId
-                  return (
-                    <div
-                      key={f.flowId}
-                      className="rounded-lg p-2.5 lg:p-5 text-center flex flex-col items-center gap-0.5 lg:gap-1.5 border"
-                      style={
-                        melhor
-                          ? { borderColor: 'var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 12%, transparent)' }
-                          : { borderColor: 'var(--border)' }
-                      }
-                    >
-                      <span className="text-base lg:text-3xl font-bold" style={{ color: melhor ? 'var(--success)' : 'var(--text-primary)' }}>
-                        {formatPercent(f.convFtd)}
-                      </span>
-                      <span className="text-[10px] lg:text-sm text-[var(--text-muted)] uppercase tracking-wide truncate w-full">{f.nomeFunil}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              <table className="w-full text-xs md:text-sm lg:text-base">
+                <thead>
+                  <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide">
+                    <th className="px-3 py-2 lg:py-3 font-medium">Funil</th>
+                    <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. FTD %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {totaisPorFunil.map((f) => {
+                    const melhor = f.flowId === melhorConvFlowId
+                    return (
+                      <tr
+                        key={f.flowId}
+                        className="border-t border-[var(--glass-border)]"
+                        style={melhor ? { backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)' } : undefined}
+                      >
+                        <td className="px-3 py-2 lg:py-3 text-[var(--text-primary)] font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {melhor && <Trophy size={12} style={{ color: 'var(--success)' }} />}
+                            {f.nomeFunil}
+                          </span>
+                        </td>
+                        <td
+                          className="px-3 py-2 lg:py-3 text-right font-semibold"
+                          style={{ color: melhor ? 'var(--success)' : 'var(--text-secondary)' }}
+                        >
+                          {formatPercent(f.convFtd)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
