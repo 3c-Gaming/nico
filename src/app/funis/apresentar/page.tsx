@@ -268,7 +268,7 @@ function FunisApresentarInner() {
 
   function exportarCsv() {
     if (!linhas) return
-    const header = ['Data', 'Funil', 'Leads', 'Registros', 'FTDs', 'Conv. FTD %']
+    const header = ['Data', 'Funil', 'Leads', 'Registros', 'FTDs', 'Conv. Lead → Reg %', 'Conv. FTD %']
     const linhasCsv: string[] = []
     for (const data of datas) {
       const dia = resultadosPorDia.get(data)
@@ -280,13 +280,15 @@ function FunisApresentarInner() {
         const r = calcularResultadoLinhaNoDia(linha, dia)
         const leads = leadsDoFunilNoDia(linha, data)
         const convFtd = r.registros > 0 ? ((r.ftds / r.registros) * 100).toFixed(1) : ''
+        const convLeadReg = leads > 0 ? ((r.registros / leads) * 100).toFixed(1) : ''
         totalLeads += leads
         totalRegistros += r.registros
         totalFtds += r.ftds
-        linhasCsv.push([data, linha.nomeFunil, String(leads), String(r.registros), String(r.ftds), convFtd].map(csvCampo).join(','))
+        linhasCsv.push([data, linha.nomeFunil, String(leads), String(r.registros), String(r.ftds), convLeadReg, convFtd].map(csvCampo).join(','))
       }
       const totalConvFtd = totalRegistros > 0 ? ((totalFtds / totalRegistros) * 100).toFixed(1) : ''
-      linhasCsv.push([data, 'Total', String(totalLeads), String(totalRegistros), String(totalFtds), totalConvFtd].map(csvCampo).join(','))
+      const totalConvLeadReg = totalLeads > 0 ? ((totalRegistros / totalLeads) * 100).toFixed(1) : ''
+      linhasCsv.push([data, 'Total', String(totalLeads), String(totalRegistros), String(totalFtds), totalConvLeadReg, totalConvFtd].map(csvCampo).join(','))
     }
     const sufixo = inicio === fim ? inicio : `${inicio}_a_${fim}`
     baixarCsv([header.join(','), ...linhasCsv].join('\n'), `funis-apresentacao-${sufixo}.csv`)
@@ -536,7 +538,8 @@ function BlocoDia({
         const r = calcularResultadoLinhaNoDia(l, dia)
         const convFtd = r.registros > 0 ? (r.ftds / r.registros) * 100 : null
         const leads = l.tags.reduce((acc, tag) => acc + (leadsPorTagPorDia[tag]?.[data] ?? 0), 0)
-        return { linha: l, leads, registros: r.registros, ftds: r.ftds, convFtd }
+        const convLeadReg = leads > 0 ? (r.registros / leads) * 100 : null
+        return { linha: l, leads, registros: r.registros, ftds: r.ftds, convFtd, convLeadReg }
       })
     : []
   const totalDia = linhasComResultado.reduce(
@@ -544,6 +547,7 @@ function BlocoDia({
     { leads: 0, registros: 0, ftds: 0 },
   )
   const totalConvFtd = totalDia.registros > 0 ? (totalDia.ftds / totalDia.registros) * 100 : null
+  const totalConvLeadReg = totalDia.leads > 0 ? (totalDia.registros / totalDia.leads) * 100 : null
 
   const rankingDia = rankearFunis(
     linhasComResultado.map(({ linha, registros, ftds, convFtd }) => ({ flowId: linha.flowId, registros, ftds, convFtd })),
@@ -578,11 +582,12 @@ function BlocoDia({
                 <th className="px-4 py-2 font-medium text-right">Leads</th>
                 <th className="px-4 py-2 font-medium text-right">Registros</th>
                 <th className="px-4 py-2 font-medium text-right">FTDs</th>
+                <th className="px-4 py-2 font-medium text-right">Conv. Lead → Reg %</th>
                 <th className="px-4 py-2 font-medium text-right">Conv. FTD %</th>
               </tr>
             </thead>
             <tbody>
-              {linhasComResultado.map(({ linha, leads, registros, ftds, convFtd }) => {
+              {linhasComResultado.map(({ linha, leads, registros, ftds, convFtd, convLeadReg }) => {
                 const melhor = linha.flowId === melhorFlowId
                 return (
                   <tr
@@ -601,6 +606,9 @@ function BlocoDia({
                     </td>
                     <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(registros)}</td>
                     <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(ftds)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-primary)]">
+                      {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatPercent(convLeadReg)}
+                    </td>
                     <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(convFtd)}</td>
                   </tr>
                 )
@@ -614,6 +622,9 @@ function BlocoDia({
                 </td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.registros)}</td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(totalDia.ftds)}</td>
+                <td className="px-4 py-2 text-right text-[var(--text-primary)]">
+                  {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatPercent(totalConvLeadReg)}
+                </td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(totalConvFtd)}</td>
               </tr>
             </tfoot>
