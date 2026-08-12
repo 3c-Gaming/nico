@@ -24,7 +24,7 @@ function getSnapshot() {
 }
 
 function getServerSnapshot(): UtmConfig[] {
-  return []
+  return cachedList
 }
 
 export function useUtmConfigs() {

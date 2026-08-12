@@ -11,8 +11,8 @@ import { Plus, Trash2, Pencil, X, Check, Copy, Search } from 'lucide-react'
 import type { UtmConfig } from '@/types'
 
 const CASA_INFO = {
-  superbet: { label: 'Superbet', short: 'UTM', cor: '#22c55e' },
-  betmgm: { label: 'BetMGM', short: 'PID', cor: '#6366f1' },
+  superbet: { label: 'Superbet', short: 'ACID', cor: '#E11D48' },
+  betmgm: { label: 'BetMGM', short: 'PID', cor: '#F59E0B' },
 } as const
 
 type Casa = keyof typeof CASA_INFO
@@ -110,7 +110,7 @@ export default function UtmsPage() {
 
   return (
     <>
-      <PageHeader titulo="UTMs / PIDs" descricao="Cadastro de UTMs (Superbet) e PIDs (BetMGM)" />
+      <PageHeader titulo="UTMs" descricao="Cadastro de UTMs para tracking dos funis/disparos" />
       <div className="p-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative flex-1 min-w-[220px]">
@@ -127,11 +127,10 @@ export default function UtmsPage() {
               <button
                 key={opcao}
                 onClick={() => setFiltroCasa(opcao)}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
-                  filtroCasa === opcao
-                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${filtroCasa === opcao
+                  ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
               >
                 {opcao === 'all' ? 'Todos' : CASA_INFO[opcao].label}
               </button>
@@ -143,8 +142,9 @@ export default function UtmsPage() {
         </div>
 
         <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
-          <div className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
+          <div className="grid grid-cols-6 gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
             <span>Casa</span>
+            <span>UTM</span>
             <span>Nome</span>
             <span>Valor</span>
             <span>Site ID</span>
@@ -152,7 +152,7 @@ export default function UtmsPage() {
           </div>
 
           {novoAberto && (
-            <div className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] items-center">
+            <div className="grid grid-cols-5 gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] items-center">
               <Select
                 value={novoCasa}
                 options={[
@@ -216,7 +216,7 @@ export default function UtmsPage() {
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 bg-[var(--bg-elevated)] items-center"
+                  className="grid grid-cols-5 gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 bg-[var(--bg-elevated)] items-center"
                 >
                   <Select
                     value={editCasa}
@@ -269,36 +269,41 @@ export default function UtmsPage() {
             return (
               <div
                 key={item.id}
-                className="group grid grid-cols-[90px_1fr_1fr_90px_104px] gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
+                className="group grid grid-cols-6 gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
               >
-                <Chip label={info.short} cor={info.cor} size="sm" />
+                <div className="flex items-center">
+                  <Chip label={info.label} cor={info.cor} size="md" />
+                </div>
+                <span className="text-sm text-[var(--text-primary)] truncate" title={info.short}>
+                  {info.short}
+                </span>
                 <span className="text-sm text-[var(--text-primary)] truncate" title={item.nome}>
                   {item.nome}
                 </span>
-                <span className="text-xs text-[var(--text-muted)] font-mono truncate" title={item.valor}>
+                <span className="text-sm text-[var(--text-muted)] font-mono truncate" title={item.valor}>
                   {item.valor}
                 </span>
-                <span className="text-xs text-[var(--text-muted)] font-mono truncate">
+                <span className="text-sm text-[var(--text-muted)] font-mono truncate">
                   {item.casa === 'superbet' ? (item.siteId || '—') : '—'}
                 </span>
-                <div className="flex items-center justify-end gap-1">
+                <div className="grid grid-cols-3 text-text-primary">
                   <button
                     onClick={() => handleCopy(item)}
-                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                    className="flex items-center justify-center h-7 rounded opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
                     title={`Copiar ${info.short}`}
                   >
                     <Copy size={14} />
                   </button>
                   <button
                     onClick={() => handleStartEdit(item)}
-                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                    className="flex items-center justify-center h-7 rounded opacity-0 group-hover:opacity-100 hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
                     title="Editar"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     onClick={() => handleRemove(item)}
-                    className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="flex items-center justify-center h-7 rounded opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
                     title="Remover"
                   >
                     <Trash2 size={14} />

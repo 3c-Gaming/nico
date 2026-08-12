@@ -13,10 +13,10 @@ const LINKS = [
   //{ href: '/disparos', label: 'Disparos', icon: List },
   //{ href: '/esteiras', label: 'Esteiras', icon: GitBranch },
   { href: '/numeros', label: 'Números', icon: null },
-  { href: '/utms', label: 'UTMs/PIDs', icon: Hash },
+  { href: '/utms', label: 'UTMs', icon: Hash },
   { href: '/testes', label: 'Testes', icon: Smartphone },
   { href: '/funis', label: 'Funis', icon: Layers },
-  { href: '/jogos', label: 'Jogos', icon: LandPlot },
+  { href: '/jogos', label: 'Grade', icon: LandPlot },
   { href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
   { href: '/paginas', label: 'Páginas', icon: FileText },
   //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
@@ -66,7 +66,6 @@ export function Sidebar() {
             {!collapsed && (
               <span className="font-mono text-lg tracking-tight text-[var(--text-primary)]">
                 <h1 className="text-lg font-bold">Nico</h1>
-                <p className="text-[10px] text-[var(--text-muted)]">Assistente de Disparos</p>
               </span>
             )}
           </Link>
