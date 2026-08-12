@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Trophy } from 'lucide-react'
+import { Loader2, Trophy, ChevronDown } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
 import type { FlowTagConfig } from '@/types'
@@ -236,6 +236,7 @@ function ResumoTile({ label, value, suffix, decimals }: { label: string; value: 
 }
 
 function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | undefined; linhas: LinhaConfig[] }) {
+  const [aberto, setAberto] = useState(true)
   const linhasComResultado = dia ? linhas.map((l) => ({ linha: l, r: calcularResultadoLinhaNoDia(l, dia) })) : []
   const totalDia = linhasComResultado.reduce(
     (acc, { r }) => ({ leads: acc.leads + r.leads, registros: acc.registros + r.registros, ftds: acc.ftds + r.ftds }),
@@ -251,8 +252,15 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
 
   return (
     <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--glass-border)]">
-        <h2 className="text-sm md:text-base font-semibold text-[var(--text-primary)]">{formatDataExtenso(data)}</h2>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        className="flex items-center justify-between w-full px-4 py-3 border-b border-[var(--glass-border)] text-left hover:bg-[var(--glass-hover-bg)] transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <ChevronDown size={16} className={`text-[var(--text-muted)] transition-transform ${aberto ? '' : '-rotate-90'}`} />
+          <h2 className="text-sm md:text-base font-semibold text-[var(--text-primary)]">{formatDataExtenso(data)}</h2>
+        </span>
         {dia ? (
           <span className="text-xs text-[var(--text-muted)]">
             {formatInt(totalDia.leads)} leads · {formatInt(totalDia.registros)} reg · {formatInt(totalDia.ftds)} FTDs
@@ -260,8 +268,8 @@ function BlocoDia({ data, dia, linhas }: { data: string; dia: ResultadoDia | und
         ) : (
           <Loader2 size={14} className="animate-spin text-[var(--text-muted)]" />
         )}
-      </div>
-      {dia && (
+      </button>
+      {dia && aberto && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs md:text-sm">
             <thead>
