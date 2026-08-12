@@ -254,6 +254,8 @@ function FunisApresentarInner() {
     return best
   }, null)?.flowId ?? null
 
+  const melhorFunilId = rankingPeriodo[0]?.flowId ?? null
+
   function exportarCsv() {
     if (!linhas) return
     const header = ['Data', 'Funil', 'Leads', 'Registros', 'FTDs', 'Conv. FTD %']
@@ -370,7 +372,7 @@ function FunisApresentarInner() {
             </p>
             <table className="w-full text-xs md:text-sm lg:text-base">
               <thead>
-                <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide">
+                <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide border-b border-[var(--border)]">
                   <th className="px-3 py-2 lg:py-3 font-medium">Funil</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Leads</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">% Leads</th>
@@ -381,19 +383,31 @@ function FunisApresentarInner() {
                 </tr>
               </thead>
               <tbody>
-                {leadsPorFunilOrdenado.map((f) => (
-                  <tr key={f.flowId} className="border-t border-[var(--glass-border)]">
-                    <td className="px-3 py-2 lg:py-3 text-[var(--text-primary)] font-medium">{f.nomeFunil}</td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.leads)}</td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">
-                      {totais.leads > 0 ? `${((f.leads / totais.leads) * 100).toFixed(1)}%` : '—'}
-                    </td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.registros)}</td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatInt(f.ftds)}</td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convLeadReg)}</td>
-                    <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-secondary)]">{formatPercent(f.convFtd)}</td>
-                  </tr>
-                ))}
+                {leadsPorFunilOrdenado.map((f) => {
+                  const melhor = f.flowId === melhorFunilId
+                  return (
+                    <tr
+                      key={f.flowId}
+                      className="border-t border-[var(--border)]"
+                      style={melhor ? { backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)' } : undefined}
+                    >
+                      <td className="px-3 py-2 lg:py-3 text-[var(--text-primary)] font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {melhor && <Trophy size={12} style={{ color: 'var(--success)' }} />}
+                          {f.nomeFunil}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatInt(f.leads)}</td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">
+                        {totais.leads > 0 ? `${((f.leads / totais.leads) * 100).toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatInt(f.registros)}</td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatInt(f.ftds)}</td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatPercent(f.convLeadReg)}</td>
+                      <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatPercent(f.convFtd)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -409,7 +423,7 @@ function FunisApresentarInner() {
               <h3 className="text-sm lg:text-lg font-semibold text-[var(--text-primary)] mb-3 lg:mb-4">Conversão Registro → FTD por funil</h3>
               <table className="w-full text-xs md:text-sm lg:text-base">
                 <thead>
-                  <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide">
+                  <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] lg:text-xs tracking-wide border-b border-[var(--border)]">
                     <th className="px-3 py-2 lg:py-3 font-medium">Funil</th>
                     <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. FTD %</th>
                   </tr>
@@ -420,7 +434,7 @@ function FunisApresentarInner() {
                     return (
                       <tr
                         key={f.flowId}
-                        className="border-t border-[var(--glass-border)]"
+                        className="border-t border-[var(--border)]"
                         style={melhor ? { backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)' } : undefined}
                       >
                         <td className="px-3 py-2 lg:py-3 text-[var(--text-primary)] font-medium">
@@ -431,7 +445,7 @@ function FunisApresentarInner() {
                         </td>
                         <td
                           className="px-3 py-2 lg:py-3 text-right font-semibold"
-                          style={{ color: melhor ? 'var(--success)' : 'var(--text-secondary)' }}
+                          style={{ color: melhor ? 'var(--success)' : 'var(--text-primary)' }}
                         >
                           {formatPercent(f.convFtd)}
                         </td>
@@ -536,7 +550,7 @@ function BlocoDia({
         <div className="overflow-x-auto">
           <table className="w-full text-xs md:text-sm">
             <thead>
-              <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] tracking-wide">
+              <tr className="text-left text-[var(--text-muted)] uppercase text-[10px] tracking-wide border-b border-[var(--border)]">
                 <th className="px-4 py-2 font-medium">Funil</th>
                 <th className="px-4 py-2 font-medium text-right">Leads</th>
                 <th className="px-4 py-2 font-medium text-right">Registros</th>
@@ -550,7 +564,7 @@ function BlocoDia({
                 return (
                   <tr
                     key={linha.flowId}
-                    className="border-t border-[var(--glass-border)]"
+                    className="border-t border-[var(--border)]"
                     style={melhor ? { backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)' } : undefined}
                   >
                     <td className="px-4 py-2 text-[var(--text-primary)] font-medium">
@@ -559,18 +573,18 @@ function BlocoDia({
                         {linha.nomeFunil}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">
+                    <td className="px-4 py-2 text-right text-[var(--text-primary)]">
                       {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatInt(leads)}
                     </td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(registros)}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatInt(ftds)}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatPercent(convFtd)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(registros)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatInt(ftds)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--text-primary)]">{formatPercent(convFtd)}</td>
                   </tr>
                 )
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-[var(--glass-border)] font-semibold">
+              <tr className="border-t-2 border-[var(--border)] font-semibold">
                 <td className="px-4 py-2 text-[var(--text-primary)]">Total</td>
                 <td className="px-4 py-2 text-right text-[var(--text-primary)]">
                   {leadHubCarregando ? <Loader2 size={12} className="animate-spin inline-block" /> : formatInt(totalDia.leads)}
