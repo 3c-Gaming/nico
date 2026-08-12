@@ -262,11 +262,20 @@ export async function buscarResultadoEdicao(conta: ContaH2Premios, edicaoId: str
       // Às vezes a troca de edição passa por um instante em que os cards somem da tela (skeleton
       // de loading) — se a leitura cair bem nesse instante, vem tudo null. Tenta de novo mais
       // algumas vezes antes de desistir, em vez de devolver zero errado.
+      //
+      // Confirmado ao vivo (12/08): quando a edição já vem pré-selecionada no load da página (o
+      // dashboard lembra a última seleção), selectOption() pra essa mesma edição não dispara
+      // change nenhum — esperarReceitaMudarJs nunca vê mudança, estoura os 20s de timeout (caído
+      // no .catch acima) e cai direto aqui sem ter esperado o fetch assíncrono dos cards
+      // terminar. O card mostra "R$ 0,00" como placeholder nesse meio tempo — um valor não-null,
+      // então o loop antigo aceitava na primeira tentativa e gravava zero errado no banco mesmo
+      // com vendas reais. Por isso: zero conta tanto quanto null como "ainda carregando", tenta de
+      // novo antes de aceitar — só desiste e aceita o zero se ele persistir em todas as tentativas.
       let cards: CardsMinhasVendas = { receitaVendas: null, ticketMedio: null, quantidadeCompras: null, clientesCaptados: null }
-      for (let tentativa = 1; tentativa <= 4; tentativa++) {
+      for (let tentativa = 1; tentativa <= 6; tentativa++) {
         await p.waitForTimeout(1500)
         cards = await p.evaluate<CardsMinhasVendas>(LER_CARDS_MINHAS_VENDAS_JS)
-        if (cards.receitaVendas != null) break
+        if (cards.receitaVendas != null && extrairNumero(cards.receitaVendas) !== 0) break
       }
 
       return {
