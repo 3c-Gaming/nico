@@ -6,13 +6,12 @@ import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
-import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
+import { GraficoLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { BarraComparativa } from '@/components/resultados-junho/BarraComparativa'
 import type { FlowTagConfig } from '@/types'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
-const PALETA_CORES = ['var(--d1)', 'var(--pontual)', 'var(--d3)', 'var(--d5)', 'var(--d7)', 'var(--success)']
 
 function formatInt(n: number): string {
   return n.toLocaleString('pt-BR')
@@ -228,21 +227,22 @@ function FunisApresentarInner() {
     return { registros, ftds }
   }, [linhas, datas, resultadosPorDia])
 
-  const serieLeadsPorFunil = useMemo<SerieLinha[]>(() => {
-    if (!linhas) return []
-    const diasComDados = datas.filter((d) => resultadosPorDia.has(d))
-    return linhas.map((linha, i) => ({
-      nome: linha.nomeFunil,
-      cor: PALETA_CORES[i % PALETA_CORES.length],
-      pontos: diasComDados.map((data) => ({ label: formatDataCurta(data), valor: leadsDoFunilNoDia(linha, data) })),
-    }))
-  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
+  // Registros e FTDs numa linha só ficam ilegíveis (FTD sempre bem menor que registro) — mostra a
+  // proporção entre eles (conversão) evoluindo dia a dia, em vez dos valores absolutos.
+  const serieConversaoDiaria = serieDiaria.registros.map((r, i) => {
+    const ftds = serieDiaria.ftds[i]?.valor ?? 0
+    return { label: r.label, valor: r.valor > 0 ? (ftds / r.valor) * 100 : 0 }
+  })
 
   const itensComparativo = totaisPorFunil.map((f) => ({ label: f.nomeFunil, valorA: f.registros, valorB: f.ftds }))
 
   const itensRankingConversao = [...totaisPorFunil]
     .sort((a, b) => (b.convFtd ?? 0) - (a.convFtd ?? 0))
     .map((f) => ({ label: f.nomeFunil, valor: f.convFtd ?? 0, cor: 'var(--success)' }))
+
+  const itensLeadsPorFunil = [...totaisPorFunil]
+    .sort((a, b) => b.leads - a.leads)
+    .map((f) => ({ label: f.nomeFunil, valor: f.leads, cor: 'var(--d1)' }))
 
   function exportarCsv() {
     if (!linhas) return
@@ -345,23 +345,21 @@ function FunisApresentarInner() {
           </div>
         )}
 
-        {serieDiaria.registros.length > 0 && (
+        {serieConversaoDiaria.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Evolução no período</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Evolução da conversão no período</h3>
             <GraficoLinha
-              series={[
-                { nome: 'Registros', cor: 'var(--d1)', pontos: serieDiaria.registros },
-                { nome: 'FTDs', cor: 'var(--pontual)', pontos: serieDiaria.ftds },
-              ]}
-              formatarValor={formatInt}
+              pontos={serieConversaoDiaria}
+              cor="var(--success)"
+              formatarValor={(v) => `${v.toFixed(1)}%`}
             />
           </div>
         )}
 
-        {!leadHubCarregando && serieLeadsPorFunil.length > 0 && serieLeadsPorFunil[0].pontos.length > 0 && (
+        {!leadHubCarregando && itensLeadsPorFunil.length > 0 && (
           <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por dia, por funil</h3>
-            <GraficoLinha series={serieLeadsPorFunil} formatarValor={formatInt} />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Leads por funil</h3>
+            <BarraComparativa itens={itensLeadsPorFunil} formatarValor={formatInt} />
           </div>
         )}
 
