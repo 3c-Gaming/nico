@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { Modal } from '@/components/ui/Modal'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
+import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
@@ -344,6 +346,9 @@ function FunisPageInner() {
   const [exportProgresso, setExportProgresso] = useState('')
   const [exportErro, setExportErro] = useState<string | null>(null)
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  const [modalApresentarAberto, setModalApresentarAberto] = useState(false)
+  const [tituloApresentacao, setTituloApresentacao] = useState('')
+  const [painelApresentacoesAberto, setPainelApresentacoesAberto] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
@@ -713,6 +718,37 @@ function FunisPageInner() {
     }
   }
 
+  function abrirModalApresentar() {
+    if (linhasParaExportar.length === 0) return
+    setTituloApresentacao(`${linhasParaExportar.length} funis — ${trackingDataInicio} até ${trackingDataFim}`)
+    setModalApresentarAberto(true)
+  }
+
+  function confirmarApresentar() {
+    const flowIds = linhasParaExportar.map((r) => r.flow.id)
+    const funis = linhasParaExportar.map((r) => r.funil ?? r.flow.nome)
+    const params = new URLSearchParams({
+      flows: flowIds.join(','),
+      inicio: trackingDataInicio,
+      fim: trackingDataFim,
+    })
+    // Abre a aba já, dentro do gesto de clique — evita bloqueio de pop-up. O salvamento roda em
+    // paralelo, sem travar a abertura.
+    window.open(`/funis/apresentar?${params.toString()}`, '_blank')
+    setModalApresentarAberto(false)
+    fetch('/api/funis-comparacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titulo: tituloApresentacao || `${flowIds.length} funis — ${trackingDataInicio} até ${trackingDataFim}`,
+        flowIds,
+        funis,
+        inicio: trackingDataInicio,
+        fim: trackingDataFim,
+      }),
+    }).catch(() => {})
+  }
+
   return (
     <>
       <PageHeader
@@ -805,21 +841,19 @@ function FunisPageInner() {
               </div>
             </Dropdown>
             <button
-              onClick={() => {
-                const flowIds = linhasParaExportar.map((r) => r.flow.id)
-                if (flowIds.length === 0) return
-                const params = new URLSearchParams({
-                  flows: flowIds.join(','),
-                  inicio: trackingDataInicio,
-                  fim: trackingDataFim,
-                })
-                window.open(`/funis/apresentar?${params.toString()}`, '_blank')
-              }}
+              onClick={abrirModalApresentar}
               disabled={linhasParaExportar.length === 0}
               className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
             >
               <Presentation size={14} />
               Apresentar dados
+            </button>
+            <button
+              onClick={() => setPainelApresentacoesAberto(true)}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <History size={14} />
+              Apresentações
             </button>
             <button
               onClick={() => setSaveVersion((v) => v + 1)}
@@ -1210,6 +1244,33 @@ function FunisPageInner() {
           </div>
         )}
       </div>
+
+      <Modal open={modalApresentarAberto} onClose={() => setModalApresentarAberto(false)} title="Apresentar dados" width="420px">
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Nome da apresentação</label>
+            <input
+              type="text"
+              value={tituloApresentacao}
+              onChange={(e) => setTituloApresentacao(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmarApresentar() }}
+              autoFocus
+              className="w-full h-9 px-3 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded-md text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+            />
+          </div>
+          <button
+            onClick={confirmarApresentar}
+            disabled={!tituloApresentacao.trim()}
+            className="flex items-center justify-center gap-1.5 w-full h-9 rounded-md text-sm font-medium text-white disabled:opacity-50 transition-opacity"
+            style={{ backgroundColor: 'var(--d1)' }}
+          >
+            <Presentation size={14} />
+            Salvar e abrir
+          </button>
+        </div>
+      </Modal>
+
+      <PainelApresentacoes aberto={painelApresentacoesAberto} onClose={() => setPainelApresentacoesAberto(false)} />
     </>
   )
 }

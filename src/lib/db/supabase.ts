@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -554,6 +554,28 @@ export async function atualizarResultado(id: string, updates: Partial<Resultado>
 
 export async function deletarResultado(id: string): Promise<boolean> {
   const { error } = await tb('resultados').delete().eq('id', id)
+  return !error
+}
+
+// --- Funis Comparações ---
+
+export async function listarFunisComparacoes(): Promise<FunilComparacao[]> {
+  const { data, error } = await tb('funis_comparacoes').select('*').order('criado_em', { ascending: false }).limit(50)
+  if (error) {
+    console.warn('[supabase] listarFunisComparacoes error:', error.message)
+    return []
+  }
+  return rows<FunilComparacao>(data)
+}
+
+export async function criarFunilComparacao(comparacao: FunilComparacao): Promise<FunilComparacao> {
+  const { data, error } = await tb('funis_comparacoes').insert(toSnakeCase(comparacao as any)).select().single()
+  if (error) throw new Error(`Erro ao criar comparação: ${error.message}`)
+  return row<FunilComparacao>(data)!
+}
+
+export async function deletarFunilComparacao(id: string): Promise<boolean> {
+  const { error } = await tb('funis_comparacoes').delete().eq('id', id)
   return !error
 }
 

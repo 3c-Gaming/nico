@@ -656,3 +656,15 @@ export interface Resultado {
   criadoEm: string
   atualizadoEm: string
 }
+
+/** Histórico de comparações de funis geradas em /funis/apresentar — um registro por clique em
+ * "Apresentar dados". `funis` é um snapshot dos nomes no momento do salvamento, não só os ids. */
+export interface FunilComparacao {
+  id: string
+  titulo: string
+  flowIds: string[]
+  funis: string[]
+  inicio: string
+  fim: string
+  criadoEm: string
+}

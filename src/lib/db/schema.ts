@@ -130,6 +130,16 @@ export const resultados = pgTable('resultados', {
   atualizadoEm: text('atualizado_em').notNull(),
 })
 
+export const funisComparacoes = pgTable('funis_comparacoes', {
+  id: text('id').primaryKey(),
+  titulo: text('titulo').notNull(),
+  flowIds: jsonb('flow_ids').notNull().default('[]'),
+  funis: jsonb('funis').notNull().default('[]'),
+  inicio: text('inicio').notNull(),
+  fim: text('fim').notNull(),
+  criadoEm: text('criado_em').notNull(),
+})
+
 export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),
