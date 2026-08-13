@@ -23,6 +23,18 @@ interface LeadComConversa {
   tags: string[]
   variaveis: Record<string, unknown>
   mensagens: MensagemFluxo[]
+  tagCliqueLink: string | null
+}
+
+// Convenção observada nos fluxos configurados: tags de um mesmo fluxo compartilham o
+// sufixo depois do primeiro "_" (Lead_F72_02, FC_F72_02, CTA_F72_02, COM_F72_02...).
+// A tag que começa com "CTA" é setada manualmente no fluxo só quando o lead de fato abre
+// o link (via redirect próprio da SendPulse, fora do webhook de mensagens do WhatsApp) —
+// então ela é o único jeito confiável de saber que o clique no botão de link aconteceu.
+function acharTagDeCliqueLink(tagEntrada: string, tagsDoLead: string[]): string | null {
+  const sufixo = tagEntrada.replace(/^[^_]+_/, '').toUpperCase()
+  if (!sufixo) return null
+  return tagsDoLead.find((t) => t.toUpperCase().startsWith('CTA') && t.toUpperCase().includes(sufixo)) ?? null
 }
 
 export async function GET(request: NextRequest) {
@@ -45,7 +57,7 @@ export async function GET(request: NextRequest) {
       candidatos.map(async (candidato): Promise<LeadComConversa> => {
         const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId)
         const mensagens = filtrarConversaPorFluxo(brutas, flowId)
-        return { ...candidato, mensagens }
+        return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
       }),
     )
 
@@ -61,7 +73,7 @@ export async function GET(request: NextRequest) {
       botId,
       flowId,
       tag,
-      avisoLinks: 'Clique em botão de link (cta_url) não gera mensagem de resposta no WhatsApp — só sabemos que o link foi enviado, não se foi clicado.',
+      avisoLinks: 'Clique em botão de link (cta_url) não gera mensagem de resposta no WhatsApp — mas se o fluxo tem uma tag "CTA_*" setada só quando o link é aberto, ela aparece em tagCliqueLink de cada lead como confirmação do clique.',
       leads,
     })
   } catch (err) {

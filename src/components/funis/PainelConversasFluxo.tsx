@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronDown, ChevronUp, Bot, User, MousePointerClick, Link2, Image as ImageIcon, FileText, Volume2, Video, Tag as TagIcon } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, Bot, User, MousePointerClick, Link2, Image as ImageIcon, FileText, Volume2, Video, Tag as TagIcon, CheckCircle2 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 
 interface MensagemFluxo {
@@ -26,6 +26,7 @@ interface LeadComConversa {
   tags: string[]
   variaveis: Record<string, unknown>
   mensagens: MensagemFluxo[]
+  tagCliqueLink: string | null
 }
 
 interface PainelConversasFluxoProps {
@@ -140,6 +141,12 @@ function LeadCard({ lead }: { lead: LeadComConversa }) {
           <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
             {lead.mensagens.length} msg · {cliques} clique(s) · {links} link(s) · {formatarTempoRelativo(lead.ultimaAtividade)}
           </div>
+          {lead.tagCliqueLink && (
+            <div className="flex items-center gap-1 text-[10px] font-medium text-[var(--success)] mt-1">
+              <CheckCircle2 size={11} />
+              Clicou no link ({lead.tagCliqueLink})
+            </div>
+          )}
         </div>
         {expandido ? <ChevronUp size={14} className="text-[var(--text-muted)] shrink-0" /> : <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" />}
       </button>
@@ -150,11 +157,21 @@ function LeadCard({ lead }: { lead: LeadComConversa }) {
             <div className="flex items-start gap-1.5">
               <TagIcon size={11} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
               <div className="flex flex-wrap gap-1">
-                {lead.tags.map((t) => (
-                  <span key={t} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-secondary)]">
-                    {t}
-                  </span>
-                ))}
+                {lead.tags.map((t) => {
+                  const ehTagDeClique = t === lead.tagCliqueLink
+                  return (
+                    <span
+                      key={t}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                        ehTagDeClique
+                          ? 'bg-[var(--success)]/15 border-[var(--success)]/40 text-[var(--success)] font-semibold'
+                          : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {t}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           )}
