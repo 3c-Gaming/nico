@@ -28,7 +28,9 @@ function getHeaders(apiKey: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MensagemBruta = any
 
-async function buscarTodasMensagens(apiKey: string, contactId: string): Promise<MensagemBruta[]> {
+/** Busca o histórico completo de mensagens de um contato, já sabendo a API key certa
+ * (ex: quando o chamador já tem o botId e resolveu a conta via apiKeyParaBot). */
+export async function buscarMensagensDoContatoNaConta(apiKey: string, contactId: string): Promise<MensagemBruta[]> {
   const todas: MensagemBruta[] = []
   let skip = 0
   while (todas.length < MAX_MENSAGENS) {
@@ -54,12 +56,45 @@ export async function buscarMensagensDoContato(contactId: string): Promise<Mensa
   let ultimoErro: unknown
   for (const conta of listarContasSendpulse()) {
     try {
-      return await buscarTodasMensagens(conta.apiKey, contactId)
+      return await buscarMensagensDoContatoNaConta(conta.apiKey, contactId)
     } catch (err) {
       ultimoErro = err
     }
   }
   throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta SendPulse reconheceu o contato ${contactId}`)
+}
+
+export interface ContatoResumo {
+  contactId: string
+  nome: string
+  telefone: string
+  ultimaAtividade: string
+  tags: string[]
+  variaveis: Record<string, unknown>
+}
+
+/** getByTag devolve os contatos ordenados do mais recente pro mais antigo (confirmado —
+ * ver contarPorTagHojeSendpulse), então pegar os N primeiros já dá os leads mais
+ * recentes daquela tag sem precisar ordenar na mão. */
+export async function buscarUltimosContatosPorTag(
+  botId: string,
+  tag: string,
+  apiKey: string,
+  quantidade: number,
+): Promise<ContatoResumo[]> {
+  const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${quantidade}`
+  const res = await fetch(url, { headers: getHeaders(apiKey) })
+  if (!res.ok) throw new Error(`Sendpulse getByTag error ${res.status}`)
+  const json = await res.json()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((json.data ?? []) as any[]).map((c) => ({
+    contactId: String(c.id ?? ''),
+    nome: c.channel_data?.name || c.channel_data?.first_name || '',
+    telefone: c.channel_data?.username || '',
+    ultimaAtividade: c.last_activity_at || c.created_at || '',
+    tags: c.tags ?? [],
+    variaveis: c.variables ?? {},
+  }))
 }
 
 export interface MensagemFluxo {

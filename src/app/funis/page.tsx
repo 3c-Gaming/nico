@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, Funnel, ChevronUp, ChevronDown } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, Funnel, ChevronUp, ChevronDown, Radio } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -11,6 +11,7 @@ import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
 import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
+import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
@@ -387,6 +388,7 @@ function FunisPageInner() {
   const [painelApresentacoesAberto, setPainelApresentacoesAberto] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  const [conversasFluxo, setConversasFluxo] = useState<{ botId: string; flowId: string; tag: string; flowNome: string } | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
@@ -1255,6 +1257,20 @@ function FunisPageInner() {
                                 <Funnel size={13} className={isExpanded ? 'text-[var(--d1)]' : ''} />
                               </button>
                             )}
+                            {row.tags.length > 0 && (
+                              <button
+                                onClick={() => setConversasFluxo({
+                                  botId: row.botId,
+                                  flowId: row.flow.id,
+                                  tag: tagDeEntradaDoFluxo(row.tags)!,
+                                  flowNome: row.funil || row.flow.nome,
+                                })}
+                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                                title="Ver conversas ao vivo dos últimos leads"
+                              >
+                                <Radio size={13} />
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingKey(isEditing ? null : configKey)}
                               className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
@@ -1348,6 +1364,16 @@ function FunisPageInner() {
       </Modal>
 
       <PainelApresentacoes aberto={painelApresentacoesAberto} onClose={() => setPainelApresentacoesAberto(false)} />
+
+      <PainelConversasFluxo
+        key={conversasFluxo ? `${conversasFluxo.flowId}-${conversasFluxo.tag}` : 'fechado'}
+        aberto={conversasFluxo !== null}
+        onClose={() => setConversasFluxo(null)}
+        botId={conversasFluxo?.botId ?? null}
+        flowId={conversasFluxo?.flowId ?? null}
+        tag={conversasFluxo?.tag ?? null}
+        flowNome={conversasFluxo?.flowNome ?? null}
+      />
     </>
   )
 }
