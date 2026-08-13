@@ -135,7 +135,7 @@ export function PainelConversasFluxo({
                   <Funnel size={12} className="text-[var(--text-muted)]" />
                   <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
                 </div>
-                <FunilConversaoChart estagios={estagios} cor={cor} />
+                <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
               </div>
             </div>
           </motion.div>
