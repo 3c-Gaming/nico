@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Radio } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Eye } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -395,7 +395,6 @@ function FunisPageInner() {
   // desses dados terminarem de carregar, ele ficaria com os números zerados pra sempre — o valor
   // "congela" no momento do clique e não reage a atualizações de estado depois disso.
   const [conversasFluxoKey, setConversasFluxoKey] = useState<string | null>(null)
-  const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingDataInicio, setTrackingDataInicio] = useState(getLocalDate())
@@ -465,37 +464,6 @@ function FunisPageInner() {
     } finally {
       setLoading(false)
       setRefreshing(false)
-    }
-  }
-
-  async function recarregarTag(row: FlowRow) {
-    const key = `${row.botId}-${row.flow.id}`
-    if (!row.tags.length || recarregandoTag[key]) return
-    setRecarregandoTag((prev) => ({ ...prev, [key]: true }))
-    try {
-      const [hojeRes, intervaloRes] = await Promise.all([
-        fetch('/api/leadhub/contagem-hoje-sendpulse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ botId: row.botId, tags: row.tags, refresh: true }),
-        }),
-        fetch('/api/sendpulse/contagem-intervalo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ botId: row.botId, tags: row.tags, dataInicio: trackingDataInicio, dataFim: trackingDataFim, refresh: true }),
-        }),
-      ])
-      if (hojeRes.ok) {
-        const data = await hojeRes.json()
-        setContagens((prev) => ({ ...prev, ...data.leads }))
-        setUltimoLeadMap((prev) => ({ ...prev, ...data.ultimoLead }))
-      }
-      if (intervaloRes.ok) {
-        const data = await intervaloRes.json()
-        setContagensIntervalo((prev) => ({ ...prev, ...data.leads }))
-      }
-    } catch {} finally {
-      setRecarregandoTag((prev) => ({ ...prev, [key]: false }))
     }
   }
 
@@ -1308,21 +1276,11 @@ function FunisPageInner() {
                             )}
                             {row.tags.length > 0 && (
                               <button
-                                onClick={() => recarregarTag(row)}
-                                disabled={recarregandoTag[configKey]}
-                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
-                                title="Recarregar contagem de leads"
-                              >
-                                <RefreshCw size={12} className={recarregandoTag[configKey] ? 'animate-spin' : ''} />
-                              </button>
-                            )}
-                            {row.tags.length > 0 && (
-                              <button
                                 onClick={() => setConversasFluxoKey(configKey)}
                                 className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
                                 title="Ver detalhes e conversas ao vivo"
                               >
-                                <Radio size={13} />
+                                <Eye size={13} />
                               </button>
                             )}
                             {row.tags.length > 0 && (
