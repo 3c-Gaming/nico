@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, Funnel, ChevronUp, ChevronDown } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -10,6 +10,7 @@ import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
+import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
@@ -144,6 +145,14 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
     setTags(tags.filter((t) => t !== tag))
   }
 
+  function moveTag(index: number, dir: -1 | 1) {
+    const alvo = index + dir
+    if (alvo < 0 || alvo >= tags.length) return
+    const next = [...tags]
+    ;[next[index], next[alvo]] = [next[alvo], next[index]]
+    setTags(next)
+  }
+
   function removeUtmExtra(valor: string) {
     setUtmsExtras(utmsExtras.filter((u) => u !== valor))
   }
@@ -255,15 +264,42 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
         <span className="text-xs font-medium text-[var(--text-muted)] w-16 pt-1">Tags:</span>
         <div className="flex-1 space-y-1.5">
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
-                  {tag}
-                  <button onClick={() => removeTag(tag)} className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors">
+            <div className="space-y-1">
+              {tags.map((tag, i) => (
+                <div key={tag} className="flex items-center gap-1.5 pl-1.5 pr-1 py-1 rounded bg-[var(--bg-elevated)] border border-[var(--border)]">
+                  <span className="w-4 text-center text-[10px] font-mono text-[var(--text-muted)]/60 shrink-0">{i + 1}</span>
+                  <span className="flex-1 text-xs font-mono text-[var(--text-primary)] truncate">{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => moveTag(i, -1)}
+                    disabled={i === 0}
+                    className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] disabled:opacity-25 disabled:hover:text-[var(--text-muted)] disabled:hover:bg-transparent transition-colors"
+                    title="Mover pra cima na jornada"
+                  >
+                    <ChevronUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveTag(i, 1)}
+                    disabled={i === tags.length - 1}
+                    className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] disabled:opacity-25 disabled:hover:text-[var(--text-muted)] disabled:hover:bg-transparent transition-colors"
+                    title="Mover pra baixo na jornada"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                    title="Remover tag"
+                  >
                     <X size={12} />
                   </button>
-                </span>
+                </div>
               ))}
+              <p className="text-[10px] text-[var(--text-muted)]/60">
+                A ordem acima é a jornada de qualificação (1ª tag que o lead recebe → última) — usada no funil de conversão do fluxo.
+              </p>
             </div>
           )}
           <TagComboBox
@@ -350,6 +386,7 @@ function FunisPageInner() {
   const [tituloApresentacao, setTituloApresentacao] = useState('')
   const [painelApresentacoesAberto, setPainelApresentacoesAberto] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
@@ -1024,6 +1061,7 @@ function FunisPageInner() {
                 {flowRows.map((row) => {
                   const configKey = chaveLinha(row)
                   const isEditing = editingKey === configKey
+                  const isExpanded = expandedKey === configKey
                   return (
                     <Fragment key={configKey}>
                       <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -1207,6 +1245,15 @@ function FunisPageInner() {
                                 <RefreshCw size={12} className={recarregandoTag[configKey] ? 'animate-spin' : ''} />
                               </button>
                             )}
+                            {row.tags.length > 1 && (
+                              <button
+                                onClick={() => setExpandedKey(isExpanded ? null : configKey)}
+                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                                title="Ver funil de conversão da jornada"
+                              >
+                                <Funnel size={13} className={isExpanded ? 'text-[var(--d1)]' : ''} />
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingKey(isEditing ? null : configKey)}
                               className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
@@ -1217,6 +1264,35 @@ function FunisPageInner() {
                           </div>
                         </td>
                       </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
+                            <div className="px-3 py-2">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Funnel size={12} className="text-[var(--text-muted)]" />
+                                <span className="text-xs font-medium text-[var(--text-muted)]">
+                                  Funil de conversão da jornada · {trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`}
+                                </span>
+                              </div>
+                              {row.carregandoTotal ? (
+                                <div className="flex justify-center py-6">
+                                  <Spinner size={20} />
+                                </div>
+                              ) : (
+                                <FunilConversaoChart
+                                  estagios={row.tags.map((tag) => ({ tag, contagem: contagensIntervalo[tag] ?? 0 }))}
+                                  cor={(() => {
+                                    const primeiraId = row.casas[0]
+                                    if (!primeiraId) return undefined
+                                    const c = (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]
+                                    return c?.cor
+                                  })()}
+                                />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {isEditing && (
                         <tr>
                           <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
