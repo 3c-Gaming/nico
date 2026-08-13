@@ -540,7 +540,8 @@ function BlocoDia({
     ? linhas.map((l) => {
         const r = calcularResultadoLinhaNoDia(l, dia)
         const convFtd = r.registros > 0 ? (r.ftds / r.registros) * 100 : null
-        const leads = l.tags.reduce((acc, tag) => acc + (leadsPorTagPorDia[tag]?.[data] ?? 0), 0)
+        const tagEntradaDia = tagDeEntradaDoFluxo(l.tags)
+        const leads = tagEntradaDia ? (leadsPorTagPorDia[tagEntradaDia]?.[data] ?? 0) : 0
         const convLeadReg = leads > 0 ? (r.registros / leads) * 100 : null
         return { linha: l, leads, registros: r.registros, ftds: r.ftds, convFtd, convLeadReg }
       })

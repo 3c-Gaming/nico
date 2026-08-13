@@ -668,3 +668,19 @@ export interface FunilComparacao {
   fim: string
   criadoEm: string
 }
+
+/** Apresentação pública de UM funil (distinta da comparação entre vários) — leads/reg/FTD/conversão
+ * do período, funil de conversão das tags e últimas conversas, com espaço pra inserir insights. Ao
+ * contrário de FunilComparacao, precisa ser um registro persistido desde a criação (não só query
+ * params) porque os comentários são editados depois, direto na página pública. */
+export interface FunilApresentacao {
+  id: string
+  titulo: string
+  flowId: string
+  funil: string
+  inicio: string
+  fim: string
+  comentarios: string
+  criadoEm: string
+  atualizadoEm: string
+}

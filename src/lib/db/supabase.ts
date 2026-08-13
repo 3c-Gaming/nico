@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -583,6 +583,30 @@ export async function atualizarFunilComparacao(id: string, titulo: string): Prom
 export async function deletarFunilComparacao(id: string): Promise<boolean> {
   const { error } = await tb('funis_comparacoes').delete().eq('id', id)
   return !error
+}
+
+// --- Funis Apresentações (funil único) ---
+
+export async function criarFunilApresentacao(apresentacao: FunilApresentacao): Promise<FunilApresentacao> {
+  const { data, error } = await tb('funis_apresentacoes').insert(toSnakeCase(apresentacao as any)).select().single()
+  if (error) throw new Error(`Erro ao criar apresentação: ${error.message}`)
+  return row<FunilApresentacao>(data)!
+}
+
+export async function buscarFunilApresentacao(id: string): Promise<FunilApresentacao | null> {
+  const { data, error } = await tb('funis_apresentacoes').select('*').eq('id', id).maybeSingle()
+  if (error) return null
+  return row<FunilApresentacao>(data)
+}
+
+export async function atualizarComentariosFunilApresentacao(id: string, comentarios: string): Promise<FunilApresentacao | null> {
+  const { data, error } = await tb('funis_apresentacoes')
+    .update({ comentarios, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return null
+  return row<FunilApresentacao>(data)
 }
 
 // --- Usuarios Responsaveis ---

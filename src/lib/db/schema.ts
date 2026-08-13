@@ -140,6 +140,18 @@ export const funisComparacoes = pgTable('funis_comparacoes', {
   criadoEm: text('criado_em').notNull(),
 })
 
+export const funisApresentacoes = pgTable('funis_apresentacoes', {
+  id: text('id').primaryKey(),
+  titulo: text('titulo').notNull(),
+  flowId: text('flow_id').notNull(),
+  funil: text('funil').notNull(),
+  inicio: text('inicio').notNull(),
+  fim: text('fim').notNull(),
+  comentarios: text('comentarios').notNull().default(''),
+  criadoEm: text('criado_em').notNull(),
+  atualizadoEm: text('atualizado_em').notNull(),
+})
+
 export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),

@@ -385,6 +385,9 @@ function FunisPageInner() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [modalApresentarAberto, setModalApresentarAberto] = useState(false)
   const [tituloApresentacao, setTituloApresentacao] = useState('')
+  const [apresentarUnicoRow, setApresentarUnicoRow] = useState<FlowRow | null>(null)
+  const [tituloApresentacaoUnica, setTituloApresentacaoUnica] = useState('')
+  const [salvandoApresentacaoUnica, setSalvandoApresentacaoUnica] = useState(false)
   const [painelApresentacoesAberto, setPainelApresentacoesAberto] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
@@ -787,6 +790,43 @@ function FunisPageInner() {
         fim: trackingDataFim,
       }),
     }).catch(() => {})
+  }
+
+  function abrirModalApresentarUnico(row: FlowRow) {
+    setTituloApresentacaoUnica(`${row.funil ?? row.flow.nome} — ${trackingDataInicio} até ${trackingDataFim}`)
+    setApresentarUnicoRow(row)
+  }
+
+  async function confirmarApresentarUnico() {
+    if (!apresentarUnicoRow) return
+    const row = apresentarUnicoRow
+    // Diferente da comparação, aqui precisa esperar o POST responder antes de abrir — a página
+    // usa o id do registro pra carregar/editar os comentários, não dá pra ser só query params.
+    // Abre a aba em branco já (dentro do gesto de clique, evita bloqueio de pop-up) e só navega
+    // ela de fato quando o id chegar.
+    const novaAba = window.open('', '_blank')
+    setSalvandoApresentacaoUnica(true)
+    try {
+      const res = await fetch('/api/funis-apresentacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: tituloApresentacaoUnica || `${row.funil ?? row.flow.nome} — ${trackingDataInicio} até ${trackingDataFim}`,
+          flowId: row.flow.id,
+          funil: row.funil ?? row.flow.nome,
+          inicio: trackingDataInicio,
+          fim: trackingDataFim,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      if (novaAba) novaAba.location.href = `/funis/apresentar-funil?id=${data.apresentacao.id}`
+    } catch {
+      novaAba?.close()
+    } finally {
+      setSalvandoApresentacaoUnica(false)
+      setApresentarUnicoRow(null)
+    }
   }
 
   return (
@@ -1271,6 +1311,15 @@ function FunisPageInner() {
                                 <Radio size={13} />
                               </button>
                             )}
+                            {row.tags.length > 0 && (
+                              <button
+                                onClick={() => abrirModalApresentarUnico(row)}
+                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                                title="Apresentar este funil"
+                              >
+                                <Presentation size={13} />
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingKey(isEditing ? null : configKey)}
                               className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
@@ -1359,6 +1408,31 @@ function FunisPageInner() {
           >
             <Presentation size={14} />
             Salvar e abrir
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={apresentarUnicoRow !== null} onClose={() => setApresentarUnicoRow(null)} title="Apresentar este funil" width="420px">
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Nome da apresentação</label>
+            <input
+              type="text"
+              value={tituloApresentacaoUnica}
+              onChange={(e) => setTituloApresentacaoUnica(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmarApresentarUnico() }}
+              autoFocus
+              className="w-full h-9 px-3 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded-md text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+            />
+          </div>
+          <button
+            onClick={confirmarApresentarUnico}
+            disabled={!tituloApresentacaoUnica.trim() || salvandoApresentacaoUnica}
+            className="flex items-center justify-center gap-1.5 w-full h-9 rounded-md text-sm font-medium text-white disabled:opacity-50 transition-opacity"
+            style={{ backgroundColor: 'var(--d1)' }}
+          >
+            <Presentation size={14} />
+            {salvandoApresentacaoUnica ? 'Salvando...' : 'Salvar e abrir'}
           </button>
         </div>
       </Modal>
