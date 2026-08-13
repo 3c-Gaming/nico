@@ -15,6 +15,7 @@ export interface MensagemFluxo {
   botaoTitulo?: string
   linkUrl?: string
   linkTexto?: string
+  imagemUrl?: string
   chainId?: string
   blockId?: string
 }
@@ -30,7 +31,7 @@ export interface LeadComConversa {
   tagCliqueLink: string | null
 }
 
-function formatarTempoRelativo(iso: string): string {
+export function formatarTempoRelativo(iso: string): string {
   const agora = Date.now()
   const ts = new Date(iso).getTime()
   if (isNaN(ts)) return iso
@@ -57,31 +58,31 @@ function IconeMensagem({ tipo }: { tipo: MensagemFluxo['tipo'] }) {
   switch (tipo) {
     case 'botao_clicado':
     case 'lista_selecionada':
-      return <MousePointerClick size={12} className={`${cls} text-[var(--success)]`} />
+      return <MousePointerClick size={13} className={`${cls} text-[var(--success)]`} />
     case 'link_enviado':
-      return <Link2 size={12} className={`${cls} text-[var(--d1)]`} />
+      return <Link2 size={13} className={`${cls} text-[var(--d1)]`} />
     case 'imagem':
-      return <ImageIcon size={12} className={`${cls} text-[var(--text-muted)]`} />
+      return <ImageIcon size={13} className={`${cls} text-[var(--text-muted)]`} />
     case 'documento':
-      return <FileText size={12} className={`${cls} text-[var(--text-muted)]`} />
+      return <FileText size={13} className={`${cls} text-[var(--text-muted)]`} />
     case 'audio':
-      return <Volume2 size={12} className={`${cls} text-[var(--text-muted)]`} />
+      return <Volume2 size={13} className={`${cls} text-[var(--text-muted)]`} />
     case 'video':
-      return <Video size={12} className={`${cls} text-[var(--text-muted)]`} />
+      return <Video size={13} className={`${cls} text-[var(--text-muted)]`} />
     default:
       return null
   }
 }
 
-function MensagemLinha({ msg }: { msg: MensagemFluxo }) {
+function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueConfirmado?: boolean }) {
   const deEntrada = msg.direcao === 'entrada'
   return (
     <div className="flex gap-2">
-      <div className="flex flex-col items-center pt-0.5 shrink-0 w-7">
-        {deEntrada ? <User size={11} className="text-[var(--d3)]" /> : <Bot size={11} className="text-[var(--text-muted)]" />}
-        <span className="text-[9px] text-[var(--text-muted)]/70 mt-0.5">{formatarHora(msg.criadoEm)}</span>
+      <div className="flex flex-col items-center pt-0.5 shrink-0 w-8">
+        {deEntrada ? <User size={13} className="text-[var(--d3)]" /> : <Bot size={13} className="text-[var(--text-muted)]" />}
+        <span className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{formatarHora(msg.criadoEm)}</span>
       </div>
-      <div className={`flex-1 min-w-0 rounded px-2 py-1.5 text-[11px] leading-snug ${
+      <div className={`flex-1 min-w-0 rounded px-2.5 py-2 text-[13px] leading-snug ${
         deEntrada ? 'bg-[var(--d3)]/10 border border-[var(--d3)]/20' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
       }`}>
         {msg.tipo === 'botao_clicado' || msg.tipo === 'lista_selecionada' ? (
@@ -92,15 +93,36 @@ function MensagemLinha({ msg }: { msg: MensagemFluxo }) {
         ) : msg.tipo === 'link_enviado' ? (
           <div className="space-y-1">
             {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap line-clamp-3">{msg.texto}</p>}
-            <a
-              href={msg.linkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 font-medium text-[var(--d1)] hover:underline"
-            >
-              <IconeMensagem tipo={msg.tipo} />
-              {msg.linkTexto || 'Link'}
+            <div className="flex items-center gap-2 flex-wrap">
+              <a
+                href={msg.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 font-medium text-[var(--d1)] hover:underline"
+              >
+                <IconeMensagem tipo={msg.tipo} />
+                {msg.linkTexto || 'Link'}
+              </a>
+              {cliqueConfirmado && (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--success)]">
+                  <CheckCircle2 size={11} />
+                  clicado
+                </span>
+              )}
+            </div>
+          </div>
+        ) : msg.tipo === 'imagem' && msg.imagemUrl ? (
+          <div className="space-y-1">
+            <a href={msg.imagemUrl} target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element -- URL externa (S3 da SendPulse), sem domínio fixo pra configurar no next/image */}
+              <img
+                src={msg.imagemUrl}
+                alt={msg.texto || 'Imagem enviada'}
+                className="max-w-[220px] max-h-[220px] rounded border border-[var(--border)] object-cover"
+                loading="lazy"
+              />
             </a>
+            {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto}</p>}
           </div>
         ) : msg.tipo === 'imagem' || msg.tipo === 'documento' || msg.tipo === 'audio' || msg.tipo === 'video' ? (
           <div className="flex items-center gap-1.5 text-[var(--text-muted)] italic">
@@ -116,11 +138,65 @@ function MensagemLinha({ msg }: { msg: MensagemFluxo }) {
   )
 }
 
+/** Bloco de detalhe (tags + variáveis + jornada) de um lead — sem o cabeçalho/accordion, pra poder
+ * ser usado tanto dentro do LeadConversaCard (apresentação pública) quanto num painel próprio
+ * (sidebar de detalhe do PainelConversasFluxo). */
+export function LeadConversaDetalhe({ lead }: { lead: LeadComConversa }) {
+  const variaveisEntries = Object.entries(lead.variaveis).filter(([, v]) => v != null && v !== '')
+
+  return (
+    <div className="space-y-3">
+      {lead.tags.length > 0 && (
+        <div className="flex items-start gap-1.5">
+          <TagIcon size={12} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+          <div className="flex flex-wrap gap-1">
+            {lead.tags.map((t) => {
+              const ehTagDeClique = t === lead.tagCliqueLink
+              return (
+                <span
+                  key={t}
+                  className={`px-1.5 py-0.5 rounded text-[11px] font-mono border ${
+                    ehTagDeClique
+                      ? 'bg-[var(--success)]/15 border-[var(--success)]/40 text-[var(--success)] font-semibold'
+                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {t}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {variaveisEntries.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Variáveis</p>
+          <div className="rounded bg-[var(--bg-elevated)] border border-[var(--border)] p-2 space-y-0.5">
+            {variaveisEntries.map(([k, v]) => (
+              <div key={k} className="flex gap-1.5 text-[11px]">
+                <span className="font-mono text-[var(--text-muted)] shrink-0">{k}:</span>
+                <span className="text-[var(--text-secondary)] truncate" title={String(v)}>{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada</p>
+        {lead.mensagens.map((msg) => (
+          <MensagemLinha key={msg.id} msg={msg} cliqueConfirmado={msg.tipo === 'link_enviado' && !!lead.tagCliqueLink} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function LeadConversaCard({ lead, abertoPorPadrao }: { lead: LeadComConversa; abertoPorPadrao?: boolean }) {
   const [expandido, setExpandido] = useState(abertoPorPadrao ?? false)
   const cliques = lead.mensagens.filter((m) => m.tipo === 'botao_clicado' || m.tipo === 'lista_selecionada').length
   const links = lead.mensagens.filter((m) => m.tipo === 'link_enviado').length
-  const variaveisEntries = Object.entries(lead.variaveis).filter(([, v]) => v != null && v !== '')
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
@@ -144,50 +220,8 @@ export function LeadConversaCard({ lead, abertoPorPadrao }: { lead: LeadComConve
       </button>
 
       {expandido && (
-        <div className="px-3 pb-3 space-y-3 border-t border-[var(--border)] pt-3">
-          {lead.tags.length > 0 && (
-            <div className="flex items-start gap-1.5">
-              <TagIcon size={11} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
-              <div className="flex flex-wrap gap-1">
-                {lead.tags.map((t) => {
-                  const ehTagDeClique = t === lead.tagCliqueLink
-                  return (
-                    <span
-                      key={t}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
-                        ehTagDeClique
-                          ? 'bg-[var(--success)]/15 border-[var(--success)]/40 text-[var(--success)] font-semibold'
-                          : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-secondary)]'
-                      }`}
-                    >
-                      {t}
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {variaveisEntries.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Variáveis</p>
-              <div className="rounded bg-[var(--bg-elevated)] border border-[var(--border)] p-2 space-y-0.5">
-                {variaveisEntries.map(([k, v]) => (
-                  <div key={k} className="flex gap-1.5 text-[10px]">
-                    <span className="font-mono text-[var(--text-muted)] shrink-0">{k}:</span>
-                    <span className="text-[var(--text-secondary)] truncate" title={String(v)}>{String(v)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada</p>
-            {lead.mensagens.map((msg) => (
-              <MensagemLinha key={msg.id} msg={msg} />
-            ))}
-          </div>
+        <div className="px-3 pb-3 border-t border-[var(--border)] pt-3">
+          <LeadConversaDetalhe lead={lead} />
         </div>
       )}
     </div>

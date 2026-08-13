@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
-import { LeadConversaCard, type LeadComConversa } from './LeadConversaCard'
+import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
 interface PainelConversasFluxoProps {
   aberto: boolean
@@ -19,6 +19,7 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
   const [leads, setLeads] = useState<LeadComConversa[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [leadSelecionado, setLeadSelecionado] = useState<LeadComConversa | null>(null)
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
@@ -35,11 +36,19 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      // Escape fecha o detalhe primeiro (se tiver aberto) — só fecha o painel inteiro no segundo Escape.
+      if (leadSelecionado) setLeadSelecionado(null)
+      else onClose()
     }
     if (aberto) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [aberto, onClose])
+  }, [aberto, onClose, leadSelecionado])
+
+  function fechar() {
+    setLeadSelecionado(null)
+    onClose()
+  }
 
   return (
     <AnimatePresence>
@@ -51,8 +60,38 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-40 bg-black/60"
-            onClick={onClose}
+            onClick={fechar}
           />
+
+          {leadSelecionado && (
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-y-0 right-[420px] z-50 w-[440px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
+            >
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+                <button
+                  onClick={() => setLeadSelecionado(null)}
+                  className="flex items-center gap-1.5 min-w-0 text-left text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                  <ChevronLeft size={16} className="shrink-0" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{leadSelecionado.nome || leadSelecionado.contactId}</h2>
+                    <p className="text-[10px] text-[var(--text-muted)]">{formatarTempoRelativo(leadSelecionado.ultimaAtividade)}</p>
+                  </div>
+                </button>
+                <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <LeadConversaDetalhe lead={leadSelecionado} />
+              </div>
+            </motion.div>
+          )}
+
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -65,7 +104,7 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conversas ao vivo</h2>
                 {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 5 leads</p>}
               </div>
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+              <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
                 <X size={16} />
               </button>
             </div>
@@ -80,7 +119,36 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
               ) : leads.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhuma conversa encontrada pra esse fluxo ainda.</p>
               ) : (
-                leads.map((lead) => <LeadConversaCard key={lead.contactId} lead={lead} />)
+                leads.map((lead) => {
+                  const cliques = lead.mensagens.filter((m) => m.tipo === 'botao_clicado' || m.tipo === 'lista_selecionada').length
+                  const links = lead.mensagens.filter((m) => m.tipo === 'link_enviado').length
+                  const selecionado = leadSelecionado?.contactId === lead.contactId
+                  return (
+                    <button
+                      key={lead.contactId}
+                      onClick={() => setLeadSelecionado(lead)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                        selecionado
+                          ? 'bg-[var(--d1)]/10 border-[var(--d1)]/40'
+                          : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-elevated)]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-[var(--text-primary)] truncate">{lead.nome || lead.contactId}</div>
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                          {lead.mensagens.length} msg · {cliques} clique(s) · {links} link(s) · {formatarTempoRelativo(lead.ultimaAtividade)}
+                        </div>
+                        {lead.tagCliqueLink && (
+                          <div className="flex items-center gap-1 text-[10px] font-medium text-[var(--success)] mt-1">
+                            <CheckCircle2 size={11} />
+                            Clicou no link ({lead.tagCliqueLink})
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />
+                    </button>
+                  )
+                })
               )}
             </div>
           </motion.div>

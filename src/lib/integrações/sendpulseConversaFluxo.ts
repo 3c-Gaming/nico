@@ -106,6 +106,7 @@ export interface MensagemFluxo {
   botaoTitulo?: string
   linkUrl?: string
   linkTexto?: string
+  imagemUrl?: string
   chainId?: string
   blockId?: string
 }
@@ -137,6 +138,7 @@ function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain
   let botaoTitulo: string | undefined
   let linkUrl: string | undefined
   let linkTexto: string | undefined
+  let imagemUrl: string | undefined
 
   if (typeof data.text?.body === 'string') {
     tipo = 'texto'
@@ -147,6 +149,7 @@ function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain
   } else if (data.image) {
     tipo = 'imagem'
     texto = data.image.caption ?? undefined
+    imagemUrl = data.image.link ?? undefined
   } else if (data.file || data.document) {
     tipo = 'documento'
     texto = (data.file ?? data.document)?.caption ?? undefined
@@ -190,6 +193,7 @@ function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain
     botaoTitulo,
     linkUrl,
     linkTexto,
+    imagemUrl,
     chainId,
     blockId,
   }
