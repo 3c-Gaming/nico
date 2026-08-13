@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, CheckCircle2, Funnel } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
+import { FunilConversaoChart } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
 interface PainelConversasFluxoProps {
@@ -13,9 +14,45 @@ interface PainelConversasFluxoProps {
   flowId: string | null
   tag: string | null
   flowNome: string | null
+  tags: string[]
+  contagensPorTag: Record<string, number>
+  cor?: string
+  leadsHoje: number
+  total: number
+  registros: number
+  ftds: number
+  periodoLabel: string
 }
 
-export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flowNome }: PainelConversasFluxoProps) {
+function formatInt(n: number): string {
+  return n.toLocaleString('pt-BR')
+}
+
+function MetricaTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
+      <div className="text-lg font-bold text-[var(--text-primary)]">{value}</div>
+      <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">{label}</div>
+    </div>
+  )
+}
+
+export function PainelConversasFluxo({
+  aberto,
+  onClose,
+  botId,
+  flowId,
+  tag,
+  flowNome,
+  tags,
+  contagensPorTag,
+  cor,
+  leadsHoje,
+  total,
+  registros,
+  ftds,
+  periodoLabel,
+}: PainelConversasFluxoProps) {
   const [leads, setLeads] = useState<LeadComConversa[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -50,6 +87,10 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
     onClose()
   }
 
+  const convReg = leadsHoje > 0 ? (registros / leadsHoje) * 100 : null
+  const convFtd = registros > 0 ? (ftds / registros) * 100 : null
+  const estagios = tags.map((t) => ({ tag: t, contagem: contagensPorTag[t] ?? 0 }))
+
   return (
     <AnimatePresence>
       {aberto && (
@@ -62,6 +103,42 @@ export function PainelConversasFluxo({ aberto, onClose, botId, flowId, tag, flow
             className="fixed inset-0 z-40 bg-black/60"
             onClick={fechar}
           />
+
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0, right: leadSelecionado ? 860 : 420 }}
+            exit={{ x: '100%' }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed inset-y-0 z-50 w-[420px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
+          >
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{flowNome || 'Detalhes'}</h2>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Período: {periodoLabel}</p>
+              </div>
+              <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <MetricaTile label="Leads" value={formatInt(leadsHoje)} />
+                <MetricaTile label="Registros" value={formatInt(registros)} />
+                <MetricaTile label="FTDs" value={formatInt(ftds)} />
+                <MetricaTile label="Conv. Reg" value={convReg === null ? '—' : `${convReg.toFixed(1)}%`} />
+                <MetricaTile label="Conv. FTD" value={convFtd === null ? '—' : `${convFtd.toFixed(1)}%`} />
+                <MetricaTile label="Total período" value={formatInt(total)} />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Funnel size={12} className="text-[var(--text-muted)]" />
+                  <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
+                </div>
+                <FunilConversaoChart estagios={estagios} cor={cor} />
+              </div>
+            </div>
+          </motion.div>
 
           {leadSelecionado && (
             <motion.div

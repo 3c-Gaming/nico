@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, Funnel, ChevronUp, ChevronDown, Radio } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Radio } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -10,7 +10,6 @@ import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
-import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
@@ -390,8 +389,12 @@ function FunisPageInner() {
   const [salvandoApresentacaoUnica, setSalvandoApresentacaoUnica] = useState(false)
   const [painelApresentacoesAberto, setPainelApresentacoesAberto] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  const [conversasFluxo, setConversasFluxo] = useState<{ botId: string; flowId: string; tag: string; flowNome: string } | null>(null)
+  // Só a chave da linha — os valores (leads/reg/ftd/contagens por tag) são recalculados a cada
+  // render a partir do flowRows/contagensIntervalo/trackingMap atuais (ver conversasFluxoProps
+  // abaixo), nunca capturados como snapshot no clique. Do contrário, se o painel for aberto antes
+  // desses dados terminarem de carregar, ele ficaria com os números zerados pra sempre — o valor
+  // "congela" no momento do clique e não reage a atualizações de estado depois disso.
+  const [conversasFluxoKey, setConversasFluxoKey] = useState<string | null>(null)
   const [recarregandoTag, setRecarregandoTag] = useState<Record<string, boolean>>({})
   const [saveVersion, setSaveVersion] = useState(0)
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
@@ -651,6 +654,32 @@ function FunisPageInner() {
   }, [numeros, fluxosMap, contagens, contagensIntervalo, ultimoLeadMap, carregandoFlows, carregandoIntervalo, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
+
+  // Recalculado a cada render a partir do estado atual (não é um snapshot capturado no clique) —
+  // assim o painel de detalhes sempre mostra os números mais recentes, mesmo se tiver sido aberto
+  // antes de contagensIntervalo/trackingMap terminarem de carregar.
+  const conversasFluxoRow = conversasFluxoKey ? flowRows.find((r) => chaveLinha(r) === conversasFluxoKey) ?? null : null
+  const conversasFluxoProps = conversasFluxoRow ? {
+    botId: conversasFluxoRow.botId,
+    flowId: conversasFluxoRow.flow.id,
+    tag: tagDeEntradaDoFluxo(conversasFluxoRow.tags)!,
+    flowNome: conversasFluxoRow.funil || conversasFluxoRow.flow.nome,
+    tags: conversasFluxoRow.tags,
+    contagensPorTag: conversasFluxoRow.tags.reduce<Record<string, number>>((acc, t) => {
+      acc[t] = contagensIntervalo[t] ?? 0
+      return acc
+    }, {}),
+    cor: (() => {
+      const primeiraId = conversasFluxoRow.casas[0]
+      if (!primeiraId) return undefined
+      return (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]?.cor
+    })(),
+    leadsHoje: conversasFluxoRow.leadsHoje,
+    total: conversasFluxoRow.total,
+    registros: trackingMap[conversasFluxoRow.flow.id]?.registros ?? 0,
+    ftds: trackingMap[conversasFluxoRow.flow.id]?.ftds ?? 0,
+    periodoLabel: trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`,
+  } : null
 
   function toggleSelecionado(key: string) {
     setSelecionados((prev) => {
@@ -1104,7 +1133,6 @@ function FunisPageInner() {
                 {flowRows.map((row) => {
                   const configKey = chaveLinha(row)
                   const isEditing = editingKey === configKey
-                  const isExpanded = expandedKey === configKey
                   return (
                     <Fragment key={configKey}>
                       <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
@@ -1288,25 +1316,11 @@ function FunisPageInner() {
                                 <RefreshCw size={12} className={recarregandoTag[configKey] ? 'animate-spin' : ''} />
                               </button>
                             )}
-                            {row.tags.length > 1 && (
-                              <button
-                                onClick={() => setExpandedKey(isExpanded ? null : configKey)}
-                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-                                title="Ver funil de conversão da jornada"
-                              >
-                                <Funnel size={13} className={isExpanded ? 'text-[var(--d1)]' : ''} />
-                              </button>
-                            )}
                             {row.tags.length > 0 && (
                               <button
-                                onClick={() => setConversasFluxo({
-                                  botId: row.botId,
-                                  flowId: row.flow.id,
-                                  tag: tagDeEntradaDoFluxo(row.tags)!,
-                                  flowNome: row.funil || row.flow.nome,
-                                })}
+                                onClick={() => setConversasFluxoKey(configKey)}
                                 className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-                                title="Ver conversas ao vivo dos últimos leads"
+                                title="Ver detalhes e conversas ao vivo"
                               >
                                 <Radio size={13} />
                               </button>
@@ -1330,35 +1344,6 @@ function FunisPageInner() {
                           </div>
                         </td>
                       </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
-                            <div className="px-3 py-2">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Funnel size={12} className="text-[var(--text-muted)]" />
-                                <span className="text-xs font-medium text-[var(--text-muted)]">
-                                  Funil de conversão da jornada · {trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`}
-                                </span>
-                              </div>
-                              {row.carregandoTotal ? (
-                                <div className="flex justify-center py-6">
-                                  <Spinner size={20} />
-                                </div>
-                              ) : (
-                                <FunilConversaoChart
-                                  estagios={row.tags.map((tag) => ({ tag, contagem: contagensIntervalo[tag] ?? 0 }))}
-                                  cor={(() => {
-                                    const primeiraId = row.casas[0]
-                                    if (!primeiraId) return undefined
-                                    const c = (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]
-                                    return c?.cor
-                                  })()}
-                                />
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                       {isEditing && (
                         <tr>
                           <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
@@ -1440,13 +1425,21 @@ function FunisPageInner() {
       <PainelApresentacoes aberto={painelApresentacoesAberto} onClose={() => setPainelApresentacoesAberto(false)} />
 
       <PainelConversasFluxo
-        key={conversasFluxo ? `${conversasFluxo.flowId}-${conversasFluxo.tag}` : 'fechado'}
-        aberto={conversasFluxo !== null}
-        onClose={() => setConversasFluxo(null)}
-        botId={conversasFluxo?.botId ?? null}
-        flowId={conversasFluxo?.flowId ?? null}
-        tag={conversasFluxo?.tag ?? null}
-        flowNome={conversasFluxo?.flowNome ?? null}
+        key={conversasFluxoKey ?? 'fechado'}
+        aberto={conversasFluxoProps !== null}
+        onClose={() => setConversasFluxoKey(null)}
+        botId={conversasFluxoProps?.botId ?? null}
+        flowId={conversasFluxoProps?.flowId ?? null}
+        tag={conversasFluxoProps?.tag ?? null}
+        flowNome={conversasFluxoProps?.flowNome ?? null}
+        tags={conversasFluxoProps?.tags ?? []}
+        contagensPorTag={conversasFluxoProps?.contagensPorTag ?? {}}
+        cor={conversasFluxoProps?.cor}
+        leadsHoje={conversasFluxoProps?.leadsHoje ?? 0}
+        total={conversasFluxoProps?.total ?? 0}
+        registros={conversasFluxoProps?.registros ?? 0}
+        ftds={conversasFluxoProps?.ftds ?? 0}
+        periodoLabel={conversasFluxoProps?.periodoLabel ?? ''}
       />
     </>
   )
