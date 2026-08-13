@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, Fragment, Suspense } from 'react'
+import { useState, useEffect, useMemo, useSyncExternalStore, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Eye } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -375,6 +375,16 @@ function FunisPageInner() {
   const [filtroCasas, setFiltroCasas] = useState<string[]>([])
   const [filtroTipo, setFiltroTipo] = useState<'' | 'traffic' | 'disparo'>('')
   const { list: casasList } = useCasasAposta()
+  // flowTagConfigs vem do DataInitializer (fetch assíncrono à parte) — sem isso, o efeito de
+  // "Total" abaixo pode disparar antes das configs chegarem, ver getState().flowTagConfigs vazio,
+  // desistir (grupos.length === 0) e nunca mais tentar sozinho. Esse valor muda de false pra true
+  // uma vez (quando as configs terminam de carregar) e entra na dependência do efeito, garantindo
+  // que ele tente de novo nesse momento em vez de ficar preso no "desistiu cedo demais".
+  const flowTagConfigsProntas = useSyncExternalStore(
+    (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
+    () => Object.keys(getState().flowTagConfigs).length > 0,
+    () => false,
+  )
   const [exportModo, setExportModo] = useState<'unico' | 'intervalo'>('unico')
   const [exportInicio, setExportInicio] = useState(getLocalDate())
   const [exportFim, setExportFim] = useState(getLocalDate())
@@ -469,11 +479,24 @@ function FunisPageInner() {
 
   useEffect(() => { carregarDados() }, [saveVersion])
 
+  // Intervalo de um dia só e esse dia é hoje: "Total" seria exatamente o mesmo número que "Leads
+  // hoje" (mesma tag, mesmo dia) — usa contagens direto em vez de refazer a busca por um caminho
+  // mais lento (getByTag paginado, pensado pra intervalos de vários dias). Isso é o que fazia
+  // "Total" ser sempre o último dado a aparecer na tela: um trabalho duplicado e mais lento pro
+  // mesmo resultado que "Leads hoje" já tinha. Derivado, não é state — sem efeito nenhum pra
+  // sincronizar, só uma leitura diferente na hora de usar.
+  const hojeISO = getLocalDate()
+  const intervaloEhHojeUnico = trackingDataInicio === hojeISO && trackingDataFim === hojeISO
+  const contagensIntervaloEfetivo = intervaloEhHojeUnico ? contagens : contagensIntervalo
+
   // Total de leads no intervalo filtrado (todas as tags de todos os fluxos, não só os com UTM —
   // "Total" na tela precisa disso pra qualquer fluxo com tag configurada). Direto na SendPulse
   // (getByTag paginado), agrupado por bot — não usa mais o LeadHub (~60-70s fixos por chamada,
-  // bem mais lento que paginar direto na fonte).
+  // bem mais lento que paginar direto na fonte). Só roda pra intervalos que não sejam "hoje único"
+  // (ver efeito acima) — inclui flowTagConfigsProntas na dependência pra tentar de novo assim que
+  // as configs terminarem de carregar, caso o primeiro disparo tenha achado tudo vazio ainda.
   useEffect(() => {
+    if (intervaloEhHojeUnico) return
     let cancelado = false
 
     async function carregarTotalIntervalo() {
@@ -495,7 +518,7 @@ function FunisPageInner() {
 
     carregarTotalIntervalo()
     return () => { cancelado = true }
-  }, [trackingDataInicio, trackingDataFim, saveVersion])
+  }, [trackingDataInicio, trackingDataFim, saveVersion, flowTagConfigsProntas, intervaloEhHojeUnico])
 
   // Busca tracking 3CGG para todos os flows que têm utm
   useEffect(() => {
@@ -582,7 +605,7 @@ function FunisPageInner() {
         const funil = configs[flow.id]?.funil
         const tagEntrada = tagDeEntradaDoFluxo(tags)
         const leads = tagEntrada ? (contagens[tagEntrada] ?? 0) : 0
-        const total = tagEntrada ? (contagensIntervalo[tagEntrada] ?? 0) : 0
+        const total = tagEntrada ? (contagensIntervaloEfetivo[tagEntrada] ?? 0) : 0
         const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
           const ts = ultimoLeadMap[t] ?? null
           if (!ts) return best
@@ -609,7 +632,7 @@ function FunisPageInner() {
           total,
           ultimoLeadAt,
           carregandoContagens: tags.length > 0 && carregandoFlows.has(flow.id),
-          carregandoTotal: tags.length > 0 && carregandoIntervalo,
+          carregandoTotal: tags.length > 0 && (intervaloEhHojeUnico ? carregandoFlows.has(flow.id) : carregandoIntervalo),
         })
       }
     }
@@ -619,7 +642,7 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensIntervalo, ultimoLeadMap, carregandoFlows, carregandoIntervalo, filtroBot, filtroBusca, filtroCasas, filtroTipo])
+  }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervalo, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
@@ -634,7 +657,7 @@ function FunisPageInner() {
     flowNome: conversasFluxoRow.funil || conversasFluxoRow.flow.nome,
     tags: conversasFluxoRow.tags,
     contagensPorTag: conversasFluxoRow.tags.reduce<Record<string, number>>((acc, t) => {
-      acc[t] = contagensIntervalo[t] ?? 0
+      acc[t] = contagensIntervaloEfetivo[t] ?? 0
       return acc
     }, {}),
     cor: (() => {
