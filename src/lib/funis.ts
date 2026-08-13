@@ -10,6 +10,14 @@ export function utmsDoFluxo(c: { utm?: string | null; utmsExtras?: string[] }): 
   return [c.utm, ...(c.utmsExtras ?? [])].filter((u): u is string => !!u)
 }
 
+// Quando um fluxo tem várias tags (jornada de qualificação — ver FlowTagEditor), elas marcam
+// etapas que o MESMO lead passa a acumular, não leads diferentes. "Leads hoje"/"Total" não podem
+// somar a contagem de todas as tags (contaria o mesmo lead uma vez por etapa já cumprida) — só a
+// primeira tag (o ponto de entrada do fluxo) representa a contagem real de leads únicos.
+export function tagDeEntradaDoFluxo(tags?: string[]): string | undefined {
+  return tags?.[0]
+}
+
 export function gerarRangeDatas(inicio: string, fim: string): string[] {
   const datas: string[] = []
   const atual = new Date(`${inicio}T00:00:00`)
@@ -79,7 +87,8 @@ export function calcularResultadoLinhaNoDia(
       ftds += item.ftds ?? 0
     }
   }
-  const leads = (cfg.tags ?? []).reduce((acc, t) => acc + (dia.leadsPorTag[t] ?? 0), 0)
+  const tagEntrada = tagDeEntradaDoFluxo(cfg.tags)
+  const leads = tagEntrada ? (dia.leadsPorTag[tagEntrada] ?? 0) : 0
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   return { leads, registros, ftds, convFtd, convReg }

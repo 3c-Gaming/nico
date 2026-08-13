@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
-import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoDia } from '@/lib/funis'
+import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, type ResultadoDia } from '@/lib/funis'
 import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -158,7 +158,10 @@ function FunisApresentarInner() {
   }, [linhas, datas, tagsUnicas, inicio, fim, erroIntervalo])
 
   const leadsDoFunilNoDia = useCallback(
-    (linha: LinhaConfig, data: string) => linha.tags.reduce((acc, tag) => acc + (leadsPorTagPorDia[tag]?.[data] ?? 0), 0),
+    (linha: LinhaConfig, data: string) => {
+      const tagEntrada = tagDeEntradaDoFluxo(linha.tags)
+      return tagEntrada ? (leadsPorTagPorDia[tagEntrada]?.[data] ?? 0) : 0
+    },
     [leadsPorTagPorDia],
   )
 

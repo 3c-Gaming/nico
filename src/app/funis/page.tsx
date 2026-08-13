@@ -14,7 +14,7 @@ import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
-import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia } from '@/lib/funis'
+import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 
 function csvCampo(valor: string): string {
@@ -604,8 +604,9 @@ function FunisPageInner() {
         const configs = getState().flowTagConfigs
         const tags = configs[flow.id]?.tags ?? []
         const funil = configs[flow.id]?.funil
-        const leads = tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
-        const total = tags.reduce((acc, t) => acc + (contagensIntervalo[t] ?? 0), 0)
+        const tagEntrada = tagDeEntradaDoFluxo(tags)
+        const leads = tagEntrada ? (contagens[tagEntrada] ?? 0) : 0
+        const total = tagEntrada ? (contagensIntervalo[tagEntrada] ?? 0) : 0
         const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
           const ts = ultimoLeadMap[t] ?? null
           if (!ts) return best
