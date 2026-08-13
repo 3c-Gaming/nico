@@ -348,6 +348,8 @@ export interface FlowTagConfig {
   casas?: string[]
   tipo?: 'traffic' | 'disparo'
   lpUrl?: string | null
+  /** Anotações/insights sobre esse funil — editável no painel de Detalhes (tela de Funis). */
+  comentarios?: string | null
 }
 
 export interface CopaMatch {

@@ -96,6 +96,7 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   casas: jsonb('casas').default('[]'),
   tipo: text('tipo').notNull().default('disparo'),
   lpUrl: text('lp_url'),
+  comentarios: text('comentarios'),
 })
 
 export const demandas = pgTable('demandas', {

@@ -17,7 +17,8 @@ export interface EstagioFunil {
 
 // Tamanho mínimo visível mesmo com contagem 0 — deixa claro que a etapa existe, só não teve leads.
 const TAMANHO_MINIMO_PCT = 10
-const ALTURA_LINHA_VERTICAL = 88
+const ALTURA_LINHA_VERTICAL = 108
+const LARGURA_COLUNA_LABEL = '38%'
 
 function PillPercentual({ pct, cor }: { pct: number; cor: string }) {
   return (
@@ -50,7 +51,7 @@ export function FunilConversaoChart({ estagios, cor, orientacao = 'horizontal' }
 
   if (orientacao === 'vertical') {
     return (
-      <div className="py-1">
+      <div>
         {estagios.map((estagio, i) => {
           const topoPct = tamanhos[i]
           const basePct = i < n - 1 ? tamanhos[i + 1] : tamanhos[i]
@@ -59,21 +60,24 @@ export function FunilConversaoChart({ estagios, cor, orientacao = 'horizontal' }
           const pct = primeiro > 0 ? (estagio.contagem / primeiro) * 100 : 0
           const opacidade = n > 1 ? 0.32 + (i / (n - 1)) * 0.68 : 1
           return (
-            <div key={`${estagio.tag}-${i}`} className={i > 0 ? 'mt-3' : ''}>
-              <div className="flex items-center justify-between gap-2 mb-1">
+            <div
+              key={`${estagio.tag}-${i}`}
+              className={`flex items-stretch gap-3 ${i > 0 ? 'border-t border-[var(--border)] pt-3' : ''} pb-3`}
+            >
+              <div className="shrink-0 flex flex-col justify-center gap-1.5 py-2" style={{ width: LARGURA_COLUNA_LABEL }}>
                 <span className="text-[11px] font-mono text-[var(--text-muted)] truncate" title={estagio.tag}>{estagio.tag}</span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-sm font-bold text-[var(--text-primary)] tabular-nums">{estagio.contagem}</span>
-                  <PillPercentual pct={pct} cor={corBase} />
-                </div>
+                <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums leading-none">{estagio.contagem}</span>
+                <PillPercentual pct={pct} cor={corBase} />
               </div>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full block" style={{ height: ALTURA_LINHA_VERTICAL }}>
-                <polygon
-                  points={`${padTopo},0 ${100 - padTopo},0 ${100 - padBase},100 ${padBase},100`}
-                  fill={corBase}
-                  opacity={Math.max(opacidade, 0.4)}
-                />
-              </svg>
+              <div className="flex-1 min-w-0">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full block" style={{ height: ALTURA_LINHA_VERTICAL }}>
+                  <polygon
+                    points={`${padTopo},0 ${100 - padTopo},0 ${100 - padBase},100 ${padBase},100`}
+                    fill={corBase}
+                    opacity={Math.max(opacidade, 0.4)}
+                  />
+                </svg>
+              </div>
             </div>
           )
         })}
