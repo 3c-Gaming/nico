@@ -129,7 +129,7 @@ function wamidDeResposta(msg: MensagemBruta): string | undefined {
   return msg.data?.context?.message_id
 }
 
-function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain>): MensagemFluxo {
+function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
   const data = msg.data ?? {}
   const interactive = data.interactive
 
@@ -173,17 +173,6 @@ function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain
     texto = interactive.body.text
   }
 
-  const chainDireto = extrairChain(msg)
-  let { chainId, blockId } = chainDireto
-  if (!chainId) {
-    const respondendoA = wamidDeResposta(msg)
-    const resolvido = respondendoA ? chainPorWamid.get(respondendoA) : undefined
-    if (resolvido) {
-      chainId = resolvido.chainId
-      blockId = resolvido.blockId
-    }
-  }
-
   return {
     id: String(msg.id ?? ''),
     direcao: msg.direction === 1 ? 'entrada' : 'saida',
@@ -194,25 +183,42 @@ function normalizarMensagem(msg: MensagemBruta, chainPorWamid: Map<string, Chain
     linkUrl,
     linkTexto,
     imagemUrl,
-    chainId,
-    blockId,
+    chainId: chain.chainId,
+    blockId: chain.blockId,
   }
 }
 
-/** Filtra e ordena as mensagens de um contato pra só as que pertencem ao fluxo
- * indicado (flow_id = chain.id). Mensagens de entrada são correlacionadas via
- * data.context.message_id -> chain da mensagem de saída que elas respondem. */
+/** Filtra e ordena as mensagens de um contato pra só as que pertencem ao fluxo indicado
+ * (flow_id = chain.id). Mensagens de entrada são correlacionadas via data.context.message_id
+ * -> chain da mensagem de saída que elas respondem (reply/swipe explícito). Uma mensagem
+ * avulsa do lead (não responde nada específico) não tem esse campo — nesse caso assume que
+ * ela ainda pertence à conversa do último fluxo que mandou algo pra ele (acompanhado
+ * cronologicamente), já que na prática é disso que se trata: o lead respondendo livremente
+ * dentro daquela janela de conversa, só sem usar o swipe-to-reply do WhatsApp. */
 export function filtrarConversaPorFluxo(mensagensBrutas: MensagemBruta[], flowId: string): MensagemFluxo[] {
+  const mensagensOrdenadas = [...mensagensBrutas].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+
   const chainPorWamid = new Map<string, Chain>()
-  for (const msg of mensagensBrutas) {
+  for (const msg of mensagensOrdenadas) {
     const chain = extrairChain(msg)
     if (chain.chainId) {
       const wamid = wamidDaMensagem(msg)
       if (wamid) chainPorWamid.set(wamid, chain)
     }
   }
-  return mensagensBrutas
-    .map((msg) => normalizarMensagem(msg, chainPorWamid))
-    .filter((m) => m.chainId === flowId)
-    .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+
+  const resultado: MensagemFluxo[] = []
+  let chainAtual: Chain = {}
+  for (const msg of mensagensOrdenadas) {
+    let chain = extrairChain(msg)
+    if (!chain.chainId) {
+      const respondendoA = wamidDeResposta(msg)
+      const resolvido = respondendoA ? chainPorWamid.get(respondendoA) : undefined
+      if (resolvido) chain = resolvido
+    }
+    if (!chain.chainId && msg.direction === 1) chain = chainAtual
+    if (chain.chainId) chainAtual = chain
+    if (chain.chainId === flowId) resultado.push(normalizarMensagem(msg, chain))
+  }
+  return resultado
 }
