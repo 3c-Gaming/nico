@@ -671,6 +671,8 @@ function FunisPageInner() {
     ftds: trackingMap[conversasFluxoRow.flow.id]?.ftds ?? 0,
     periodoLabel: trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`,
     dataReferencia: trackingDataFim,
+    utm: getState().flowTagConfigs[conversasFluxoRow.flow.id]?.utm ?? null,
+    utmsExtras: getState().flowTagConfigs[conversasFluxoRow.flow.id]?.utmsExtras ?? [],
   } : null
 
   function toggleSelecionado(key: string) {
@@ -1402,6 +1404,8 @@ function FunisPageInner() {
         ftds={conversasFluxoProps?.ftds ?? 0}
         periodoLabel={conversasFluxoProps?.periodoLabel ?? ''}
         dataReferencia={conversasFluxoProps?.dataReferencia ?? hojeISO}
+        utm={conversasFluxoProps?.utm ?? null}
+        utmsExtras={conversasFluxoProps?.utmsExtras ?? []}
       />
     </>
   )

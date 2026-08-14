@@ -6,7 +6,8 @@ import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
-import { FunilConversaoChart } from './FunilConversaoChart'
+import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoLinhaDia } from '@/lib/funis'
+import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
 const LARGURA_METRICAS = 420
@@ -96,6 +97,8 @@ interface PainelConversasFluxoProps {
   ftds: number
   periodoLabel: string
   dataReferencia: string
+  utm: string | null
+  utmsExtras: string[]
 }
 
 function formatInt(n: number): string {
@@ -107,6 +110,33 @@ function MetricaTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
       <div className="text-lg font-bold text-[var(--text-primary)]">{value}</div>
       <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">{label}</div>
+    </div>
+  )
+}
+
+function BlocoMetricas({ leads, registros, ftds, total }: { leads: number; registros: number; ftds: number; total: number }) {
+  const convReg = leads > 0 ? (registros / leads) * 100 : null
+  const convFtd = registros > 0 ? (ftds / registros) * 100 : null
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <MetricaTile label="Leads" value={formatInt(leads)} />
+      <MetricaTile label="Registros" value={formatInt(registros)} />
+      <MetricaTile label="FTDs" value={formatInt(ftds)} />
+      <MetricaTile label="Conv. Reg" value={convReg === null ? '—' : `${convReg.toFixed(1)}%`} />
+      <MetricaTile label="Conv. FTD" value={convFtd === null ? '—' : `${convFtd.toFixed(1)}%`} />
+      <MetricaTile label="Total período" value={formatInt(total)} />
+    </div>
+  )
+}
+
+function BlocoFunilChart({ estagios, cor }: { estagios: EstagioFunil[]; cor?: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Funnel size={12} className="text-[var(--text-muted)]" />
+        <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
+      </div>
+      <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
     </div>
   )
 }
@@ -127,6 +157,8 @@ export function PainelConversasFluxo({
   ftds,
   periodoLabel,
   dataReferencia,
+  utm,
+  utmsExtras,
 }: PainelConversasFluxoProps) {
   const [leads, setLeads] = useState<LeadComConversa[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -136,7 +168,7 @@ export function PainelConversasFluxo({
   // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
-  const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; contagens: Record<string, number> | null; erro: string | null } | null>(null)
+  const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; resultado: ResultadoLinhaDia | null; leadsPorTag: Record<string, number> | null; erro: string | null } | null>(null)
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
@@ -154,18 +186,13 @@ export function PainelConversasFluxo({
   useEffect(() => {
     if (!dataComparacao || !botId || tags.length === 0) return
     const dataAlvo = dataComparacao
-    fetch('/api/sendpulse/contagem-intervalo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ botId, tags, dataInicio: dataAlvo, dataFim: dataAlvo }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) { setResultadoComparacao({ data: dataAlvo, contagens: null, erro: data.error }); return }
-        setResultadoComparacao({ data: dataAlvo, contagens: data.leads ?? {}, erro: null })
+    buscarResultadosDoDia(dataAlvo, [{ botId, tags }])
+      .then((dia) => {
+        const resultado = calcularResultadoLinhaNoDia({ tags, utm, utmsExtras }, dia)
+        setResultadoComparacao({ data: dataAlvo, resultado, leadsPorTag: dia.leadsPorTag, erro: null })
       })
-      .catch(() => setResultadoComparacao({ data: dataAlvo, contagens: null, erro: 'Erro ao buscar comparação' }))
-  }, [dataComparacao, botId, tags])
+      .catch(() => setResultadoComparacao({ data: dataAlvo, resultado: null, leadsPorTag: null, erro: 'Erro ao buscar comparação' }))
+  }, [dataComparacao, botId, tags, utm, utmsExtras])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -187,8 +214,6 @@ export function PainelConversasFluxo({
     setDataComparacao((atual) => (atual === d ? null : d))
   }
 
-  const convReg = leadsHoje > 0 ? (registros / leadsHoje) * 100 : null
-  const convFtd = registros > 0 ? (ftds / registros) * 100 : null
   const estagios = tags.map((t) => ({ tag: t, contagem: contagensPorTag[t] ?? 0 }))
 
   // resultadoComparacao só é válido pra exibição se corresponder à data selecionada agora —
@@ -196,8 +221,9 @@ export function PainelConversasFluxo({
   const comparacaoPronta = dataComparacao !== null && resultadoComparacao?.data === dataComparacao
   const carregandoComparacao = dataComparacao !== null && !comparacaoPronta
   const erroComparacao = comparacaoPronta ? resultadoComparacao!.erro : null
-  const contagensComparacao = comparacaoPronta ? resultadoComparacao!.contagens : null
-  const estagiosComparacao = contagensComparacao ? tags.map((t) => ({ tag: t, contagem: contagensComparacao[t] ?? 0 })) : []
+  const resultadoDiaComparacao = comparacaoPronta ? resultadoComparacao!.resultado : null
+  const leadsPorTagComparacao = comparacaoPronta ? resultadoComparacao!.leadsPorTag : null
+  const estagiosComparacao = leadsPorTagComparacao ? tags.map((t) => ({ tag: t, contagem: leadsPorTagComparacao[t] ?? 0 })) : []
 
   const dataOntem = formatarData(adicionarDias(parsearDataISO(dataReferencia), -1), 'YYYY-MM-DD')
   const dataSemanaPassada = formatarData(adicionarDias(parsearDataISO(dataReferencia), -7), 'YYYY-MM-DD')
@@ -246,81 +272,79 @@ export function PainelConversasFluxo({
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                <MetricaTile label="Leads" value={formatInt(leadsHoje)} />
-                <MetricaTile label="Registros" value={formatInt(registros)} />
-                <MetricaTile label="FTDs" value={formatInt(ftds)} />
-                <MetricaTile label="Conv. Reg" value={convReg === null ? '—' : `${convReg.toFixed(1)}%`} />
-                <MetricaTile label="Conv. FTD" value={convFtd === null ? '—' : `${convFtd.toFixed(1)}%`} />
-                <MetricaTile label="Total período" value={formatInt(total)} />
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <span className="text-xs font-medium text-[var(--text-muted)]">Comparar com outro dia</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => alternarDataComparacao(dataOntem)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataOntem
+                      ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
+                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      }`}
+                  >
+                    Ontem
+                  </button>
+                  <button
+                    onClick={() => alternarDataComparacao(dataSemanaPassada)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataSemanaPassada
+                      ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
+                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      }`}
+                  >
+                    Mesma data sem. passada
+                  </button>
+                  <label className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] cursor-pointer">
+                    <CalendarDays size={11} />
+                    <input
+                      type="date"
+                      value={dataComparacao ?? ''}
+                      max={dataReferencia}
+                      onChange={(e) => setDataComparacao(e.target.value || null)}
+                      className="bg-transparent outline-none [color-scheme:dark] w-[86px]"
+                    />
+                  </label>
+                  {dataComparacao && (
+                    <button onClick={() => setDataComparacao(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between gap-1.5 mb-2 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Funnel size={12} className="text-[var(--text-muted)]" />
-                    <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => alternarDataComparacao(dataOntem)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataOntem
-                        ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
-                        : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                        }`}
-                    >
-                      Ontem
-                    </button>
-                    <button
-                      onClick={() => alternarDataComparacao(dataSemanaPassada)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataSemanaPassada
-                        ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
-                        : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                        }`}
-                    >
-                      Mesma data sem. passada
-                    </button>
-                    <label className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] cursor-pointer">
-                      <CalendarDays size={11} />
-                      <input
-                        type="date"
-                        value={dataComparacao ?? ''}
-                        max={dataReferencia}
-                        onChange={(e) => setDataComparacao(e.target.value || null)}
-                        className="bg-transparent outline-none [color-scheme:dark] w-[86px]"
-                      />
-                    </label>
-                    {dataComparacao && (
-                      <button onClick={() => setDataComparacao(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                        <X size={12} />
-                      </button>
+              {dataComparacao ? (
+                <div className="flex gap-4">
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Comparação · {formatarDataCurta(dataComparacao)}</div>
+                    {carregandoComparacao ? (
+                      <div className="flex items-center justify-center py-10">
+                        <Spinner size={16} />
+                      </div>
+                    ) : erroComparacao ? (
+                      <p className="text-[11px] text-[var(--error)]">{erroComparacao}</p>
+                    ) : (
+                      <>
+                        <BlocoMetricas
+                          leads={resultadoDiaComparacao?.leads ?? 0}
+                          registros={resultadoDiaComparacao?.registros ?? 0}
+                          ftds={resultadoDiaComparacao?.ftds ?? 0}
+                          total={resultadoDiaComparacao?.leads ?? 0}
+                        />
+                        <BlocoFunilChart estagios={estagiosComparacao} cor={cor} />
+                      </>
                     )}
                   </div>
-                </div>
-
-                {dataComparacao ? (
-                  <div className="flex gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Comparação · {formatarDataCurta(dataComparacao)}</div>
-                      {carregandoComparacao ? (
-                        <div className="flex items-center justify-center py-10">
-                          <Spinner size={16} />
-                        </div>
-                      ) : erroComparacao ? (
-                        <p className="text-[11px] text-[var(--error)]">{erroComparacao}</p>
-                      ) : (
-                        <FunilConversaoChart estagios={estagiosComparacao} cor={cor} orientacao="vertical" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Atual · {periodoLabel}</div>
-                      <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
-                    </div>
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Atual · {periodoLabel}</div>
+                    <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
+                    <BlocoFunilChart estagios={estagios} cor={cor} />
                   </div>
-                ) : (
-                  <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
+                  <BlocoFunilChart estagios={estagios} cor={cor} />
+                </>
+              )}
             </div>
           </motion.div>
 
