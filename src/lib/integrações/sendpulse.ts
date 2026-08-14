@@ -220,6 +220,51 @@ export async function contarPorTagIntervaloSendpulse(
   return { total, ultimoLeadAt }
 }
 
+/**
+ * Mesma paginação/critério de parada de `contarPorTagIntervaloSendpulse`, mas devolve os
+ * contact_ids em vez de só contar — usado pra varrer a conversa de cada um (ex: contagem de
+ * cliques num botão específico), onde a contagem sozinha não basta.
+ */
+export interface ContatoNoIntervalo {
+  id: string
+  tags: string[]
+}
+
+export async function buscarContatosPorTagIntervaloSendpulse(
+  botId: string,
+  tag: string,
+  apiKey: string,
+  dataInicio: string,
+  dataFim: string,
+  signal?: AbortSignal,
+): Promise<ContatoNoIntervalo[]> {
+  const contatosNoIntervalo: ContatoNoIntervalo[] = []
+
+  for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
+    const skip = pagina * TAMANHO_PAGINA_GETBYTAG
+    const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
+    const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+    if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+    const json = await res.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contatos = (json.data ?? []) as any[]
+    if (contatos.length === 0) break
+
+    for (const contato of contatos) {
+      const createdAt = String(contato.created_at ?? '')
+      if (!createdAt) continue
+      const dia = dataParaBrasilISO(createdAt)
+      if (dia >= dataInicio && dia <= dataFim) contatosNoIntervalo.push({ id: String(contato.id), tags: contato.tags ?? [] })
+    }
+
+    const maisVelhoDaPagina = dataParaBrasilISO(String(contatos[contatos.length - 1].created_at ?? ''))
+    if (maisVelhoDaPagina < dataInicio) break
+    if (contatos.length < TAMANHO_PAGINA_GETBYTAG) break
+  }
+
+  return contatosNoIntervalo
+}
+
 export async function enviarMensagem(params: {
   botId: string
   telefone: string

@@ -350,6 +350,20 @@ export interface FlowTagConfig {
   lpUrl?: string | null
   /** Anotações/insights sobre esse funil — editável no painel de Detalhes (tela de Funis). */
   comentarios?: string | null
+  /** KPIs customizados que contam cliques únicos num botão específico da jornada — ver
+   * painel de Detalhes (tela de Funis). */
+  kpisBotao?: KpiBotao[]
+}
+
+export interface KpiBotao {
+  id: string
+  nome: string
+  /** Texto exato do botão (botaoTitulo/linkTexto de MensagemFluxo) usado pra contar cliques. */
+  botaoTitulo: string
+  /** "botao": resposta rápida/lista, clique correlacionado por mensagem (exato). "link": botão de
+   * link (cta_url) — clique confirmado via tag CTA_*, não é possível distinguir entre múltiplos
+   * links diferentes no mesmo fluxo (limitação da API do WhatsApp, ver sendpulseConversaFluxo.ts). */
+  tipo: 'botao' | 'link'
 }
 
 export interface CopaMatch {

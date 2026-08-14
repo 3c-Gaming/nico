@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoLinhaDia } from '@/lib/funis'
+import type { KpiBotao } from '@/types'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
@@ -14,6 +15,10 @@ const LARGURA_METRICAS = 420
 const LARGURA_METRICAS_COMPARACAO = 760
 const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
+// Referência estável pro caso "sem KPIs" — useSyncExternalStore exige que getSnapshot devolva a
+// mesma referência quando nada mudou; um `[]` literal inline criaria um array novo a cada
+// chamada e disparava um loop infinito de re-render.
+const KPIS_BOTAO_VAZIO: KpiBotao[] = []
 
 function formatarDataCurta(iso: string): string {
   return formatarData(parsearDataISO(iso), 'DD/MM')
@@ -97,6 +102,7 @@ interface PainelConversasFluxoProps {
   ftds: number
   periodoLabel: string
   dataReferencia: string
+  dataInicio: string
   utm: string | null
   utmsExtras: string[]
 }
@@ -141,6 +147,92 @@ function BlocoFunilChart({ estagios, cor }: { estagios: EstagioFunil[]; cor?: st
   )
 }
 
+function KpiBotaoTile({
+  botId,
+  tag,
+  flowId,
+  kpi,
+  dataInicio,
+  dataFim,
+  onRemover,
+}: {
+  botId: string
+  tag: string
+  flowId: string
+  kpi: KpiBotao
+  dataInicio: string
+  dataFim: string
+  onRemover?: () => void
+}) {
+  const [contagem, setContagem] = useState<number | null>(null)
+  const [erro, setErro] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/sendpulse/contagem-botao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ botId, tag, flowId, botaoTitulo: kpi.botaoTitulo, tipo: kpi.tipo, dataInicio, dataFim }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) { setErro(true); return }
+        setContagem(data.contagem ?? 0)
+      })
+      .catch(() => setErro(true))
+  }, [botId, tag, flowId, kpi.botaoTitulo, kpi.tipo, dataInicio, dataFim])
+
+  return (
+    <div className="relative">
+      <MetricaTile label={kpi.nome} value={erro ? '—' : contagem === null ? '···' : formatInt(contagem)} />
+      {onRemover && (
+        <button
+          onClick={onRemover}
+          title="Remover KPI"
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[var(--bg-elevated)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+        >
+          <X size={10} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function BlocoKpisBotao({
+  kpis,
+  botId,
+  tag,
+  flowId,
+  dataInicio,
+  dataFim,
+  onRemover,
+}: {
+  kpis: KpiBotao[]
+  botId: string
+  tag: string
+  flowId: string
+  dataInicio: string
+  dataFim: string
+  onRemover?: (id: string) => void
+}) {
+  if (kpis.length === 0) return null
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {kpis.map((kpi) => (
+        <KpiBotaoTile
+          key={`${kpi.id}-${dataInicio}-${dataFim}`}
+          botId={botId}
+          tag={tag}
+          flowId={flowId}
+          kpi={kpi}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          onRemover={onRemover ? () => onRemover(kpi.id) : undefined}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function PainelConversasFluxo({
   aberto,
   onClose,
@@ -157,6 +249,7 @@ export function PainelConversasFluxo({
   ftds,
   periodoLabel,
   dataReferencia,
+  dataInicio,
   utm,
   utmsExtras,
 }: PainelConversasFluxoProps) {
@@ -165,6 +258,9 @@ export function PainelConversasFluxo({
   const [erro, setErro] = useState<string | null>(null)
   const [leadSelecionado, setLeadSelecionado] = useState<LeadComConversa | null>(null)
   const [dataComparacao, setDataComparacao] = useState<string | null>(null)
+  const [formKpiAberto, setFormKpiAberto] = useState(false)
+  const [botaoEscolhido, setBotaoEscolhido] = useState('')
+  const [nomeKpiNovo, setNomeKpiNovo] = useState('')
   // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
@@ -212,6 +308,46 @@ export function PainelConversasFluxo({
 
   function alternarDataComparacao(d: string) {
     setDataComparacao((atual) => (atual === d ? null : d))
+  }
+
+  const kpisBotao = useSyncExternalStore(
+    (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
+    () => (flowId ? getState().flowTagConfigs[flowId]?.kpisBotao ?? KPIS_BOTAO_VAZIO : KPIS_BOTAO_VAZIO),
+    () => KPIS_BOTAO_VAZIO,
+  )
+
+  // Botões distintos (com ou sem link) que já apareceram nas conversas carregadas — usado como
+  // opções pro picker de "novo KPI". Como o texto de um botão é fixo no fluxo (não muda por
+  // lead), a amostra de conversas já carregada normalmente cobre todos eles.
+  const botoesDisponiveis = useMemo(() => {
+    const mapa = new Map<string, 'botao' | 'link'>()
+    for (const lead of leads) {
+      for (const msg of lead.mensagens) {
+        if (msg.botoesOferecidos) for (const b of msg.botoesOferecidos) if (!mapa.has(b)) mapa.set(b, 'botao')
+        if (msg.tipo === 'link_enviado' && msg.linkTexto && !mapa.has(msg.linkTexto)) mapa.set(msg.linkTexto, 'link')
+      }
+    }
+    return [...mapa.entries()].map(([botaoTitulo, tipo]) => ({ botaoTitulo, tipo }))
+  }, [leads])
+
+  function adicionarKpiBotao() {
+    if (!flowId || !botaoEscolhido) return
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    const escolhido = botoesDisponiveis.find((b) => b.botaoTitulo === botaoEscolhido)
+    if (!escolhido) return
+    const novo: KpiBotao = { id: crypto.randomUUID(), nome: nomeKpiNovo.trim() || escolhido.botaoTitulo, botaoTitulo: escolhido.botaoTitulo, tipo: escolhido.tipo }
+    updateFlowTagConfig({ ...configAtual, kpisBotao: [...(configAtual.kpisBotao ?? []), novo] })
+    setBotaoEscolhido('')
+    setNomeKpiNovo('')
+    setFormKpiAberto(false)
+  }
+
+  function removerKpiBotao(id: string) {
+    if (!flowId) return
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    updateFlowTagConfig({ ...configAtual, kpisBotao: (configAtual.kpisBotao ?? []).filter((k) => k.id !== id) })
   }
 
   const estagios = tags.map((t) => ({ tag: t, contagem: contagensPorTag[t] ?? 0 }))
@@ -311,6 +447,64 @@ export function PainelConversasFluxo({
                 </div>
               </div>
 
+              {botId && tag && flowId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+                      <MousePointerClick size={12} />
+                      KPIs de clique
+                    </span>
+                    <button
+                      onClick={() => setFormKpiAberto((v) => !v)}
+                      className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <Plus size={11} />
+                      Novo KPI
+                    </button>
+                  </div>
+                  {formKpiAberto && (
+                    <div className="flex items-center gap-1.5 flex-wrap p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+                      {botoesDisponiveis.length === 0 ? (
+                        <p className="text-[11px] text-[var(--text-muted)]">Nenhum botão encontrado ainda nas conversas carregadas.</p>
+                      ) : (
+                        <>
+                          <select
+                            value={botaoEscolhido}
+                            onChange={(e) => setBotaoEscolhido(e.target.value)}
+                            className="text-[11px] bg-[var(--bg-surface)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
+                          >
+                            <option value="">Selecione um botão...</option>
+                            {botoesDisponiveis.map((b) => (
+                              <option key={b.botaoTitulo} value={b.botaoTitulo}>
+                                {b.botaoTitulo}{b.tipo === 'link' ? ' (link)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={nomeKpiNovo}
+                            onChange={(e) => setNomeKpiNovo(e.target.value)}
+                            placeholder="Nome do KPI (opcional)"
+                            className="text-[11px] bg-[var(--bg-surface)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] flex-1 min-w-[120px] outline-none"
+                          />
+                          <button
+                            onClick={adicionarKpiBotao}
+                            disabled={!botaoEscolhido}
+                            className="text-[11px] font-medium px-2 py-1 rounded disabled:opacity-40 text-white transition-opacity"
+                            style={{ backgroundColor: 'var(--d1)' }}
+                          >
+                            Adicionar
+                          </button>
+                        </>
+                      )}
+                      <button onClick={() => setFormKpiAberto(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {dataComparacao ? (
                 <div className="flex gap-4">
                   <div className="flex-1 min-w-0 space-y-4">
@@ -329,6 +523,9 @@ export function PainelConversasFluxo({
                           ftds={resultadoDiaComparacao?.ftds ?? 0}
                           total={resultadoDiaComparacao?.leads ?? 0}
                         />
+                        {botId && tag && flowId && (
+                          <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataComparacao} dataFim={dataComparacao} />
+                        )}
                         <BlocoFunilChart estagios={estagiosComparacao} cor={cor} />
                       </>
                     )}
@@ -336,12 +533,18 @@ export function PainelConversasFluxo({
                   <div className="flex-1 min-w-0 space-y-4">
                     <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Atual · {periodoLabel}</div>
                     <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
+                    {botId && tag && flowId && (
+                      <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
+                    )}
                     <BlocoFunilChart estagios={estagios} cor={cor} />
                   </div>
                 </div>
               ) : (
                 <>
                   <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
+                  {botId && tag && flowId && (
+                    <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
+                  )}
                   <BlocoFunilChart estagios={estagios} cor={cor} />
                 </>
               )}

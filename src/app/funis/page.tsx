@@ -671,6 +671,7 @@ function FunisPageInner() {
     ftds: trackingMap[conversasFluxoRow.flow.id]?.ftds ?? 0,
     periodoLabel: trackingDataInicio === trackingDataFim ? trackingDataInicio : `${trackingDataInicio} até ${trackingDataFim}`,
     dataReferencia: trackingDataFim,
+    dataInicio: trackingDataInicio,
     utm: getState().flowTagConfigs[conversasFluxoRow.flow.id]?.utm ?? null,
     utmsExtras: getState().flowTagConfigs[conversasFluxoRow.flow.id]?.utmsExtras ?? [],
   } : null
@@ -1404,6 +1405,7 @@ function FunisPageInner() {
         ftds={conversasFluxoProps?.ftds ?? 0}
         periodoLabel={conversasFluxoProps?.periodoLabel ?? ''}
         dataReferencia={conversasFluxoProps?.dataReferencia ?? hojeISO}
+        dataInicio={conversasFluxoProps?.dataInicio ?? hojeISO}
         utm={conversasFluxoProps?.utm ?? null}
         utmsExtras={conversasFluxoProps?.utmsExtras ?? []}
       />

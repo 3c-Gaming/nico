@@ -245,3 +245,14 @@ export function filtrarConversaPorFluxo(mensagensBrutas: MensagemBruta[], flowId
   }
   return resultado
 }
+
+// Convenção observada nos fluxos configurados: tags de um mesmo fluxo compartilham o sufixo
+// depois do primeiro "_" (Lead_F72_02, FC_F72_02, CTA_F72_02, COM_F72_02...). A tag que começa
+// com "CTA" é setada manualmente no fluxo só quando o lead de fato abre o link (via redirect
+// próprio da SendPulse, fora do webhook de mensagens do WhatsApp) — então ela é o único jeito
+// confiável de saber que o clique no botão de link aconteceu.
+export function acharTagDeCliqueLink(tagEntrada: string, tagsDoLead: string[]): string | null {
+  const sufixo = tagEntrada.replace(/^[^_]+_/, '').toUpperCase()
+  if (!sufixo) return null
+  return tagsDoLead.find((t) => t.toUpperCase().startsWith('CTA') && t.toUpperCase().includes(sufixo)) ?? null
+}
