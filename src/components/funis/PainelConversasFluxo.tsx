@@ -2,15 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
+import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
 import { FunilConversaoChart } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
 const LARGURA_METRICAS = 420
+const LARGURA_METRICAS_COMPARACAO = 760
 const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
+
+function formatarDataCurta(iso: string): string {
+  return formatarData(parsearDataISO(iso), 'DD/MM')
+}
 
 function PainelAnotacoes({ flowId, direita, onClose }: { flowId: string; direita: number; onClose: () => void }) {
   const [comentarios, setComentarios] = useState('')
@@ -89,6 +95,7 @@ interface PainelConversasFluxoProps {
   registros: number
   ftds: number
   periodoLabel: string
+  dataReferencia: string
 }
 
 function formatInt(n: number): string {
@@ -119,11 +126,17 @@ export function PainelConversasFluxo({
   registros,
   ftds,
   periodoLabel,
+  dataReferencia,
 }: PainelConversasFluxoProps) {
   const [leads, setLeads] = useState<LeadComConversa[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [leadSelecionado, setLeadSelecionado] = useState<LeadComConversa | null>(null)
+  const [dataComparacao, setDataComparacao] = useState<string | null>(null)
+  // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
+  // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
+  // síncrono no corpo do effect pra sinalizar início de carregamento.
+  const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; contagens: Record<string, number> | null; erro: string | null } | null>(null)
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
@@ -137,6 +150,22 @@ export function PainelConversasFluxo({
       .catch(() => setErro('Erro ao buscar conversas'))
       .finally(() => setCarregando(false))
   }, [aberto, botId, flowId, tag])
+
+  useEffect(() => {
+    if (!dataComparacao || !botId || tags.length === 0) return
+    const dataAlvo = dataComparacao
+    fetch('/api/sendpulse/contagem-intervalo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ botId, tags, dataInicio: dataAlvo, dataFim: dataAlvo }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) { setResultadoComparacao({ data: dataAlvo, contagens: null, erro: data.error }); return }
+        setResultadoComparacao({ data: dataAlvo, contagens: data.leads ?? {}, erro: null })
+      })
+      .catch(() => setResultadoComparacao({ data: dataAlvo, contagens: null, erro: 'Erro ao buscar comparação' }))
+  }, [dataComparacao, botId, tags])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -154,15 +183,33 @@ export function PainelConversasFluxo({
     onClose()
   }
 
+  function alternarDataComparacao(d: string) {
+    setDataComparacao((atual) => (atual === d ? null : d))
+  }
+
   const convReg = leadsHoje > 0 ? (registros / leadsHoje) * 100 : null
   const convFtd = registros > 0 ? (ftds / registros) * 100 : null
   const estagios = tags.map((t) => ({ tag: t, contagem: contagensPorTag[t] ?? 0 }))
 
+  // resultadoComparacao só é válido pra exibição se corresponder à data selecionada agora —
+  // enquanto isso não bate, ainda está carregando (ou o usuário trocou de data de novo).
+  const comparacaoPronta = dataComparacao !== null && resultadoComparacao?.data === dataComparacao
+  const carregandoComparacao = dataComparacao !== null && !comparacaoPronta
+  const erroComparacao = comparacaoPronta ? resultadoComparacao!.erro : null
+  const contagensComparacao = comparacaoPronta ? resultadoComparacao!.contagens : null
+  const estagiosComparacao = contagensComparacao ? tags.map((t) => ({ tag: t, contagem: contagensComparacao[t] ?? 0 })) : []
+
+  const dataOntem = formatarData(adicionarDias(parsearDataISO(dataReferencia), -1), 'YYYY-MM-DD')
+  const dataSemanaPassada = formatarData(adicionarDias(parsearDataISO(dataReferencia), -7), 'YYYY-MM-DD')
+
   // Painéis empilhados da direita pra esquerda: lista -> (detalhe do lead, se selecionado) ->
   // métricas/funil -> anotações. Cada um calcula seu offset a partir da largura dos anteriores,
-  // pra não deixar gap nem sobrepor quando o detalhe do lead abre/fecha.
+  // pra não deixar gap nem sobrepor quando o detalhe do lead abre/fecha. A largura do painel de
+  // métricas/funil também varia — alarga quando uma comparação entre dias está ativa, pra caber
+  // os dois funis lado a lado.
+  const larguraMetricas = dataComparacao ? LARGURA_METRICAS_COMPARACAO : LARGURA_METRICAS
   const offsetMetricas = LARGURA_LISTA + (leadSelecionado ? LARGURA_LEAD_DETALHE : 0)
-  const offsetAnotacoes = offsetMetricas + LARGURA_METRICAS
+  const offsetAnotacoes = offsetMetricas + larguraMetricas
 
   return (
     <AnimatePresence>
@@ -187,10 +234,10 @@ export function PainelConversasFluxo({
 
           <motion.div
             initial={{ x: '100%' }}
-            animate={{ x: 0, right: offsetMetricas }}
+            animate={{ x: 0, right: offsetMetricas, width: larguraMetricas }}
             exit={{ x: '100%' }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-y-0 z-50 w-[420px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
+            className="fixed inset-y-0 z-50 max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
           >
             <div className="flex items-center justify-between px-4 py-3.5 border-[var(--border)]">
               <div className="min-w-0">
@@ -209,11 +256,70 @@ export function PainelConversasFluxo({
               </div>
 
               <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Funnel size={12} className="text-[var(--text-muted)]" />
-                  <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
+                <div className="flex items-center justify-between gap-1.5 mb-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Funnel size={12} className="text-[var(--text-muted)]" />
+                    <span className="text-xs font-medium text-[var(--text-muted)]">Funil de conversão da jornada</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => alternarDataComparacao(dataOntem)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataOntem
+                        ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
+                        : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}
+                    >
+                      Ontem
+                    </button>
+                    <button
+                      onClick={() => alternarDataComparacao(dataSemanaPassada)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataSemanaPassada
+                        ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
+                        : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}
+                    >
+                      Mesma data sem. passada
+                    </button>
+                    <label className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] cursor-pointer">
+                      <CalendarDays size={11} />
+                      <input
+                        type="date"
+                        value={dataComparacao ?? ''}
+                        max={dataReferencia}
+                        onChange={(e) => setDataComparacao(e.target.value || null)}
+                        className="bg-transparent outline-none [color-scheme:dark] w-[86px]"
+                      />
+                    </label>
+                    {dataComparacao && (
+                      <button onClick={() => setDataComparacao(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
+
+                {dataComparacao ? (
+                  <div className="flex gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">{formatarDataCurta(dataComparacao)}</div>
+                      {carregandoComparacao ? (
+                        <div className="flex items-center justify-center py-10">
+                          <Spinner size={16} />
+                        </div>
+                      ) : erroComparacao ? (
+                        <p className="text-[11px] text-[var(--error)]">{erroComparacao}</p>
+                      ) : (
+                        <FunilConversaoChart estagios={estagiosComparacao} cor="var(--text-muted)" orientacao="vertical" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">{periodoLabel}</div>
+                      <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
+                    </div>
+                  </div>
+                ) : (
+                  <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
+                )}
               </div>
             </div>
           </motion.div>
