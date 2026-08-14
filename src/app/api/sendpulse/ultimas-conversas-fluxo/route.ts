@@ -37,6 +37,19 @@ function acharTagDeCliqueLink(tagEntrada: string, tagsDoLead: string[]): string 
   return tagsDoLead.find((t) => t.toUpperCase().startsWith('CTA') && t.toUpperCase().includes(sufixo)) ?? null
 }
 
+/** Timestamp da última mensagem de ENTRADA (resposta do lead) dentro da jornada — null se o
+ * lead recebeu a mensagem mas ainda não respondeu nada. Usado pra ordenar a lista por quem
+ * interagiu mais recentemente, não só por quem entrou na tag mais recentemente (em disparos em
+ * lote pra muita gente de uma vez, a ordem de entrada na tag não diz nada sobre quem já respondeu). */
+function ultimaRespostaEm(mensagens: MensagemFluxo[]): string | null {
+  let ultima: string | null = null
+  for (const m of mensagens) {
+    if (m.direcao !== 'entrada') continue
+    if (!ultima || m.criadoEm > ultima) ultima = m.criadoEm
+  }
+  return ultima
+}
+
 export async function GET(request: NextRequest) {
   const botId = request.nextUrl.searchParams.get('botId')
   const tag = request.nextUrl.searchParams.get('tag')
@@ -61,12 +74,22 @@ export async function GET(request: NextRequest) {
       }),
     )
 
-    // Mantém a ordem de recência do getByTag — só descarta quem não tem mensagem
-    // correlacionável a esse fluxo (ou cuja busca falhou).
+    // Descarta quem não tem mensagem correlacionável a esse fluxo (ou cuja busca falhou), e
+    // ordena por quem respondeu mais recentemente — não pela recência de entrada na tag (que,
+    // num disparo em lote pra muita gente de uma vez, não diz nada sobre quem já interagiu).
+    // Quem ainda não respondeu nada fica no fim, na ordem original (recência do getByTag).
     const leads = resolvidos
       .filter((r): r is PromiseFulfilledResult<LeadComConversa> => r.status === 'fulfilled')
       .map((r) => r.value)
       .filter((lead) => lead.mensagens.length > 0)
+      .sort((a, b) => {
+        const ra = ultimaRespostaEm(a.mensagens)
+        const rb = ultimaRespostaEm(b.mensagens)
+        if (ra && rb) return rb.localeCompare(ra)
+        if (ra && !rb) return -1
+        if (!ra && rb) return 1
+        return 0
+      })
       .slice(0, quantidade)
 
     return NextResponse.json({
