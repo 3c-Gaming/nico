@@ -16,6 +16,7 @@ export interface MensagemFluxo {
   linkUrl?: string
   linkTexto?: string
   imagemUrl?: string
+  botoesOferecidos?: string[]
   chainId?: string
   blockId?: string
 }
@@ -131,7 +132,22 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
             {msg.texto && <span className="not-italic text-[var(--text-secondary)]">— {msg.texto}</span>}
           </div>
         ) : (
-          <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto || '—'}</p>
+          <div>
+            <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto || '—'}</p>
+            {msg.botoesOferecidos && msg.botoesOferecidos.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
+                {msg.botoesOferecidos.map((label, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-center gap-1.5 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 text-[12px] font-medium text-[var(--d1)]"
+                  >
+                    <MousePointerClick size={12} className="text-[var(--text-muted)]" />
+                    {label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

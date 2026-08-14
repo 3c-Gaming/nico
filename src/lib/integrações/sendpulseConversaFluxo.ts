@@ -107,6 +107,9 @@ export interface MensagemFluxo {
   linkUrl?: string
   linkTexto?: string
   imagemUrl?: string
+  // Opções de resposta rápida (botões ou lista) que essa mensagem OFERECEU ao lead — não
+  // confundir com botaoTitulo, que é o que o lead CLICOU numa mensagem de entrada.
+  botoesOferecidos?: string[]
   chainId?: string
   blockId?: string
 }
@@ -139,6 +142,7 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
   let linkUrl: string | undefined
   let linkTexto: string | undefined
   let imagemUrl: string | undefined
+  let botoesOferecidos: string[] | undefined
 
   if (typeof data.text?.body === 'string') {
     tipo = 'texto'
@@ -168,6 +172,24 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
   } else if (interactive?.type === 'list_reply') {
     tipo = 'lista_selecionada'
     botaoTitulo = interactive.list_reply?.title
+  } else if (interactive?.type === 'button') {
+    // Mensagem de SAÍDA oferecendo botões de resposta rápida (até 3, sem link — isso é
+    // cta_url, tratado acima). O clique em si vira uma mensagem de ENTRADA separada
+    // (button_reply, acima) — aqui só guarda quais opções foram oferecidas.
+    tipo = 'texto'
+    texto = interactive.body?.text
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    botoesOferecidos = ((interactive.action?.buttons ?? []) as any[])
+      .map((b) => b.reply?.title)
+      .filter((t): t is string => typeof t === 'string')
+  } else if (interactive?.type === 'list') {
+    tipo = 'texto'
+    texto = interactive.body?.text
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    botoesOferecidos = ((interactive.action?.sections ?? []) as any[])
+      .flatMap((s) => s.rows ?? [])
+      .map((r) => r.title)
+      .filter((t): t is string => typeof t === 'string')
   } else if (typeof interactive?.body?.text === 'string') {
     tipo = 'texto'
     texto = interactive.body.text
@@ -183,6 +205,7 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
     linkUrl,
     linkTexto,
     imagemUrl,
+    botoesOferecidos,
     chainId: chain.chainId,
     blockId: chain.blockId,
   }
