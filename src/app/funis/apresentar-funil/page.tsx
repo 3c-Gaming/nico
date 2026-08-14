@@ -91,7 +91,7 @@ function FunilApresentarUnicoInner() {
   useEffect(() => {
     if (!config || !tagEntrada) return
     let ativo = true
-    const params = new URLSearchParams({ botId: config.botId, flowId: config.flowId, tag: tagEntrada, quantidade: '15' })
+    const params = new URLSearchParams({ botId: config.botId, flowId: config.flowId, tag: tagEntrada, quantidade: '50' })
     fetch(`/api/sendpulse/ultimas-conversas-fluxo?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => { if (ativo) setLeads(data.leads ?? []) })

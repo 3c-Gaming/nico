@@ -9,7 +9,7 @@ import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
 
 export const maxDuration = 60
 
-const QUANTIDADE_PADRAO = 15
+const QUANTIDADE_PADRAO = 50
 // Pede mais candidatos do que precisa — um contato pode ter a tag mas não ter mensagem
 // correlacionável a esse flowId específico (ex: tag setada manualmente, ou por outro
 // caminho que não passou por esse fluxo). Busca com folga e filtra os que sobram.

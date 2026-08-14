@@ -127,7 +127,7 @@ export function PainelConversasFluxo({
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
-    const params = new URLSearchParams({ botId, flowId, tag, quantidade: '15' })
+    const params = new URLSearchParams({ botId, flowId, tag, quantidade: '50' })
     fetch(`/api/sendpulse/ultimas-conversas-fluxo?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
@@ -255,7 +255,7 @@ export function PainelConversasFluxo({
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conversas ao vivo</h2>
-                {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 15 leads</p>}
+                {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 50 leads</p>}
               </div>
               <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
                 <X size={16} />
