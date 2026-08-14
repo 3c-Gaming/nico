@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, ExternalLink, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Eye } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Eye } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -1103,11 +1103,9 @@ function FunisPageInner() {
                       )}
                     </div>
                   </th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Flow ID</th>
-                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">LP</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Tags</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
@@ -1162,9 +1160,6 @@ function FunisPageInner() {
                           )}
                         </td>
                         <td className="py-3 px-3">
-                          <span className="text-[var(--text-muted)] text-xs font-mono">{row.botNome}</span>
-                        </td>
-                        <td className="py-3 px-3">
                           <span className="text-[var(--text-muted)] text-xs font-mono">{row.botNumero}</span>
                         </td>
                          <td className="py-3 px-3">
@@ -1179,22 +1174,6 @@ function FunisPageInner() {
                            <span className="text-[10px] text-[var(--text-muted)]/60 font-mono truncate block max-w-[140px]" title={row.flow.id}>
                              {row.flow.id}
                            </span>
-                         </td>
-                         <td className="py-3 px-3">
-                           {row.lpUrl ? (
-                             <a
-                               href={row.lpUrl}
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               className="inline-flex items-center gap-1 text-[11px] text-[var(--d1)] hover:underline font-mono truncate max-w-[160px]"
-                               title={row.lpUrl}
-                             >
-                               <ExternalLink size={10} className="shrink-0" />
-                               {row.lpUrl.replace(/^https?:\/\//, '').slice(0, 30)}
-                             </a>
-                           ) : (
-                             <span className="text-[10px] text-[var(--text-muted)]/40">—</span>
-                           )}
                          </td>
                         <td className="py-3 px-3">
                           <FlowStatusBadge status={row.flow.status} />

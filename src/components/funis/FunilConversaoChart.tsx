@@ -62,7 +62,7 @@ export function FunilConversaoChart({ estagios, cor, orientacao = 'horizontal' }
           return (
             <div
               key={`${estagio.tag}-${i}`}
-              className={`flex items-stretch gap-3 ${i > 0 ? 'border-t border-[var(--border)] pt-3' : ''} pb-3`}
+              className={`flex items-stretch gap-3 ${i > 0 ? 'border-t border-[var(--border)]' : ''}`}
             >
               <div className="shrink-0 flex flex-col justify-center gap-1.5 py-2" style={{ width: LARGURA_COLUNA_LABEL }}>
                 <span className="text-[11px] font-mono text-[var(--text-muted)] truncate" title={estagio.tag}>{estagio.tag}</span>

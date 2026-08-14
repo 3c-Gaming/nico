@@ -82,9 +82,8 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
         {deEntrada ? <User size={13} className="text-[var(--d3)]" /> : <Bot size={13} className="text-[var(--text-muted)]" />}
         <span className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{formatarHora(msg.criadoEm)}</span>
       </div>
-      <div className={`flex-1 min-w-0 rounded px-2.5 py-2 text-[13px] leading-snug ${
-        deEntrada ? 'bg-[var(--d3)]/10 border border-[var(--d3)]/20' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
-      }`}>
+      <div className={`flex-1 min-w-0 rounded px-2.5 py-2 text-[13px] leading-snug ${deEntrada ? 'bg-[var(--d3)]/10 border border-[var(--d3)]/20' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
+        }`}>
         {msg.tipo === 'botao_clicado' || msg.tipo === 'lista_selecionada' ? (
           <div className="flex items-center gap-1.5 font-medium text-[var(--success)]">
             <IconeMensagem tipo={msg.tipo} />
@@ -93,23 +92,24 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
         ) : msg.tipo === 'link_enviado' ? (
           <div className="space-y-1">
             {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap line-clamp-3">{msg.texto}</p>}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex justify-center items-center gap-2 flex-wrap border bg-gray-950ß shadow-sm rounded bg-[var(--bg-elevated)] border-[var(--border)] px-2 py-2">
               <a
                 href={msg.linkUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 font-medium text-[var(--d1)] hover:underline"
+                className="flex items-center gap-1 font-medium text-[var(--success)] hover:underline"
               >
                 <IconeMensagem tipo={msg.tipo} />
                 {msg.linkTexto || 'Link'}
               </a>
-              {cliqueConfirmado && (
-                <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--success)]">
-                  <CheckCircle2 size={11} />
-                  clicado
-                </span>
-              )}
+
             </div>
+            {cliqueConfirmado && (
+              <span className="flex items-center gap-1 text-[13px] font-medium text-[var(--success)]">
+                <CheckCircle2 size={11} />
+                Visto e Clicado
+              </span>
+            )}
           </div>
         ) : msg.tipo === 'imagem' && msg.imagemUrl ? (
           <div className="space-y-1">
@@ -155,11 +155,10 @@ export function LeadConversaDetalhe({ lead }: { lead: LeadComConversa }) {
               return (
                 <span
                   key={t}
-                  className={`px-1.5 py-0.5 rounded text-[11px] font-mono border ${
-                    ehTagDeClique
+                  className={`px-1.5 py-0.5 rounded text-[11px] font-mono border ${ehTagDeClique
                       ? 'bg-[var(--success)]/15 border-[var(--success)]/40 text-[var(--success)] font-semibold'
                       : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-secondary)]'
-                  }`}
+                    }`}
                 >
                   {t}
                 </span>

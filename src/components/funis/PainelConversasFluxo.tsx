@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, ChevronLeft, CheckCircle2, Funnel, Save, NotebookText } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { FunilConversaoChart } from './FunilConversaoChart'
@@ -13,11 +13,15 @@ const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
 
 function PainelAnotacoes({ flowId, direita, onClose }: { flowId: string; direita: number; onClose: () => void }) {
-  // Só roda uma vez por montagem — o pai (PainelConversasFluxo) já remonta com key própria por
-  // fluxo, então não precisa de efeito pra ressincronizar quando flowId muda.
-  const [comentarios, setComentarios] = useState(() => getState().flowTagConfigs[flowId]?.comentarios ?? '')
-  const [salvo, setSalvo] = useState(() => getState().flowTagConfigs[flowId]?.comentarios ?? '')
+  const [comentarios, setComentarios] = useState('')
+  const [salvo, setSalvo] = useState('')
   const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    const atual = getState().flowTagConfigs[flowId]?.comentarios ?? ''
+    setComentarios(atual)
+    setSalvo(atual)
+  }, [flowId])
 
   async function salvar() {
     const configAtual = getState().flowTagConfigs[flowId]
@@ -173,9 +177,13 @@ export function PainelConversasFluxo({
             onClick={fechar}
           />
 
-          {flowId && (
-            <PainelAnotacoes flowId={flowId} direita={offsetAnotacoes} onClose={fechar} />
-          )}
+          <div className="hidden">
+
+            {flowId && (
+              <PainelAnotacoes flowId={flowId} direita={offsetAnotacoes} onClose={fechar} />
+            )}
+
+          </div>
 
           <motion.div
             initial={{ x: '100%' }}
@@ -184,14 +192,11 @@ export function PainelConversasFluxo({
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="fixed inset-y-0 z-50 w-[420px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
           >
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+            <div className="flex items-center justify-between px-4 py-3.5 border-[var(--border)]">
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{flowNome || 'Detalhes'}</h2>
                 <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Período: {periodoLabel}</p>
               </div>
-              <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                <X size={16} />
-              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="grid grid-cols-3 gap-2">
@@ -221,19 +226,17 @@ export function PainelConversasFluxo({
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="fixed inset-y-0 right-[420px] z-50 w-[440px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
             >
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+              <div className="flex items-center justify-between px-4 py-3.5 border-[var(--border)]">
                 <button
-                  onClick={() => setLeadSelecionado(null)}
                   className="flex items-center gap-1.5 min-w-0 text-left text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
-                  <ChevronLeft size={16} className="shrink-0" />
                   <div className="min-w-0">
                     <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{leadSelecionado.nome || leadSelecionado.contactId}</h2>
-                    <p className="text-[10px] text-[var(--text-muted)]">{formatarTempoRelativo(leadSelecionado.ultimaAtividade)}</p>
+                    <p className="text-md text-[var(--text-muted)]">{formatarTempoRelativo(leadSelecionado.ultimaAtividade)}</p>
                   </div>
                 </button>
-                <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                  <X size={16} />
+                <button  onClick={() => setLeadSelecionado(null)} className="hover:text-[var(--text-primary)] cursor-pointer transition-colors shrink-0 px-4 py-2">
+                  <ChevronRight size={20} className="shrink-0 text-text-primary" />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
@@ -277,11 +280,10 @@ export function PainelConversasFluxo({
                     <button
                       key={lead.contactId}
                       onClick={() => setLeadSelecionado(lead)}
-                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${
-                        selecionado
-                          ? 'bg-[var(--d1)]/10 border-[var(--d1)]/40'
-                          : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-elevated)]'
-                      }`}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${selecionado
+                        ? 'bg-[var(--d1)]/10 border-[var(--d1)]/40'
+                        : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-elevated)]'
+                        }`}
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-[var(--text-primary)] truncate">{lead.nome || lead.contactId}</div>
