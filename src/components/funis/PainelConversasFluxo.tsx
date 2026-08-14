@@ -301,7 +301,7 @@ export function PainelConversasFluxo({
                 {dataComparacao ? (
                   <div className="flex gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">{formatarDataCurta(dataComparacao)}</div>
+                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Comparação · {formatarDataCurta(dataComparacao)}</div>
                       {carregandoComparacao ? (
                         <div className="flex items-center justify-center py-10">
                           <Spinner size={16} />
@@ -309,11 +309,11 @@ export function PainelConversasFluxo({
                       ) : erroComparacao ? (
                         <p className="text-[11px] text-[var(--error)]">{erroComparacao}</p>
                       ) : (
-                        <FunilConversaoChart estagios={estagiosComparacao} cor="var(--text-muted)" orientacao="vertical" />
+                        <FunilConversaoChart estagios={estagiosComparacao} cor={cor} orientacao="vertical" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">{periodoLabel}</div>
+                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Atual · {periodoLabel}</div>
                       <FunilConversaoChart estagios={estagios} cor={cor} orientacao="vertical" />
                     </div>
                   </div>
