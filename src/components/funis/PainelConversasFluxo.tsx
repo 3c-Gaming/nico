@@ -301,7 +301,7 @@ export function PainelConversasFluxo({
     if (aberto) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [aberto, onClose, leadSelecionado])
-
+467
   function fechar() {
     setLeadSelecionado(null)
     onClose()
@@ -417,7 +417,7 @@ export function PainelConversasFluxo({
                   <button
                     onClick={copiarFlowId}
                     title="Copiar Flow ID"
-                    className="inline-flex items-center gap-1 mt-1 px-1 py-0.5 -mx-1 rounded text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                    className="inline-flex items-center gap-1 mt-1 px-1 py-0.5 -mx-1 rounded text-sm cursor-pointer font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
                   >
                     {flowIdCopiado ? (
                       <><Check size={10} className="text-[var(--success)]" /> <span className="text-[var(--success)]">Copiado</span></>
