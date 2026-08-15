@@ -1109,7 +1109,6 @@ function FunisPageInner() {
                   </th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
-                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Flow ID</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Tags</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
@@ -1173,11 +1172,6 @@ function FunisPageInner() {
                                {row.flow.triggers.map((t) => t.nome).join(', ')}
                              </div>
                            )}
-                         </td>
-                         <td className="py-3 px-3">
-                           <span className="text-[10px] text-[var(--text-muted)]/60 font-mono truncate block max-w-[140px]" title={row.flow.id}>
-                             {row.flow.id}
-                           </span>
                          </td>
                         <td className="py-3 px-3">
                           <FlowStatusBadge status={row.flow.status} />

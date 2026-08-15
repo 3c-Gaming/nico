@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
@@ -261,6 +261,7 @@ export function PainelConversasFluxo({
   const [formKpiAberto, setFormKpiAberto] = useState(false)
   const [botaoEscolhido, setBotaoEscolhido] = useState('')
   const [nomeKpiNovo, setNomeKpiNovo] = useState('')
+  const [flowIdCopiado, setFlowIdCopiado] = useState(false)
   // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
@@ -308,6 +309,13 @@ export function PainelConversasFluxo({
 
   function alternarDataComparacao(d: string) {
     setDataComparacao((atual) => (atual === d ? null : d))
+  }
+
+  function copiarFlowId() {
+    if (!flowId) return
+    navigator.clipboard.writeText(flowId)
+    setFlowIdCopiado(true)
+    setTimeout(() => setFlowIdCopiado(false), 1500)
   }
 
   const kpisBotao = useSyncExternalStore(
@@ -405,6 +413,19 @@ export function PainelConversasFluxo({
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{flowNome || 'Detalhes'}</h2>
                 <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Período: {periodoLabel}</p>
+                {flowId && (
+                  <button
+                    onClick={copiarFlowId}
+                    title="Copiar Flow ID"
+                    className="inline-flex items-center gap-1 mt-1 px-1 py-0.5 -mx-1 rounded text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                  >
+                    {flowIdCopiado ? (
+                      <><Check size={10} className="text-[var(--success)]" /> <span className="text-[var(--success)]">Copiado</span></>
+                    ) : (
+                      <><Copy size={10} /> {flowId}</>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
