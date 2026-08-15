@@ -1163,7 +1163,9 @@ function FunisPageInner() {
                           )}
                         </td>
                         <td className="py-3 px-3">
-                          <span className="text-[var(--text-muted)] text-xs font-mono">{row.botNumero}</span>
+                          <span className="text-[var(--text-muted)] text-xs font-mono" title={row.botNumero}>
+                            ···{row.botNumero.slice(-4)}
+                          </span>
                         </td>
                          <td className="py-3 px-3">
                            <div className="text-[var(--text-primary)] font-medium text-sm">{row.flow.nome}</div>
