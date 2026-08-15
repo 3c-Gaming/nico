@@ -353,6 +353,10 @@ export interface FlowTagConfig {
   /** KPIs customizados que contam cliques únicos num botão específico da jornada — ver
    * painel de Detalhes (tela de Funis). */
   kpisBotao?: KpiBotao[]
+  /** Nomes exatos de campanha do Meta Ads atribuídos manualmente a esse funil (ver painel de
+   * Detalhes) — usado pra somar o gasto do funil no período, sem tentar adivinhar por regex
+   * (nomes de campanha têm padrão inconsistente e ambíguo entre funis diferentes). */
+  campanhasMeta?: string[]
 }
 
 export interface KpiBotao {

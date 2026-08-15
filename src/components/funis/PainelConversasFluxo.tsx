@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoLinhaDia } from '@/lib/funis'
 import type { KpiBotao } from '@/types'
+import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
@@ -15,10 +16,11 @@ const LARGURA_METRICAS = 420
 const LARGURA_METRICAS_COMPARACAO = 760
 const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
-// Referência estável pro caso "sem KPIs" — useSyncExternalStore exige que getSnapshot devolva a
-// mesma referência quando nada mudou; um `[]` literal inline criaria um array novo a cada
-// chamada e disparava um loop infinito de re-render.
+// Referência estável pro caso "sem KPIs"/"sem campanhas" — useSyncExternalStore exige que
+// getSnapshot devolva a mesma referência quando nada mudou; um `[]` literal inline criaria um
+// array novo a cada chamada e disparava um loop infinito de re-render.
 const KPIS_BOTAO_VAZIO: KpiBotao[] = []
+const CAMPANHAS_META_VAZIO: string[] = []
 
 function formatarDataCurta(iso: string): string {
   return formatarData(parsearDataISO(iso), 'DD/MM')
@@ -229,6 +231,111 @@ function BlocoKpisBotao({
           onRemover={onRemover ? () => onRemover(kpi.id) : undefined}
         />
       ))}
+    </div>
+  )
+}
+
+function agregarCampanhasPorNome(campanhas: CampanhaMeta[]): { nome: string; gasto: number; cliquesLink: number }[] {
+  const mapa = new Map<string, { gasto: number; cliquesLink: number }>()
+  for (const c of campanhas) {
+    const atual = mapa.get(c.nome) ?? { gasto: 0, cliquesLink: 0 }
+    atual.gasto += c.gasto
+    atual.cliquesLink += c.cliquesLink
+    mapa.set(c.nome, atual)
+  }
+  return [...mapa.entries()].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.gasto - a.gasto)
+}
+
+function formatMoeda(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/** Gasto em Meta Ads do funil no período — como o nome de campanha não segue um padrão
+ * confiável (ver comentário na rota /api/meta-ads/campanhas), a atribuição campanha -> funil é
+ * manual: busca todas as campanhas do período e deixa marcar quais pertencem a esse funil,
+ * somando o gasto só das marcadas. */
+function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: string; dataInicio: string; dataFim: string; editavel?: boolean }) {
+  const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
+  const [erro, setErro] = useState(false)
+  const [checklistAberto, setChecklistAberto] = useState(false)
+
+  useEffect(() => {
+    // Guarda contra a dupla invocação do StrictMode em dev: sem isso, se a primeira chamada
+    // (já cancelada) responder DEPOIS da segunda (a que realmente vale), ela sobrescreve o
+    // resultado bom com erro.
+    let ativo = true
+    fetch(`/api/meta-ads/campanhas?from=${dataInicio}&to=${dataFim}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ativo) return
+        if (data.error) { setErro(true); return }
+        setCampanhas(data.campanhas ?? [])
+      })
+      .catch(() => { if (ativo) setErro(true) })
+    return () => { ativo = false }
+  }, [dataInicio, dataFim])
+
+  const campanhasAtribuidas = useSyncExternalStore(
+    (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
+    () => getState().flowTagConfigs[flowId]?.campanhasMeta ?? CAMPANHAS_META_VAZIO,
+    () => CAMPANHAS_META_VAZIO,
+  )
+
+  const agregadas = useMemo(() => (campanhas ? agregarCampanhasPorNome(campanhas) : []), [campanhas])
+  const gastoTotal = agregadas.filter((c) => campanhasAtribuidas.includes(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
+
+  function toggleCampanha(nome: string) {
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    const atuais = configAtual.campanhasMeta ?? []
+    const novas = atuais.includes(nome) ? atuais.filter((n) => n !== nome) : [...atuais, nome]
+    updateFlowTagConfig({ ...configAtual, campanhasMeta: novas })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+          <DollarSign size={12} />
+          Gasto em Ads (Meta)
+        </span>
+        {editavel && (
+          <button
+            onClick={() => setChecklistAberto((v) => !v)}
+            className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            {checklistAberto ? 'Fechar' : 'Atribuir campanhas'}
+          </button>
+        )}
+      </div>
+      <MetricaTile
+        label={`Gasto${campanhasAtribuidas.length > 0 ? ` (${campanhasAtribuidas.length} camp.)` : ''}`}
+        value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
+      />
+      {editavel && checklistAberto && (
+        <div className="max-h-56 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+          {campanhas === null ? (
+            <div className="flex items-center justify-center py-6">
+              <Spinner size={16} />
+            </div>
+          ) : agregadas.length === 0 ? (
+            <p className="text-[11px] text-[var(--text-muted)]">Nenhuma campanha encontrada nesse período.</p>
+          ) : (
+            agregadas.map((c) => (
+              <label key={c.nome} className="flex items-center gap-2 text-[11px] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={campanhasAtribuidas.includes(c.nome)}
+                  onChange={() => toggleCampanha(c.nome)}
+                  className="shrink-0"
+                />
+                <span className="flex-1 truncate text-[var(--text-secondary)]" title={c.nome}>{c.nome}</span>
+                <span className="font-mono text-[var(--text-muted)] shrink-0">{formatMoeda(c.gasto)}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -548,6 +655,7 @@ export function PainelConversasFluxo({
                         {botId && tag && flowId && (
                           <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataComparacao} dataFim={dataComparacao} />
                         )}
+                        {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataComparacao} dataFim={dataComparacao} />}
                         <BlocoFunilChart estagios={estagiosComparacao} cor={cor} />
                       </>
                     )}
@@ -558,6 +666,7 @@ export function PainelConversasFluxo({
                     {botId && tag && flowId && (
                       <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
                     )}
+                    {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} editavel />}
                     <BlocoFunilChart estagios={estagios} cor={cor} />
                   </div>
                 </div>
@@ -567,6 +676,7 @@ export function PainelConversasFluxo({
                   {botId && tag && flowId && (
                     <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
                   )}
+                  {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} editavel />}
                   <BlocoFunilChart estagios={estagios} cor={cor} />
                 </>
               )}
