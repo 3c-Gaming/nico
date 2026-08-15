@@ -370,6 +370,7 @@ export function PainelConversasFluxo({
   const [nomeKpiNovo, setNomeKpiNovo] = useState('')
   const [flowIdCopiado, setFlowIdCopiado] = useState(false)
   const [tagFiltro, setTagFiltro] = useState(tag ?? '')
+  const [buscaLeadId, setBuscaLeadId] = useState('')
   // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
@@ -467,6 +468,14 @@ export function PainelConversasFluxo({
   }
 
   const estagios = tags.map((t) => ({ tag: t, contagem: contagensPorTag[t] ?? 0 }))
+
+  // Filtra a amostra de leads já carregada pelo lead_id (variável salva pelo próprio fluxo de
+  // origem) — útil em fluxos que recebem leads de vários fluxos diferentes (ex: QUIZ SUPER),
+  // onde a tag sozinha não distingue de qual fluxo original cada lead veio.
+  const buscaLeadIdNormalizada = buscaLeadId.trim().toLowerCase()
+  const leadsFiltrados = buscaLeadIdNormalizada
+    ? leads.filter((l) => String(l.variaveis?.lead_id ?? '').toLowerCase().includes(buscaLeadIdNormalizada))
+    : leads
 
   // resultadoComparacao só é válido pra exibição se corresponder à data selecionada agora —
   // enquanto isso não bate, ainda está carregando (ou o usuário trocou de data de novo).
@@ -721,7 +730,11 @@ export function PainelConversasFluxo({
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conversas ao vivo</h2>
-                  {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 50 leads</p>}
+                  {flowNome && (
+                    <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
+                      {flowNome} · {buscaLeadIdNormalizada ? `${leadsFiltrados.length} de ${leads.length} leads` : 'últimos 50 leads'}
+                    </p>
+                  )}
                 </div>
                 <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
                   <X size={16} />
@@ -738,6 +751,13 @@ export function PainelConversasFluxo({
                   ))}
                 </select>
               )}
+              <input
+                type="text"
+                value={buscaLeadId}
+                onChange={(e) => setBuscaLeadId(e.target.value)}
+                placeholder="Filtrar por lead_id (ex: f71-02)..."
+                className="w-full text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-2 py-1.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+              />
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -749,8 +769,10 @@ export function PainelConversasFluxo({
                 <p className="text-xs text-[var(--error)] text-center py-10">{erro}</p>
               ) : leads.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhuma conversa encontrada pra esse fluxo ainda.</p>
+              ) : leadsFiltrados.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhum lead com esse lead_id nos {leads.length} carregados.</p>
               ) : (
-                leads.map((lead) => {
+                leadsFiltrados.map((lead) => {
                   const cliques = lead.mensagens.filter((m) => m.tipo === 'botao_clicado' || m.tipo === 'lista_selecionada').length
                   const links = lead.mensagens.filter((m) => m.tipo === 'link_enviado').length
                   const selecionado = leadSelecionado?.contactId === lead.contactId
