@@ -1183,14 +1183,18 @@ function FunisPageInner() {
                           <FlowStatusBadge status={row.flow.status} />
                         </td>
                         <td className="py-3 px-3">
-                          {row.tags.length > 0 ? (
+                          {row.tags.length === 0 ? (
+                            <span className="text-[10px] text-[var(--text-muted)]/40 italic">sem tags</span>
+                          ) : row.tags.length > 3 ? (
+                            <span title={row.tags.join(', ')}>
+                              <TagChip label={`${row.tags.length} tags`} />
+                            </span>
+                          ) : (
                             <div className="flex flex-wrap gap-1">
                               {row.tags.map((tag) => (
                                 <TagChip key={tag} label={tag} />
                               ))}
                             </div>
-                          ) : (
-                            <span className="text-[10px] text-[var(--text-muted)]/40 italic">sem tags</span>
                           )}
                         </td>
                         <td className="py-3 px-3">
