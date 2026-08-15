@@ -50,11 +50,16 @@ export async function GET(request: NextRequest) {
   if (!tag) return NextResponse.json({ error: 'tag é obrigatório' }, { status: 400 })
   if (!flowId) return NextResponse.json({ error: 'flowId é obrigatório' }, { status: 400 })
 
+  // Tag usada pra BUSCAR os candidatos (getByTag) — por padrão é a mesma tag de entrada, mas o
+  // painel deixa filtrar por qualquer outra tag do fluxo (ex: só quem chegou em CTA_BILHETE),
+  // enquanto `tag` continua sendo a tag de entrada, usada pra resolver o sufixo do clique de link.
+  const tagFiltro = request.nextUrl.searchParams.get('tagFiltro') || tag
+
   try {
     const apiKey = apiKeyParaBot(botId)
     if (!apiKey) return NextResponse.json({ error: `Nenhuma conta SendPulse reconhece o bot ${botId}` }, { status: 400 })
 
-    const candidatos = await buscarUltimosContatosPorTag(botId, tag, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS)
+    const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS)
 
     const resolvidos = await Promise.allSettled(
       candidatos.map(async (candidato): Promise<LeadComConversa> => {
@@ -86,6 +91,7 @@ export async function GET(request: NextRequest) {
       botId,
       flowId,
       tag,
+      tagFiltro,
       avisoLinks: 'Clique em botão de link (cta_url) não gera mensagem de resposta no WhatsApp — mas se o fluxo tem uma tag "CTA_*" setada só quando o link é aberto, ela aparece em tagCliqueLink de cada lead como confirmação do clique.',
       leads,
     })

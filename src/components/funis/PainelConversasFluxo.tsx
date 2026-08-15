@@ -262,6 +262,7 @@ export function PainelConversasFluxo({
   const [botaoEscolhido, setBotaoEscolhido] = useState('')
   const [nomeKpiNovo, setNomeKpiNovo] = useState('')
   const [flowIdCopiado, setFlowIdCopiado] = useState(false)
+  const [tagFiltro, setTagFiltro] = useState(tag ?? '')
   // Guarda a data a que o resultado se refere junto com o resultado — permite derivar "carregando"
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
@@ -269,7 +270,7 @@ export function PainelConversasFluxo({
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
-    const params = new URLSearchParams({ botId, flowId, tag, quantidade: '50' })
+    const params = new URLSearchParams({ botId, flowId, tag, tagFiltro: tagFiltro || tag, quantidade: '50' })
     fetch(`/api/sendpulse/ultimas-conversas-fluxo?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
@@ -278,7 +279,7 @@ export function PainelConversasFluxo({
       })
       .catch(() => setErro('Erro ao buscar conversas'))
       .finally(() => setCarregando(false))
-  }, [aberto, botId, flowId, tag])
+  }, [aberto, botId, flowId, tag, tagFiltro])
 
   useEffect(() => {
     if (!dataComparacao || !botId || tags.length === 0) return
@@ -301,7 +302,7 @@ export function PainelConversasFluxo({
     if (aberto) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [aberto, onClose, leadSelecionado])
-467
+
   function fechar() {
     setLeadSelecionado(null)
     onClose()
@@ -606,14 +607,27 @@ export function PainelConversasFluxo({
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="fixed inset-y-0 right-0 z-50 w-[420px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
           >
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conversas ao vivo</h2>
-                {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 50 leads</p>}
+            <div className="px-4 py-3.5 border-b border-[var(--border)] space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conversas ao vivo</h2>
+                  {flowNome && <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{flowNome} · últimos 50 leads</p>}
+                </div>
+                <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                  <X size={16} />
+                </button>
               </div>
-              <button onClick={fechar} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                <X size={16} />
-              </button>
+              {tags.length > 1 && (
+                <select
+                  value={tagFiltro}
+                  onChange={(e) => { setTagFiltro(e.target.value); setCarregando(true) }}
+                  className="w-full text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-2 py-1.5 text-[var(--text-primary)] outline-none"
+                >
+                  {tags.map((t) => (
+                    <option key={t} value={t}>Tag: {t}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
