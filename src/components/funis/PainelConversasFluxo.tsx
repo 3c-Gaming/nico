@@ -2,18 +2,18 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, Calculator } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, Calculator, GitCompare } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
-import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoLinhaDia } from '@/lib/funis'
-import type { KpiBotao, KpiCusto } from '@/types'
+import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, type ResultadoLinhaDia } from '@/lib/funis'
+import type { KpiBotao, KpiCusto, FlowTagConfig, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
 
 const LARGURA_METRICAS = 420
-const LARGURA_METRICAS_COMPARACAO = 760
+const LARGURA_COLUNA_COMPARACAO = 380
 const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
 // Referência estável pro caso "sem KPIs"/"sem campanhas" — useSyncExternalStore exige que
@@ -514,6 +514,61 @@ export function PainelConversasFluxo({
   // (dataComparacao mudou mas ainda não tem resultado pra essa data) sem precisar de setState
   // síncrono no corpo do effect pra sinalizar início de carregamento.
   const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; resultado: ResultadoLinhaDia | null; leadsPorTag: Record<string, number> | null; erro: string | null } | null>(null)
+  const [todosFunis, setTodosFunis] = useState<FlowTagConfig[]>([])
+  const [funisComparados, setFunisComparados] = useState<string[]>([])
+  type ResultadoFunilComparado = { leads: number; registros: number; ftds: number; contagensPorTag: Record<string, number> }
+  const [resultadosFunisComparados, setResultadosFunisComparados] = useState<Record<string, ResultadoFunilComparado | null>>({})
+
+  // Lista de funis configurados (pra montar o picker de "comparar com outro funil") — busca só
+  // uma vez quando o painel abre, não depende do período selecionado.
+  useEffect(() => {
+    if (!aberto) return
+    let ativo = true
+    fetch('/api/flow-tag-configs')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ativo) return
+        const configs = (data.configs ?? []) as FlowTagConfig[]
+        setTodosFunis(configs.filter((c) => c.funil))
+      })
+      .catch(() => {})
+    return () => { ativo = false }
+  }, [aberto])
+
+  // Resultado (leads/registros/ftds/contagem por tag) de cada funil comparado, somado dia a dia
+  // no MESMO período selecionado pro funil principal — mesma lógica de agregação usada em
+  // /funis/apresentar pra comparar vários funis ao longo de um intervalo.
+  useEffect(() => {
+    if (funisComparados.length === 0) return
+    let ativo = true
+    const datas = gerarRangeDatas(dataInicio, dataReferencia)
+    Promise.all(
+      funisComparados.map(async (flowIdComparado): Promise<[string, ResultadoFunilComparado | null]> => {
+        const config = todosFunis.find((f) => f.flowId === flowIdComparado)
+        if (!config) return [flowIdComparado, null]
+        const tagEntrada = tagDeEntradaDoFluxo(config.tags)
+        const dias = await Promise.all(
+          datas.map((data) => buscarResultadosDoDia(data, [{ botId: config.botId, tags: config.tags }])),
+        )
+        let leads = 0
+        let registros = 0
+        let ftds = 0
+        const contagensPorTag: Record<string, number> = {}
+        for (const dia of dias) {
+          const r = calcularResultadoLinhaNoDia(config, dia)
+          leads += tagEntrada ? (dia.leadsPorTag[tagEntrada] ?? 0) : 0
+          registros += r.registros
+          ftds += r.ftds
+          for (const [t, c] of Object.entries(dia.leadsPorTag)) contagensPorTag[t] = (contagensPorTag[t] ?? 0) + c
+        }
+        return [flowIdComparado, { leads, registros, ftds, contagensPorTag }]
+      }),
+    ).then((entradas) => {
+      if (!ativo) return
+      setResultadosFunisComparados(Object.fromEntries(entradas))
+    })
+    return () => { ativo = false }
+  }, [funisComparados, dataInicio, dataReferencia, todosFunis])
 
   useEffect(() => {
     if (!aberto || !botId || !flowId || !tag) return
@@ -564,6 +619,15 @@ export function PainelConversasFluxo({
     navigator.clipboard.writeText(flowId)
     setFlowIdCopiado(true)
     setTimeout(() => setFlowIdCopiado(false), 1500)
+  }
+
+  function adicionarFunilComparado(flowIdEscolhido: string) {
+    if (!flowIdEscolhido || funisComparados.includes(flowIdEscolhido) || funisComparados.length >= 2) return
+    setFunisComparados((prev) => [...prev, flowIdEscolhido])
+  }
+
+  function removerFunilComparado(flowIdRemovido: string) {
+    setFunisComparados((prev) => prev.filter((id) => id !== flowIdRemovido))
   }
 
   const kpisBotao = useSyncExternalStore(
@@ -628,12 +692,21 @@ export function PainelConversasFluxo({
   const dataOntem = formatarData(adicionarDias(parsearDataISO(dataReferencia), -1), 'YYYY-MM-DD')
   const dataSemanaPassada = formatarData(adicionarDias(parsearDataISO(dataReferencia), -7), 'YYYY-MM-DD')
 
+  const funisDisponiveisParaComparar = todosFunis.filter((f) => f.flowId !== flowId && !funisComparados.includes(f.flowId))
+
+  function corDoFunil(config: FlowTagConfig): string | undefined {
+    const primeiraId = config.casas?.[0]
+    if (!primeiraId) return undefined
+    return (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]?.cor
+  }
+
   // Painéis empilhados da direita pra esquerda: lista -> (detalhe do lead, se selecionado) ->
   // métricas/funil -> anotações. Cada um calcula seu offset a partir da largura dos anteriores,
   // pra não deixar gap nem sobrepor quando o detalhe do lead abre/fecha. A largura do painel de
-  // métricas/funil também varia — alarga quando uma comparação entre dias está ativa, pra caber
-  // os dois funis lado a lado.
-  const larguraMetricas = dataComparacao ? LARGURA_METRICAS_COMPARACAO : LARGURA_METRICAS
+  // métricas/funil também varia — alarga conforme o total de colunas mostradas lado a lado (dia
+  // comparado + funis comparados), até um total de 4 (principal + 1 dia + 2 funis).
+  const totalColunas = 1 + (dataComparacao ? 1 : 0) + funisComparados.length
+  const larguraMetricas = totalColunas > 1 ? LARGURA_COLUNA_COMPARACAO * totalColunas : LARGURA_METRICAS
   const offsetMetricas = LARGURA_LISTA + (leadSelecionado ? LARGURA_LEAD_DETALHE : 0)
   const offsetAnotacoes = offsetMetricas + larguraMetricas
 
@@ -724,6 +797,45 @@ export function PainelConversasFluxo({
                 </div>
               </div>
 
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+                    <GitCompare size={12} />
+                    Comparar com outro funil
+                  </span>
+                  {funisComparados.length < 2 && funisDisponiveisParaComparar.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => adicionarFunilComparado(e.target.value)}
+                      className="text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
+                    >
+                      <option value="">+ Adicionar funil...</option>
+                      {funisDisponiveisParaComparar.map((f) => (
+                        <option key={f.flowId} value={f.flowId}>{f.funil}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {funisComparados.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {funisComparados.map((fid) => {
+                      const config = todosFunis.find((f) => f.flowId === fid)
+                      return (
+                        <span
+                          key={fid}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]"
+                        >
+                          {config?.funil ?? fid}
+                          <button onClick={() => removerFunilComparado(fid)} className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors">
+                            <X size={10} />
+                          </button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
               {botId && tag && flowId && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-1.5 flex-wrap">
@@ -782,8 +894,8 @@ export function PainelConversasFluxo({
                 </div>
               )}
 
-              {dataComparacao ? (
-                <div className="flex gap-4">
+              <div className="flex gap-4">
+                {dataComparacao && (
                   <div className="flex-1 min-w-0 space-y-4">
                     <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Comparação · {formatarDataCurta(dataComparacao)}</div>
                     {carregandoComparacao ? (
@@ -818,29 +930,11 @@ export function PainelConversasFluxo({
                       </>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0 space-y-4">
-                    <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Atual · {periodoLabel}</div>
-                    <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
-                    {botId && tag && flowId && (
-                      <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
-                    )}
-                    {flowId && (
-                      <BlocoGastoMeta
-                        flowId={flowId}
-                        dataInicio={dataInicio}
-                        dataFim={dataReferencia}
-                        registros={registros}
-                        ftds={ftds}
-                        tags={tags}
-                        contagensPorTag={contagensPorTag}
-                        editavel
-                      />
-                    )}
-                    <BlocoFunilChart estagios={estagios} cor={cor} />
-                  </div>
-                </div>
-              ) : (
-                <>
+                )}
+                <div className="flex-1 min-w-0 space-y-4">
+                  {totalColunas > 1 && (
+                    <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{flowNome} · {periodoLabel}</div>
+                  )}
                   <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
                   {botId && tag && flowId && (
                     <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
@@ -858,8 +952,38 @@ export function PainelConversasFluxo({
                     />
                   )}
                   <BlocoFunilChart estagios={estagios} cor={cor} />
-                </>
-              )}
+                </div>
+                {funisComparados.map((flowIdComparado) => {
+                  const config = todosFunis.find((f) => f.flowId === flowIdComparado)
+                  const resultado = resultadosFunisComparados[flowIdComparado]
+                  if (!config) return null
+                  const estagiosComparado = resultado ? config.tags.map((t) => ({ tag: t, contagem: resultado.contagensPorTag[t] ?? 0 })) : []
+                  return (
+                    <div key={flowIdComparado} className="flex-1 min-w-0 space-y-4">
+                      <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{config.funil} · {periodoLabel}</div>
+                      {!resultado ? (
+                        <div className="flex items-center justify-center py-10">
+                          <Spinner size={16} />
+                        </div>
+                      ) : (
+                        <>
+                          <BlocoMetricas leads={resultado.leads} registros={resultado.registros} ftds={resultado.ftds} total={resultado.leads} />
+                          <BlocoGastoMeta
+                            flowId={config.flowId}
+                            dataInicio={dataInicio}
+                            dataFim={dataReferencia}
+                            registros={resultado.registros}
+                            ftds={resultado.ftds}
+                            tags={config.tags}
+                            contagensPorTag={resultado.contagensPorTag}
+                          />
+                          <BlocoFunilChart estagios={estagiosComparado} cor={corDoFunil(config)} />
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </motion.div>
 
