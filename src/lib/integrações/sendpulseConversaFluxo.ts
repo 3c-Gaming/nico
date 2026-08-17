@@ -153,7 +153,10 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
   } else if (data.image) {
     tipo = 'imagem'
     texto = data.image.caption ?? undefined
-    imagemUrl = data.image.link ?? undefined
+    // Mensagens de saída (nossas) trazem "link" (S3 da SendPulse); mensagens de entrada (o lead
+    // mandou a imagem) só trazem "url" — endpoint de mídia da própria SendPulse, sem autenticação
+    // necessária pra baixar (confirmado testando direto).
+    imagemUrl = data.image.link ?? data.image.url ?? undefined
   } else if (data.file || data.document) {
     tipo = 'documento'
     texto = (data.file ?? data.document)?.caption ?? undefined
