@@ -368,11 +368,13 @@ function BlocoGastoMeta({
           </div>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MetricaTile
-          label={`Gasto${campanhasAtribuidas.length > 0 ? ` (${campanhasAtribuidas.length} camp.)` : ''}`}
-          value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
-        />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <MetricaTile
+            label={`Gasto${campanhasAtribuidas.length > 0 ? ` (${campanhasAtribuidas.length} camp.)` : ''}`}
+            value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
+          />
+        </div>
         <MetricaTile label="Custo/Reg" value={custoRegistro === null ? '—' : formatMoeda(custoRegistro)} />
         <MetricaTile label="Custo/FTD" value={custoFtd === null ? '—' : formatMoeda(custoFtd)} />
       </div>
