@@ -524,9 +524,10 @@ function FunilComboBox({ opcoes, onSelect }: { opcoes: FlowTagConfig[]; onSelect
                 key={f.flowId}
                 type="button"
                 onClick={() => selecionar(f.flowId)}
-                className="block w-full px-3 py-1.5 text-[11px] text-left text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors truncate"
+                className="flex items-center justify-between gap-2 w-full px-3 py-1.5 text-[11px] text-left text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
               >
-                {f.funil}
+                <span className="truncate">{f.funil}</span>
+                <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{(f.tags ?? []).length} tag{(f.tags ?? []).length === 1 ? '' : 's'}</span>
               </button>
             ))
           )}

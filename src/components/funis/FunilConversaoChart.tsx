@@ -66,7 +66,7 @@ export function FunilConversaoChart({ estagios, cor, orientacao = 'horizontal' }
             >
               <div className="shrink-0 flex flex-col justify-center gap-1.5 py-2" style={{ width: LARGURA_COLUNA_LABEL }}>
                 <span className="text-[11px] font-mono text-[var(--text-muted)] truncate" title={estagio.tag}>{estagio.tag}</span>
-                <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums leading-none">{estagio.contagem}</span>
+                <span className="text-lg font-bold text-[var(--text-primary)] tabular-nums leading-none">{estagio.contagem}</span>
                 <PillPercentual pct={pct} cor={corBase} />
               </div>
               <div className="flex-1 min-w-0">
