@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, Calculator, GitCompare } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
@@ -479,6 +479,63 @@ function BlocoGastoMeta({
   )
 }
 
+/** Combobox pesquisável pra escolher um funil na comparação — o app tem dezenas de funis
+ * configurados, um <select> nativo fica ruim de usar (lista gigante sem busca). Mesmo padrão
+ * de interação do TagComboBox (ui/TagComboBox.tsx). */
+function FunilComboBox({ opcoes, onSelect }: { opcoes: FlowTagConfig[]; onSelect: (flowId: string) => void }) {
+  const [busca, setBusca] = useState('')
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const termo = busca.trim().toLowerCase()
+  const filtradas = termo ? opcoes.filter((f) => (f.funil ?? '').toLowerCase().includes(termo)) : opcoes
+
+  function selecionar(flowIdEscolhido: string) {
+    onSelect(flowIdEscolhido)
+    setBusca('')
+    setAberto(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        value={busca}
+        onChange={(e) => { setBusca(e.target.value); setAberto(true) }}
+        onFocus={() => setAberto(true)}
+        placeholder="Buscar funil..."
+        className="text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none w-[160px]"
+      />
+      {aberto && (
+        <div className="absolute top-full right-0 z-50 mt-1 w-[240px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded-md shadow-lg max-h-52 overflow-y-auto">
+          {filtradas.length === 0 ? (
+            <div className="px-3 py-1.5 text-[11px] text-[var(--text-muted)]">Nenhum funil encontrado.</div>
+          ) : (
+            filtradas.map((f) => (
+              <button
+                key={f.flowId}
+                type="button"
+                onClick={() => selecionar(f.flowId)}
+                className="block w-full px-3 py-1.5 text-[11px] text-left text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors truncate"
+              >
+                {f.funil}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function PainelConversasFluxo({
   aberto,
   onClose,
@@ -804,16 +861,7 @@ export function PainelConversasFluxo({
                     Comparar com outro funil
                   </span>
                   {funisComparados.length < 2 && funisDisponiveisParaComparar.length > 0 && (
-                    <select
-                      value=""
-                      onChange={(e) => adicionarFunilComparado(e.target.value)}
-                      className="text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
-                    >
-                      <option value="">+ Adicionar funil...</option>
-                      {funisDisponiveisParaComparar.map((f) => (
-                        <option key={f.flowId} value={f.flowId}>{f.funil}</option>
-                      ))}
-                    </select>
+                    <FunilComboBox opcoes={funisDisponiveisParaComparar} onSelect={adicionarFunilComparado} />
                   )}
                 </div>
                 {funisComparados.length > 0 && (
