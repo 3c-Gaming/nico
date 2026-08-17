@@ -447,7 +447,7 @@ function BlocoGastoMeta({
         </div>
       )}
       {kpisCusto.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {kpisCusto.map((kpi) => {
             const contagem = contagensPorTag[kpi.tag] ?? 0
             const custo = gastoTotal > 0 && contagem > 0 ? gastoTotal / contagem : null
