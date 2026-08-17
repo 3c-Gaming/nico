@@ -501,7 +501,29 @@ function FunisPageInner() {
 
     async function carregarTotalIntervalo() {
       const configs = getState().flowTagConfigs
-      const grupos = agruparTagsPorBot(Object.values(configs).map((c) => ({ botId: c.botId, tags: c.tags ?? [] })))
+      const naoMonitorados = getState().numerosNaoMonitorados
+      const termo = filtroBusca.toLowerCase()
+
+      // Só busca pros fluxos que passam no filtro atual da tela — buscar o sistema inteiro (todos
+      // os bots configurados) de uma vez sobrecarregava a API da SendPulse e travava a coluna
+      // "Total" inteira esperando o bot mais lento responder, mesmo pra linhas já filtradas fora.
+      const itensVisiveis: { botId?: string; tags: string[] }[] = []
+      for (const num of numeros) {
+        if (filtroBot && num.id !== filtroBot) continue
+        if (naoMonitorados.includes(num.id)) continue
+        for (const flow of fluxosMap[num.id] ?? []) {
+          const tags = configs[flow.id]?.tags ?? []
+          if (tags.length === 0) continue
+          const funil = configs[flow.id]?.funil
+          if (termo && !flow.nome.toLowerCase().includes(termo) && !(funil ?? '').toLowerCase().includes(termo)) continue
+          const casas = configs[flow.id]?.casas ?? []
+          if (filtroCasas.length > 0 && !casas.some((id) => filtroCasas.includes(id))) continue
+          const tipo = configs[flow.id]?.tipo ?? 'disparo'
+          if (filtroTipo && tipo !== filtroTipo) continue
+          itensVisiveis.push({ botId: num.id, tags })
+        }
+      }
+      const grupos = agruparTagsPorBot(itensVisiveis)
       if (!grupos.length) return
 
       setCarregandoIntervalo(true)
@@ -518,7 +540,7 @@ function FunisPageInner() {
 
     carregarTotalIntervalo()
     return () => { cancelado = true }
-  }, [trackingDataInicio, trackingDataFim, saveVersion, flowTagConfigsProntas, intervaloEhHojeUnico])
+  }, [trackingDataInicio, trackingDataFim, saveVersion, flowTagConfigsProntas, intervaloEhHojeUnico, numeros, fluxosMap, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   // Busca tracking 3CGG para todos os flows que têm utm
   useEffect(() => {
@@ -665,7 +687,6 @@ function FunisPageInner() {
       if (!primeiraId) return undefined
       return (getState().casasAposta as Record<string, CasaAposta>)[primeiraId]?.cor
     })(),
-    leadsHoje: conversasFluxoRow.leadsHoje,
     total: conversasFluxoRow.total,
     registros: trackingMap[conversasFluxoRow.flow.id]?.registros ?? 0,
     ftds: trackingMap[conversasFluxoRow.flow.id]?.ftds ?? 0,
@@ -1399,7 +1420,6 @@ function FunisPageInner() {
         tags={conversasFluxoProps?.tags ?? []}
         contagensPorTag={conversasFluxoProps?.contagensPorTag ?? {}}
         cor={conversasFluxoProps?.cor}
-        leadsHoje={conversasFluxoProps?.leadsHoje ?? 0}
         total={conversasFluxoProps?.total ?? 0}
         registros={conversasFluxoProps?.registros ?? 0}
         ftds={conversasFluxoProps?.ftds ?? 0}

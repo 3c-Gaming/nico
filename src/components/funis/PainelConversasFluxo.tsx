@@ -99,7 +99,6 @@ interface PainelConversasFluxoProps {
   tags: string[]
   contagensPorTag: Record<string, number>
   cor?: string
-  leadsHoje: number
   total: number
   registros: number
   ftds: number
@@ -547,7 +546,6 @@ export function PainelConversasFluxo({
   tags,
   contagensPorTag,
   cor,
-  leadsHoje,
   total,
   registros,
   ftds,
@@ -990,7 +988,7 @@ export function PainelConversasFluxo({
                   {totalColunas > 1 && (
                     <div className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{flowNome} · {periodoLabel}</div>
                   )}
-                  <BlocoMetricas leads={leadsHoje} registros={registros} ftds={ftds} total={total} />
+                  <BlocoMetricas leads={total} registros={registros} ftds={ftds} total={total} />
                   {botId && tag && flowId && (
                     <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
                   )}
