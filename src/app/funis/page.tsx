@@ -366,7 +366,10 @@ function FunisPageInner() {
   // mais o total histórico da tag, é a soma real do período selecionado (mesma fonte/lógica que
   // já usávamos pra exportar por intervalo, só que aplicada direto na tela em vez de só no CSV).
   const [contagensIntervalo, setContagensIntervalo] = useState<Record<string, number>>({})
-  const [carregandoIntervalo, setCarregandoIntervalo] = useState(false)
+  // bot.id -> ainda esperando a contagem de intervalo daquele bot especificamente — granular por
+  // bot (não um único flag global) pra cada linha parar de girar assim que o SEU bot responder,
+  // em vez de todas ficarem presas esperando o bot mais lento do sistema inteiro.
+  const [carregandoIntervaloBots, setCarregandoIntervaloBots] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -526,15 +529,22 @@ function FunisPageInner() {
       const grupos = agruparTagsPorBot(itensVisiveis)
       if (!grupos.length) return
 
-      setCarregandoIntervalo(true)
+      setCarregandoIntervaloBots(new Set(grupos.map((g) => g.botId)))
       setContagensIntervalo({})
       try {
-        const leads = await contarLeadsIntervalo(grupos, trackingDataInicio, trackingDataFim)
-        if (!cancelado) setContagensIntervalo(leads)
+        await contarLeadsIntervalo(grupos, trackingDataInicio, trackingDataFim, {
+          onGrupoResolvido: (botId, leads) => {
+            if (cancelado) return
+            setContagensIntervalo((prev) => ({ ...prev, ...leads }))
+            setCarregandoIntervaloBots((prev) => {
+              const next = new Set(prev)
+              next.delete(botId)
+              return next
+            })
+          },
+        })
       } catch {
         // Total no intervalo é complementar — falha aqui não deve travar o resto da tela
-      } finally {
-        if (!cancelado) setCarregandoIntervalo(false)
       }
     }
 
@@ -654,7 +664,7 @@ function FunisPageInner() {
           total,
           ultimoLeadAt,
           carregandoContagens: tags.length > 0 && carregandoFlows.has(flow.id),
-          carregandoTotal: tags.length > 0 && (intervaloEhHojeUnico ? carregandoFlows.has(flow.id) : carregandoIntervalo),
+          carregandoTotal: tags.length > 0 && (intervaloEhHojeUnico ? carregandoFlows.has(flow.id) : carregandoIntervaloBots.has(num.id)),
         })
       }
     }
@@ -664,7 +674,7 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervalo, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo])
+  }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervaloBots, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 

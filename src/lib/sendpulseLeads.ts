@@ -23,12 +23,15 @@ export function agruparTagsPorBot(itens: { botId?: string | null; tags: string[]
 
 /** Busca a contagem de leads por tag num intervalo, uma chamada por bot (em paralelo), e devolve
  * tudo já mesclado num único mapa tag -> contagem. Uma tag que falhar fica de fora do mapa
- * (undefined), não derruba as demais. */
+ * (undefined), não derruba as demais. Se `onGrupoResolvido` for passado, é chamado a cada bot que
+ * responder (com só as tags daquele grupo) — permite a quem chama atualizar a tela
+ * progressivamente em vez de esperar todos os bots responderem pra mostrar qualquer coisa (um bot
+ * lento não deveria travar a exibição dos que já responderam). */
 export async function contarLeadsIntervalo(
   grupos: GrupoBotTags[],
   dataInicio: string,
   dataFim: string,
-  opts?: { refresh?: boolean },
+  opts?: { refresh?: boolean; onGrupoResolvido?: (botId: string, leads: Record<string, number>) => void },
 ): Promise<Record<string, number>> {
   const leads: Record<string, number> = {}
   await Promise.allSettled(
@@ -38,9 +41,10 @@ export async function contarLeadsIntervalo(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ botId: grupo.botId, tags: grupo.tags, dataInicio, dataFim, refresh: opts?.refresh }),
       })
-      if (!res.ok) return
+      if (!res.ok) { opts?.onGrupoResolvido?.(grupo.botId, {}); return }
       const data = await res.json()
       Object.assign(leads, data.leads ?? {})
+      opts?.onGrupoResolvido?.(grupo.botId, data.leads ?? {})
     }),
   )
   return leads
