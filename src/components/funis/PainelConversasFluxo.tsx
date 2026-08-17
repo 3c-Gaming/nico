@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, Calculator } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, type ResultadoLinhaDia } from '@/lib/funis'
-import type { KpiBotao } from '@/types'
+import type { KpiBotao, KpiCusto } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
@@ -21,6 +21,7 @@ const LARGURA_LISTA = 420
 // array novo a cada chamada e disparava um loop infinito de re-render.
 const KPIS_BOTAO_VAZIO: KpiBotao[] = []
 const CAMPANHAS_META_VAZIO: string[] = []
+const KPIS_CUSTO_VAZIO: KpiCusto[] = []
 
 function formatarDataCurta(iso: string): string {
   return formatarData(parsearDataISO(iso), 'DD/MM')
@@ -253,12 +254,34 @@ function formatMoeda(n: number): string {
 /** Gasto em Meta Ads do funil no período — como o nome de campanha não segue um padrão
  * confiável (ver comentário na rota /api/meta-ads/campanhas), a atribuição campanha -> funil é
  * manual: busca todas as campanhas do período e deixa marcar quais pertencem a esse funil,
- * somando o gasto só das marcadas. */
-function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: string; dataInicio: string; dataFim: string; editavel?: boolean }) {
+ * somando o gasto só das marcadas. A partir do gasto total, deriva Custo/Registro e Custo/FTD
+ * automaticamente, e permite criar KPIs de custo por tag (ex: custo por CTA). */
+function BlocoGastoMeta({
+  flowId,
+  dataInicio,
+  dataFim,
+  registros,
+  ftds,
+  tags,
+  contagensPorTag,
+  editavel,
+}: {
+  flowId: string
+  dataInicio: string
+  dataFim: string
+  registros: number
+  ftds: number
+  tags: string[]
+  contagensPorTag: Record<string, number>
+  editavel?: boolean
+}) {
   const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
   const [erro, setErro] = useState(false)
   const [checklistAberto, setChecklistAberto] = useState(false)
   const [buscaCampanha, setBuscaCampanha] = useState('')
+  const [formKpiCustoAberto, setFormKpiCustoAberto] = useState(false)
+  const [tagEscolhidaCusto, setTagEscolhidaCusto] = useState('')
+  const [nomeKpiCustoNovo, setNomeKpiCustoNovo] = useState('')
 
   useEffect(() => {
     // Guarda contra a dupla invocação do StrictMode em dev: sem isso, se a primeira chamada
@@ -281,6 +304,11 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
     () => getState().flowTagConfigs[flowId]?.campanhasMeta ?? CAMPANHAS_META_VAZIO,
     () => CAMPANHAS_META_VAZIO,
   )
+  const kpisCusto = useSyncExternalStore(
+    (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
+    () => getState().flowTagConfigs[flowId]?.kpisCusto ?? KPIS_CUSTO_VAZIO,
+    () => KPIS_CUSTO_VAZIO,
+  )
 
   const agregadas = useMemo(() => (campanhas ? agregarCampanhasPorNome(campanhas) : []), [campanhas])
   const gastoTotal = agregadas.filter((c) => campanhasAtribuidas.includes(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
@@ -288,6 +316,8 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
   const agregadasFiltradas = buscaCampanhaNormalizada
     ? agregadas.filter((c) => c.nome.toLowerCase().includes(buscaCampanhaNormalizada))
     : agregadas
+  const custoRegistro = gastoTotal > 0 && registros > 0 ? gastoTotal / registros : null
+  const custoFtd = gastoTotal > 0 && ftds > 0 ? gastoTotal / ftds : null
 
   function toggleCampanha(nome: string) {
     const configAtual = getState().flowTagConfigs[flowId]
@@ -295,6 +325,23 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
     const atuais = configAtual.campanhasMeta ?? []
     const novas = atuais.includes(nome) ? atuais.filter((n) => n !== nome) : [...atuais, nome]
     updateFlowTagConfig({ ...configAtual, campanhasMeta: novas })
+  }
+
+  function adicionarKpiCusto() {
+    if (!tagEscolhidaCusto) return
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    const novo: KpiCusto = { id: crypto.randomUUID(), nome: nomeKpiCustoNovo.trim() || `Custo ${tagEscolhidaCusto}`, tag: tagEscolhidaCusto }
+    updateFlowTagConfig({ ...configAtual, kpisCusto: [...(configAtual.kpisCusto ?? []), novo] })
+    setTagEscolhidaCusto('')
+    setNomeKpiCustoNovo('')
+    setFormKpiCustoAberto(false)
+  }
+
+  function removerKpiCusto(id: string) {
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    updateFlowTagConfig({ ...configAtual, kpisCusto: (configAtual.kpisCusto ?? []).filter((k) => k.id !== id) })
   }
 
   return (
@@ -313,10 +360,14 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
           </button>
         )}
       </div>
-      <MetricaTile
-        label={`Gasto${campanhasAtribuidas.length > 0 ? ` (${campanhasAtribuidas.length} camp.)` : ''}`}
-        value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
-      />
+      <div className="grid grid-cols-3 gap-2">
+        <MetricaTile
+          label={`Gasto${campanhasAtribuidas.length > 0 ? ` (${campanhasAtribuidas.length} camp.)` : ''}`}
+          value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
+        />
+        <MetricaTile label="Custo/Reg" value={custoRegistro === null ? '—' : formatMoeda(custoRegistro)} />
+        <MetricaTile label="Custo/FTD" value={custoFtd === null ? '—' : formatMoeda(custoFtd)} />
+      </div>
       {editavel && checklistAberto && (
         <div className="space-y-1.5">
           {campanhas !== null && agregadas.length > 0 && (
@@ -352,6 +403,76 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {editavel && (
+        <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+            <Calculator size={12} />
+            KPIs de custo
+          </span>
+          <button
+            onClick={() => setFormKpiCustoAberto((v) => !v)}
+            className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <Plus size={11} />
+            Novo KPI
+          </button>
+        </div>
+      )}
+      {editavel && formKpiCustoAberto && (
+        <div className="flex items-center gap-1.5 flex-wrap p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+          <select
+            value={tagEscolhidaCusto}
+            onChange={(e) => setTagEscolhidaCusto(e.target.value)}
+            className="text-[11px] bg-[var(--bg-surface)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
+          >
+            <option value="">Selecione uma tag...</option>
+            {tags.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={nomeKpiCustoNovo}
+            onChange={(e) => setNomeKpiCustoNovo(e.target.value)}
+            placeholder="Nome do KPI (opcional)"
+            className="text-[11px] bg-[var(--bg-surface)] border border-[var(--border)] rounded px-1.5 py-1 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] flex-1 min-w-[120px] outline-none"
+          />
+          <button
+            onClick={adicionarKpiCusto}
+            disabled={!tagEscolhidaCusto}
+            className="text-[11px] font-medium px-2 py-1 rounded disabled:opacity-40 text-white transition-opacity"
+            style={{ backgroundColor: 'var(--d1)' }}
+          >
+            Adicionar
+          </button>
+          <button onClick={() => setFormKpiCustoAberto(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+      {kpisCusto.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {kpisCusto.map((kpi) => {
+            const contagem = contagensPorTag[kpi.tag] ?? 0
+            const custo = gastoTotal > 0 && contagem > 0 ? gastoTotal / contagem : null
+            return (
+              <div key={kpi.id} className="relative">
+                <MetricaTile label={kpi.nome} value={custo === null ? '—' : formatMoeda(custo)} />
+                {editavel && (
+                  <button
+                    onClick={() => removerKpiCusto(kpi.id)}
+                    title="Remover KPI"
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[var(--bg-elevated)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -682,7 +803,17 @@ export function PainelConversasFluxo({
                         {botId && tag && flowId && (
                           <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataComparacao} dataFim={dataComparacao} />
                         )}
-                        {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataComparacao} dataFim={dataComparacao} />}
+                        {flowId && (
+                          <BlocoGastoMeta
+                            flowId={flowId}
+                            dataInicio={dataComparacao}
+                            dataFim={dataComparacao}
+                            registros={resultadoDiaComparacao?.registros ?? 0}
+                            ftds={resultadoDiaComparacao?.ftds ?? 0}
+                            tags={tags}
+                            contagensPorTag={leadsPorTagComparacao ?? {}}
+                          />
+                        )}
                         <BlocoFunilChart estagios={estagiosComparacao} cor={cor} />
                       </>
                     )}
@@ -693,7 +824,18 @@ export function PainelConversasFluxo({
                     {botId && tag && flowId && (
                       <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
                     )}
-                    {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} editavel />}
+                    {flowId && (
+                      <BlocoGastoMeta
+                        flowId={flowId}
+                        dataInicio={dataInicio}
+                        dataFim={dataReferencia}
+                        registros={registros}
+                        ftds={ftds}
+                        tags={tags}
+                        contagensPorTag={contagensPorTag}
+                        editavel
+                      />
+                    )}
                     <BlocoFunilChart estagios={estagios} cor={cor} />
                   </div>
                 </div>
@@ -703,7 +845,18 @@ export function PainelConversasFluxo({
                   {botId && tag && flowId && (
                     <BlocoKpisBotao kpis={kpisBotao} botId={botId} tag={tag} flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} onRemover={removerKpiBotao} />
                   )}
-                  {flowId && <BlocoGastoMeta flowId={flowId} dataInicio={dataInicio} dataFim={dataReferencia} editavel />}
+                  {flowId && (
+                    <BlocoGastoMeta
+                      flowId={flowId}
+                      dataInicio={dataInicio}
+                      dataFim={dataReferencia}
+                      registros={registros}
+                      ftds={ftds}
+                      tags={tags}
+                      contagensPorTag={contagensPorTag}
+                      editavel
+                    />
+                  )}
                   <BlocoFunilChart estagios={estagios} cor={cor} />
                 </>
               )}

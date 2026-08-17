@@ -357,6 +357,15 @@ export interface FlowTagConfig {
    * Detalhes) — usado pra somar o gasto do funil no período, sem tentar adivinhar por regex
    * (nomes de campanha têm padrão inconsistente e ambíguo entre funis diferentes). */
   campanhasMeta?: string[]
+  /** KPIs customizados de custo por etapa da jornada — escolhe uma tag do fluxo e calcula
+   * gasto (Meta) ÷ leads com aquela tag, ex: "custo por CTA". Ver painel de Detalhes. */
+  kpisCusto?: KpiCusto[]
+}
+
+export interface KpiCusto {
+  id: string
+  nome: string
+  tag: string
 }
 
 export interface KpiBotao {

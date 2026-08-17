@@ -99,6 +99,7 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   comentarios: text('comentarios'),
   kpisBotao: jsonb('kpis_botao').default('[]'),
   campanhasMeta: jsonb('campanhas_meta').default('[]'),
+  kpisCusto: jsonb('kpis_custo').default('[]'),
 })
 
 export const demandas = pgTable('demandas', {
