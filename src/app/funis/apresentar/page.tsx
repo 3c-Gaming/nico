@@ -10,6 +10,7 @@ import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import type { FlowTagConfig } from '@/types'
+import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
 const PALETA_CORES = ['var(--d1)', 'var(--pontual)', 'var(--d3)', 'var(--d5)', 'var(--d7)', 'var(--success)']
@@ -20,6 +21,18 @@ function formatInt(n: number): string {
 
 function formatPercent(n: number | null): string {
   return n === null ? '—' : `${n.toFixed(1)}%`
+}
+
+function formatMoeda(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/** Soma o gasto das campanhas do Meta atribuídas manualmente a esse funil (ver painel de
+ * Detalhes) — campanhas não atribuídas ou nomes que não aparecem no período não contam. */
+function gastoDoFunil(campanhasMeta: string[] | undefined, campanhas: CampanhaMeta[]): number {
+  if (!campanhasMeta || campanhasMeta.length === 0) return 0
+  const atribuidas = new Set(campanhasMeta)
+  return campanhas.filter((c) => atribuidas.has(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
 }
 
 function formatDataExtenso(data: string): string {
@@ -94,6 +107,7 @@ function FunisApresentarInner() {
   const [leadsPorTagPorDia, setLeadsPorTagPorDia] = useState<Record<string, Record<string, number>>>({})
   const [leadHubConcluido, setLeadHubConcluido] = useState(false)
   const [leadHubProgresso, setLeadHubProgresso] = useState<ProgressoLeadHub | null>(null)
+  const [campanhasMetaDoPeriodo, setCampanhasMetaDoPeriodo] = useState<CampanhaMeta[] | null>(null)
 
   const datas = useMemo(() => {
     if (!inicio || !fim) return []
@@ -141,6 +155,21 @@ function FunisApresentarInner() {
     return () => { ativo = false }
   }, [linhas, datas, erroIntervalo])
 
+  // Uma chamada só pro período inteiro — cada campanha do Meta já vem com a data, então não
+  // precisa buscar dia a dia como resultadosPorDia (que depende do LeadHub, sem esse endpoint).
+  useEffect(() => {
+    if (!inicio || !fim || erroIntervalo) return
+    let ativo = true
+    fetch(`/api/meta-ads/campanhas?from=${inicio}&to=${fim}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ativo) return
+        if (data.error) return
+        setCampanhasMetaDoPeriodo(data.campanhas ?? [])
+      })
+    return () => { ativo = false }
+  }, [inicio, fim, erroIntervalo])
+
   const tagsUnicas = useMemo(() => (linhas ? [...new Set(linhas.flatMap((l) => l.tags))] : []), [linhas])
   const leadHubCarregando = tagsUnicas.length > 0 && !leadHubConcluido
 
@@ -166,10 +195,11 @@ function FunisApresentarInner() {
   )
 
   const totais = useMemo(() => {
-    if (!linhas) return { leads: 0, registros: 0, ftds: 0 }
+    if (!linhas) return { leads: 0, registros: 0, ftds: 0, gasto: 0 }
     let leads = 0
     let registros = 0
     let ftds = 0
+    let gasto = 0
     for (const data of datas) {
       const dia = resultadosPorDia.get(data)
       if (!dia) continue
@@ -180,10 +210,14 @@ function FunisApresentarInner() {
         ftds += r.ftds
       }
     }
-    return { leads, registros, ftds }
-  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
+    if (campanhasMetaDoPeriodo) {
+      for (const linha of linhas) gasto += gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo)
+    }
+    return { leads, registros, ftds, gasto }
+  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia, campanhasMetaDoPeriodo])
 
   const convFtdMedia = totais.registros > 0 ? (totais.ftds / totais.registros) * 100 : null
+  const temCampanhasConfiguradas = (linhas ?? []).some((l) => (l.campanhasMeta ?? []).length > 0)
   const periodoLabel = inicio === fim ? inicio : `${inicio} até ${fim}`
 
   const { list: casasList } = useCasasAposta()
@@ -211,9 +245,12 @@ function FunisApresentarInner() {
       }
       const convFtd = registros > 0 ? (ftds / registros) * 100 : null
       const convLeadReg = leads > 0 ? (registros / leads) * 100 : null
-      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd, convLeadReg }
+      const gasto = campanhasMetaDoPeriodo ? gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo) : 0
+      const custoRegistro = registros > 0 && gasto > 0 ? gasto / registros : null
+      const custoFtd = ftds > 0 && gasto > 0 ? gasto / ftds : null
+      return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd, convLeadReg, gasto, custoRegistro, custoFtd }
     })
-  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia])
+  }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia, campanhasMetaDoPeriodo])
 
   const rankingPeriodo = useMemo(
     () => rankearFunis(totaisPorFunil).filter((r) => r.score > 0).slice(0, 2),
@@ -354,11 +391,14 @@ function FunisApresentarInner() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${temCampanhasConfiguradas ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
           <ResumoTile label="Leads" value={totais.leads} loading={leadHubCarregando} />
           <ResumoTile label="Registros" value={totais.registros} />
           <ResumoTile label="FTDs" value={totais.ftds} />
           <ResumoTile label="Conv. FTD" value={convFtdMedia === null ? 0 : convFtdMedia} suffix="%" decimals={1} />
+          {temCampanhasConfiguradas && (
+            <ResumoTile label="Gasto (Meta)" value={totais.gasto} formatador={formatMoeda} loading={campanhasMetaDoPeriodo === null} />
+          )}
         </div>
 
         {rankingPeriodo.length > 0 && (
@@ -408,6 +448,13 @@ function FunisApresentarInner() {
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">FTDs</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Lead → Reg %</th>
                   <th className="px-3 py-2 lg:py-3 font-medium text-right">Conv. Reg → FTD %</th>
+                  {temCampanhasConfiguradas && (
+                    <>
+                      <th className="px-3 py-2 lg:py-3 font-medium text-right">Gasto (Meta)</th>
+                      <th className="px-3 py-2 lg:py-3 font-medium text-right">Custo/Reg</th>
+                      <th className="px-3 py-2 lg:py-3 font-medium text-right">Custo/FTD</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -433,6 +480,13 @@ function FunisApresentarInner() {
                       <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatInt(f.ftds)}</td>
                       <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatPercent(f.convLeadReg)}</td>
                       <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{formatPercent(f.convFtd)}</td>
+                      {temCampanhasConfiguradas && (
+                        <>
+                          <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{f.gasto > 0 ? formatMoeda(f.gasto) : '—'}</td>
+                          <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{f.custoRegistro === null ? '—' : formatMoeda(f.custoRegistro)}</td>
+                          <td className="px-3 py-2 lg:py-3 text-right text-[var(--text-primary)]">{f.custoFtd === null ? '—' : formatMoeda(f.custoFtd)}</td>
+                        </>
+                      )}
                     </tr>
                   )
                 })}
@@ -506,14 +560,14 @@ function FunisApresentarInner() {
   )
 }
 
-function ResumoTile({ label, value, suffix, decimals, loading }: { label: string; value: number; suffix?: string; decimals?: number; loading?: boolean }) {
+function ResumoTile({ label, value, suffix, decimals, loading, formatador }: { label: string; value: number; suffix?: string; decimals?: number; loading?: boolean; formatador?: (v: number) => string }) {
   return (
     <div className="rounded-xl glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4 lg:p-6 text-center flex flex-col items-center gap-1 lg:gap-2">
       {loading ? (
         <Loader2 size={20} className="lg:w-7 lg:h-7 animate-spin text-[var(--text-muted)] my-1" />
       ) : (
         <span className="text-xl md:text-2xl lg:text-4xl font-bold text-[var(--text-primary)]">
-          {decimals ? value.toFixed(decimals) : formatInt(value)}
+          {formatador ? formatador(value) : decimals ? value.toFixed(decimals) : formatInt(value)}
           {suffix ?? ''}
         </span>
       )}

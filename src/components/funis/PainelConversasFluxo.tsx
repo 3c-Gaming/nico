@@ -258,6 +258,7 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
   const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
   const [erro, setErro] = useState(false)
   const [checklistAberto, setChecklistAberto] = useState(false)
+  const [buscaCampanha, setBuscaCampanha] = useState('')
 
   useEffect(() => {
     // Guarda contra a dupla invocação do StrictMode em dev: sem isso, se a primeira chamada
@@ -283,6 +284,10 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
 
   const agregadas = useMemo(() => (campanhas ? agregarCampanhasPorNome(campanhas) : []), [campanhas])
   const gastoTotal = agregadas.filter((c) => campanhasAtribuidas.includes(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
+  const buscaCampanhaNormalizada = buscaCampanha.trim().toLowerCase()
+  const agregadasFiltradas = buscaCampanhaNormalizada
+    ? agregadas.filter((c) => c.nome.toLowerCase().includes(buscaCampanhaNormalizada))
+    : agregadas
 
   function toggleCampanha(nome: string) {
     const configAtual = getState().flowTagConfigs[flowId]
@@ -313,27 +318,40 @@ function BlocoGastoMeta({ flowId, dataInicio, dataFim, editavel }: { flowId: str
         value={erro ? '—' : campanhas === null ? '···' : formatMoeda(gastoTotal)}
       />
       {editavel && checklistAberto && (
-        <div className="max-h-56 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
-          {campanhas === null ? (
-            <div className="flex items-center justify-center py-6">
-              <Spinner size={16} />
-            </div>
-          ) : agregadas.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)]">Nenhuma campanha encontrada nesse período.</p>
-          ) : (
-            agregadas.map((c) => (
-              <label key={c.nome} className="flex items-center gap-2 text-[11px] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={campanhasAtribuidas.includes(c.nome)}
-                  onChange={() => toggleCampanha(c.nome)}
-                  className="shrink-0"
-                />
-                <span className="flex-1 truncate text-[var(--text-secondary)]" title={c.nome}>{c.nome}</span>
-                <span className="font-mono text-[var(--text-muted)] shrink-0">{formatMoeda(c.gasto)}</span>
-              </label>
-            ))
+        <div className="space-y-1.5">
+          {campanhas !== null && agregadas.length > 0 && (
+            <input
+              type="text"
+              value={buscaCampanha}
+              onChange={(e) => setBuscaCampanha(e.target.value)}
+              placeholder="Buscar campanha..."
+              className="w-full text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-2 py-1.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+            />
           )}
+          <div className="max-h-56 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+            {campanhas === null ? (
+              <div className="flex items-center justify-center py-6">
+                <Spinner size={16} />
+              </div>
+            ) : agregadas.length === 0 ? (
+              <p className="text-[11px] text-[var(--text-muted)]">Nenhuma campanha encontrada nesse período.</p>
+            ) : agregadasFiltradas.length === 0 ? (
+              <p className="text-[11px] text-[var(--text-muted)]">Nenhuma campanha bate com essa busca.</p>
+            ) : (
+              agregadasFiltradas.map((c) => (
+                <label key={c.nome} className="flex items-center gap-2 text-[11px] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={campanhasAtribuidas.includes(c.nome)}
+                    onChange={() => toggleCampanha(c.nome)}
+                    className="shrink-0"
+                  />
+                  <span className="flex-1 truncate text-[var(--text-secondary)]" title={c.nome}>{c.nome}</span>
+                  <span className="font-mono text-[var(--text-muted)] shrink-0">{formatMoeda(c.gasto)}</span>
+                </label>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
