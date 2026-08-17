@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, Calculator, GitCompare } from 'lucide-react'
+import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays, Plus, MousePointerClick, Copy, Check, DollarSign, GitCompare } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
@@ -351,12 +351,21 @@ function BlocoGastoMeta({
           Gasto em Ads (Meta)
         </span>
         {editavel && (
-          <button
-            onClick={() => setChecklistAberto((v) => !v)}
-            className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            {checklistAberto ? 'Fechar' : 'Atribuir campanhas'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setFormKpiCustoAberto((v) => !v)}
+              className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <Plus size={11} />
+              Novo KPI
+            </button>
+            <button
+              onClick={() => setChecklistAberto((v) => !v)}
+              className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              {checklistAberto ? 'Fechar' : 'Atribuir campanhas'}
+            </button>
+          </div>
         )}
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -405,21 +414,6 @@ function BlocoGastoMeta({
         </div>
       )}
 
-      {editavel && (
-        <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1">
-          <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
-            <Calculator size={12} />
-            KPIs de custo
-          </span>
-          <button
-            onClick={() => setFormKpiCustoAberto((v) => !v)}
-            className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            <Plus size={11} />
-            Novo KPI
-          </button>
-        </div>
-      )}
       {editavel && formKpiCustoAberto && (
         <div className="flex items-center gap-1.5 flex-wrap p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
           <select
