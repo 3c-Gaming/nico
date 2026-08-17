@@ -797,7 +797,13 @@ export function PainelConversasFluxo({
           >
             <div className="flex items-center justify-between px-4 py-3.5 border-[var(--border)]">
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{flowNome || 'Detalhes'}</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                  {flowNome || 'Detalhes'}
+                  {funisComparados.map((fid) => {
+                    const config = todosFunis.find((f) => f.flowId === fid)
+                    return config ? <span key={fid} className="text-[var(--text-muted)]"> vs {config.funil}</span> : null
+                  })}
+                </h2>
                 <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Período: {periodoLabel}</p>
                 {flowId && (
                   <button
@@ -816,13 +822,13 @@ export function PainelConversasFluxo({
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                <span className="text-xs font-medium text-[var(--text-muted)]">Comparar com outro dia</span>
+                <span className="text-xs font-medium text-[var(--text-primary)]">Comparar com outro dia</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => alternarDataComparacao(dataOntem)}
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataOntem
                       ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
-                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-primary)]'
                       }`}
                   >
                     Ontem
@@ -831,12 +837,12 @@ export function PainelConversasFluxo({
                     onClick={() => alternarDataComparacao(dataSemanaPassada)}
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${dataComparacao === dataSemanaPassada
                       ? 'bg-[var(--d1)]/15 border-[var(--d1)]/40 text-[var(--d1)]'
-                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-primary)]'
                       }`}
                   >
                     Mesma data sem. passada
                   </button>
-                  <label className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-muted)] cursor-pointer">
+                  <label className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--bg-elevated)] border-[var(--border)] text-[var(--text-primary)] cursor-pointer">
                     <CalendarDays size={11} />
                     <input
                       type="date"
@@ -856,7 +862,7 @@ export function PainelConversasFluxo({
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-primary)]">
                     <GitCompare size={12} />
                     Comparar com outro funil
                   </span>
