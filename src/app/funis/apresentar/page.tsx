@@ -27,12 +27,30 @@ function formatMoeda(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+/** Quantos funis dessa comparação têm cada campanha atribuída — uma mesma campanha do Meta pode
+ * ter rodado pra vários funis ao mesmo tempo (ex: um anúncio que manda pra 4 variantes de teste).
+ * Nesse caso o gasto dela não pode ser contado inteiro em cada funil, senão o total da comparação
+ * fica multiplicado pelo número de funis que compartilham a campanha. */
+function contarFunisPorCampanha(linhas: { campanhasMeta?: string[] }[]): Map<string, number> {
+  const contagem = new Map<string, number>()
+  for (const linha of linhas) {
+    for (const nome of linha.campanhasMeta ?? []) {
+      contagem.set(nome, (contagem.get(nome) ?? 0) + 1)
+    }
+  }
+  return contagem
+}
+
 /** Soma o gasto das campanhas do Meta atribuídas manualmente a esse funil (ver painel de
- * Detalhes) — campanhas não atribuídas ou nomes que não aparecem no período não contam. */
-function gastoDoFunil(campanhasMeta: string[] | undefined, campanhas: CampanhaMeta[]): number {
+ * Detalhes) — campanhas não atribuídas ou nomes que não aparecem no período não contam. Campanhas
+ * compartilhadas com outros funis da mesma comparação (ver contarFunisPorCampanha) têm o gasto
+ * dividido entre eles, pra não contar o mesmo real gasto mais de uma vez no total. */
+function gastoDoFunil(campanhasMeta: string[] | undefined, campanhas: CampanhaMeta[], funisPorCampanha: Map<string, number>): number {
   if (!campanhasMeta || campanhasMeta.length === 0) return 0
   const atribuidas = new Set(campanhasMeta)
-  return campanhas.filter((c) => atribuidas.has(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
+  return campanhas
+    .filter((c) => atribuidas.has(c.nome))
+    .reduce((soma, c) => soma + c.gasto / (funisPorCampanha.get(c.nome) ?? 1), 0)
 }
 
 function formatDataExtenso(data: string): string {
@@ -211,7 +229,8 @@ function FunisApresentarInner() {
       }
     }
     if (campanhasMetaDoPeriodo) {
-      for (const linha of linhas) gasto += gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo)
+      const funisPorCampanha = contarFunisPorCampanha(linhas)
+      for (const linha of linhas) gasto += gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha)
     }
     return { leads, registros, ftds, gasto }
   }, [linhas, datas, resultadosPorDia, leadsDoFunilNoDia, campanhasMetaDoPeriodo])
@@ -231,6 +250,7 @@ function FunisApresentarInner() {
 
   const totaisPorFunil = useMemo(() => {
     if (!linhas) return []
+    const funisPorCampanha = contarFunisPorCampanha(linhas)
     return linhas.map((linha) => {
       let leads = 0
       let registros = 0
@@ -245,7 +265,7 @@ function FunisApresentarInner() {
       }
       const convFtd = registros > 0 ? (ftds / registros) * 100 : null
       const convLeadReg = leads > 0 ? (registros / leads) * 100 : null
-      const gasto = campanhasMetaDoPeriodo ? gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo) : 0
+      const gasto = campanhasMetaDoPeriodo ? gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha) : 0
       const custoRegistro = registros > 0 && gasto > 0 ? gasto / registros : null
       const custoFtd = ftds > 0 && gasto > 0 ? gasto / ftds : null
       return { flowId: linha.flowId, nomeFunil: linha.nomeFunil, leads, registros, ftds, convFtd, convLeadReg, gasto, custoRegistro, custoFtd }
