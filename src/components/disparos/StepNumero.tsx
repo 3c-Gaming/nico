@@ -44,9 +44,9 @@ export function StepNumero({ numeros: selected, onChange }: StepNumeroProps) {
       } catch {
         setOffline(true)
         setNumeros([
-          { id: 'num_001', numero: '+5511999990000', nome: 'SB Receptivo ODD 100x', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
-          { id: 'num_002', numero: '+5511999991111', nome: 'MGM Geral', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
-          { id: 'num_003', numero: '+5511999992222', nome: 'Esportiva Bet VIP', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
+          { id: 'num_001', canal: 'whatsapp', numero: '+5511999990000', nome: 'SB Receptivo ODD 100x', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
+          { id: 'num_002', canal: 'whatsapp', numero: '+5511999991111', nome: 'MGM Geral', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
+          { id: 'num_003', canal: 'whatsapp', numero: '+5511999992222', nome: 'Esportiva Bet VIP', status: 'ativo', inboxTotal: 0, inboxNaoLidas: 0 },
         ])
       } finally {
         setLoading(false)
@@ -69,6 +69,7 @@ export function StepNumero({ numeros: selected, onChange }: StepNumeroProps) {
     if (!val) return
     const novo: NumeroSendpulse = {
       id: crypto.randomUUID(),
+      canal: 'whatsapp',
       numero: val,
       nome: '',
       status: 'inativo',

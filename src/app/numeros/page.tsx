@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check, Eye, EyeOff } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check, Eye, EyeOff, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
@@ -80,7 +80,7 @@ function UltimaAtualizacao({ iso }: { iso: string }) {
   return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: string; aberto: boolean }) {
+function FluxosLinha({ botId, identificador, canal, aberto }: { botId: string; identificador: string; canal: 'whatsapp' | 'telegram'; aberto: boolean }) {
   const router = useRouter()
   const [fluxos, setFluxos] = useState<FluxoSendpulse[] | null>(null)
   const [carregando, setCarregando] = useState(false)
@@ -249,7 +249,9 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
                         </td>
                         <td className="py-2 px-2 text-center">
                           <a
-                            href={`https://wa.pulse.is/${telefone}?start=${fluxo.id}&text=Start`}
+                            href={canal === 'telegram'
+                              ? `https://t.me/${identificador.replace(/^@/, '')}?start=${fluxo.id}`
+                              : `https://wa.pulse.is/${identificador}?start=${fluxo.id}&text=Start`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center px-2 py-1 rounded text-[11px] font-medium text-[var(--d3)] hover:bg-[var(--d3)]/10 transition-colors"
@@ -267,6 +269,98 @@ function FluxosLinha({ botId, telefone, aberto }: { botId: string; telefone: str
         </div>
       </td>
     </tr>
+  )
+}
+
+/** Bots de Telegram da SendPulse — listagem simples e fluxos expansíveis, no mesmo espírito da
+ * tabela de WhatsApp acima, mas sem "Testar bot"/status online-de-verdade (health-check só existe
+ * pra WhatsApp hoje, via um gateway totalmente separado) nem "Leads hoje" (a contagem por tag
+ * também só está calibrada pra WhatsApp). Busca própria, independente de useMonitoramento. */
+function TelegramBotsSecao() {
+  const [numeros, setNumeros] = useState<NumeroSendpulse[] | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let ativo = true
+    fetch('/api/sendpulse/numeros?canal=telegram')
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => { if (ativo) setNumeros(json.numeros ?? []) })
+      .catch(() => { if (ativo) setErro('Erro ao carregar bots de Telegram') })
+    return () => { ativo = false }
+  }, [])
+
+  if (numeros === null && !erro) {
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner size={20} />
+      </div>
+    )
+  }
+  if (erro) {
+    return <div className="text-xs text-[var(--error)]">{erro}</div>
+  }
+  if (numeros!.length === 0) {
+    return <div className="text-sm text-[var(--text-muted)]">Nenhum bot de Telegram encontrado na SendPulse.</div>
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-[var(--glass-border)]">
+            <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome / Usuário</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bot ID</th>
+            <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis Ativos</th>
+            <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Inbox</th>
+          </tr>
+        </thead>
+        <tbody>
+          {numeros!.map((num) => {
+            const isExpanded = expandedId === num.id
+            const ativos = Object.values(getState().flowTagConfigs).filter((c) => c.botId === num.id && c.tags?.length).length
+            return (
+              <Fragment key={num.id}>
+                <tr
+                  className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors cursor-pointer"
+                  onClick={() => setExpandedId(isExpanded ? null : num.id)}
+                >
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />}
+                      <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${num.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`} />
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-[var(--text-primary)]">{num.nome}</span>
+                          {num.contaNome && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                              {num.contaNome}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] font-mono">{num.numero}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono text-[var(--text-muted)]">
+                      {num.id}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <span className="text-[var(--text-primary)] font-semibold">{ativos}</span>
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <span className="text-[var(--text-muted)]">{num.inboxTotal}</span>
+                  </td>
+                </tr>
+                <FluxosLinha botId={num.id} identificador={num.numero} canal="telegram" aberto={isExpanded} />
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -515,7 +609,7 @@ export default function NumerosPage() {
                         </div>
                       </td>
                     </tr>
-                    <FluxosLinha botId={item.numero.id} telefone={item.numero.numero} aberto={isExpanded} />
+                    <FluxosLinha botId={item.numero.id} identificador={item.numero.numero} canal="whatsapp" aberto={isExpanded} />
                     </Fragment>
                     )}
                   )}
@@ -524,6 +618,14 @@ export default function NumerosPage() {
             </div>
           </>
         )}
+
+        <div className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+            <Send size={14} />
+            Bots de Telegram
+          </h2>
+          <TelegramBotsSecao />
+        </div>
       </div>
     </>
   )

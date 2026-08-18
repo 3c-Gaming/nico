@@ -204,6 +204,9 @@ export interface DisparoAgendadoDaxx {
 
 export interface NumeroSendpulse {
   id: string
+  canal: 'whatsapp' | 'telegram'
+  /** Telefone (WhatsApp) ou "@username" (Telegram) — identificador de exibição do bot, formato
+   * depende do canal. */
   numero: string
   nome: string
   descricao?: string

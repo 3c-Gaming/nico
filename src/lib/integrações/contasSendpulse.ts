@@ -64,6 +64,50 @@ export function apiKeyParaBot(botId: string): string {
   return contaParaBot(botId)?.apiKey ?? ''
 }
 
+// botId -> canal ('whatsapp'/'telegram'), populado a cada listarNumerosTodasContas() (REST) —
+// mesma ideia de botIdParaContaId acima, mesma limitação de cache não sobreviver entre invocações
+// serverless isoladas. Default 'whatsapp' pra bot nunca visto (mantém o comportamento de sempre
+// pra quem só conhece bots de WhatsApp).
+const botIdParaCanal = new Map<string, 'whatsapp' | 'telegram'>()
+
+export function registrarCanalDoBot(botId: string, canal: 'whatsapp' | 'telegram') {
+  botIdParaCanal.set(botId, canal)
+}
+
+export function canalParaBot(botId: string): 'whatsapp' | 'telegram' {
+  return botIdParaCanal.get(botId) ?? 'whatsapp'
+}
+
+/** Como comContaDoBot, mas também resolve o canal do bot (whatsapp ou telegram) sem o chamador
+ * precisar saber de antemão — tenta o palpite cacheado (conta + canal) primeiro, senão tenta as
+ * outras combinações até uma responder (mesmo princípio: a SendPulse rejeita bot_id de canal/conta
+ * errada, então sempre acerta, só mais lento a frio). */
+export async function comContaECanalDoBot<T>(
+  botId: string,
+  fn: (apiKey: string, canal: 'whatsapp' | 'telegram') => Promise<T>,
+): Promise<T> {
+  const contas = listarContasSendpulse()
+  const contaPalpite = contaParaBot(botId)
+  const ordemContas = contaPalpite ? [contaPalpite, ...contas.filter((c) => c.id !== contaPalpite.id)] : contas
+  const canalPalpite = canalParaBot(botId)
+  const ordemCanais: ('whatsapp' | 'telegram')[] = canalPalpite === 'telegram' ? ['telegram', 'whatsapp'] : ['whatsapp', 'telegram']
+
+  let ultimoErro: unknown
+  for (const conta of ordemContas) {
+    for (const canal of ordemCanais) {
+      try {
+        const valor = await fn(conta.apiKey, canal)
+        registrarContaDoBot(botId, conta.id)
+        registrarCanalDoBot(botId, canal)
+        return valor
+      } catch (err) {
+        ultimoErro = err
+      }
+    }
+  }
+  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta/canal SendPulse reconheceu o bot ${botId}`)
+}
+
 /** Cada rota da API roda como uma function serverless isolada na Vercel — o cache em
  * memória de botIdParaContaId só é confiável DENTRO da mesma invocação (ex: dentro de
  * listarNumerosTodasContas -> processarBot, no mesmo request). Uma rota chamada

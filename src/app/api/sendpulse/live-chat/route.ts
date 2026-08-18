@@ -81,7 +81,7 @@ async function fetchAllBots(): Promise<DadosMonitoramento> {
     for (const r of resultados) {
       dados.push(
         r.status === 'fulfilled' ? r.value : {
-          numero: { id: '', numero: '', nome: 'Erro', status: 'inativo' as const, inboxTotal: 0, inboxNaoLidas: 0 },
+          numero: { id: '', canal: 'whatsapp' as const, numero: '', nome: 'Erro', status: 'inativo' as const, inboxTotal: 0, inboxNaoLidas: 0 },
           chats: [], totalConversas: 0, leadsHoje: 0, totalNaoLidas: 0, volumeUltimos5Min: 0, volumeUltimaHora: 0, volumeHoje: 0, volumeOutbox5Min: 0, chatsScanned: 0, chatsTotal: 0, totalMensagensEnviadas: 0, totalFluxos: 0,
         }
       )

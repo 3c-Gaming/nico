@@ -422,7 +422,7 @@ function FunisPageInner() {
     setError(null)
 
     try {
-      const numRes = await fetch('/api/sendpulse/numeros')
+      const numRes = await fetch('/api/sendpulse/numeros?canal=todos')
       if (!numRes.ok) throw new Error('Erro ao carregar números')
       const numData = await numRes.json()
       const nums: NumeroSendpulse[] = numData.numeros
