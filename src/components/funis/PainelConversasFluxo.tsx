@@ -6,7 +6,7 @@ import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
-import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, type ResultadoLinhaDia } from '@/lib/funis'
+import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, type ResultadoLinhaDia } from '@/lib/funis'
 import type { KpiBotao, KpiCusto, FlowTagConfig, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
@@ -310,7 +310,12 @@ function BlocoGastoMeta({
   )
 
   const agregadas = useMemo(() => (campanhas ? agregarCampanhasPorNome(campanhas) : []), [campanhas])
-  const gastoTotal = agregadas.filter((c) => campanhasAtribuidas.includes(c.nome)).reduce((soma, c) => soma + c.gasto, 0)
+  // Campanhas atribuídas a mais de um funil (ex: mesmo anúncio rodando pra várias variantes de
+  // teste) têm o gasto dividido entre eles — senão o mesmo real gasto conta inteiro em cada funil
+  // que a compartilha. Escopo sempre o sistema inteiro (todos os flowTagConfigs), não só os
+  // funis visíveis nesse painel, pra bater com a listagem de Funis e a tela de comparação.
+  const funisPorCampanha = contarFunisPorCampanha(Object.values(getState().flowTagConfigs))
+  const gastoTotal = campanhas ? gastoDoFunil(campanhasAtribuidas, campanhas, funisPorCampanha) : 0
   const buscaCampanhaNormalizada = buscaCampanha.trim().toLowerCase()
   const agregadasFiltradas = buscaCampanhaNormalizada
     ? agregadas.filter((c) => c.nome.toLowerCase().includes(buscaCampanhaNormalizada))

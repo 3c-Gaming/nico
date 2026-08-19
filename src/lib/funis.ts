@@ -3,6 +3,7 @@
 // 3CGG (registros/FTDs) + SendPulse via sendpulseLeads.ts (leads).
 
 import { contarLeadsIntervalo, type GrupoBotTags } from './sendpulseLeads'
+import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 // Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
 // diferentes) — soma os resultados de todas ao invés de só olhar a principal.
@@ -92,4 +93,30 @@ export function calcularResultadoLinhaNoDia(
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   return { leads, registros, ftds, convFtd, convReg }
+}
+
+/** Quantos funis (do sistema inteiro, não só os visíveis numa tela filtrada) têm cada campanha do
+ * Meta atribuída — uma mesma campanha pode ter rodado pra vários funis ao mesmo tempo (ex: um
+ * anúncio que manda pra 4 variantes de teste). Nesse caso o gasto dela não pode ser contado
+ * inteiro em cada funil, senão o total fica multiplicado pelo número de funis que a compartilham. */
+export function contarFunisPorCampanha(linhas: { campanhasMeta?: string[] }[]): Map<string, number> {
+  const contagem = new Map<string, number>()
+  for (const linha of linhas) {
+    for (const nome of linha.campanhasMeta ?? []) {
+      contagem.set(nome, (contagem.get(nome) ?? 0) + 1)
+    }
+  }
+  return contagem
+}
+
+/** Soma o gasto das campanhas do Meta atribuídas manualmente a esse funil (ver painel de
+ * Detalhes) — campanhas não atribuídas ou nomes que não aparecem no período não contam. Campanhas
+ * compartilhadas com outros funis (ver contarFunisPorCampanha) têm o gasto dividido entre eles,
+ * pra não contar o mesmo real gasto mais de uma vez no total. */
+export function gastoDoFunil(campanhasMeta: string[] | undefined, campanhas: CampanhaMeta[], funisPorCampanha: Map<string, number>): number {
+  if (!campanhasMeta || campanhasMeta.length === 0) return 0
+  const atribuidas = new Set(campanhasMeta)
+  return campanhas
+    .filter((c) => atribuidas.has(c.nome))
+    .reduce((soma, c) => soma + c.gasto / (funisPorCampanha.get(c.nome) ?? 1), 0)
 }

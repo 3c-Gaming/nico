@@ -15,7 +15,9 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
+import { contarFunisPorCampanha, gastoDoFunil } from '@/lib/funis'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
+import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 const POLL_FUNIL_MS = 30_000
 
@@ -345,6 +347,14 @@ interface FunilRow {
   custoPorReg: number
   custoPorFtd: number
   regParaFtd: number
+  // Gasto em Ads (Meta) — só relevante pra funis de tráfego com campanhas atribuídas (ver
+  // "Atribuir campanhas" no painel de Detalhes). Campos separados de baseCusto/custoPorReg/
+  // custoPorFtd acima, que são o custo de disparo interno via DAXX (conceito diferente, só
+  // populado pra tipo 'disparo').
+  gastoMeta: number
+  custoEntradaMeta: number | null
+  custoRegMeta: number | null
+  custoFtdMeta: number | null
   utm: string
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
@@ -373,6 +383,23 @@ export default function HomePage() {
   const [daxxLoaded, setDaxxLoaded] = useState(false)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
   const [flowTagConfigsVersion, setFlowTagConfigsVersion] = useState(0)
+  // Campanhas do Meta no dia selecionado — usado pras colunas de Custo/Entrada, Custo/Reg e
+  // Custo/FTD na tabela "Tráfego", só preenchidas pra funis com campanhas atribuídas (ver
+  // "Atribuir campanhas" no painel de Detalhes). A Home não tem range, só um dia — from/to iguais.
+  const [campanhasMetaDoPeriodo, setCampanhasMetaDoPeriodo] = useState<CampanhaMeta[] | null>(null)
+
+  useEffect(() => {
+    let ativo = true
+    fetch(`/api/meta-ads/campanhas?from=${trackingData}&to=${trackingData}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ativo) return
+        if (data.error) return
+        setCampanhasMetaDoPeriodo(data.campanhas ?? [])
+      })
+      .catch(() => {})
+    return () => { ativo = false }
+  }, [trackingData])
 
   useEffect(() => {
     const s = getState()
@@ -595,6 +622,9 @@ export default function HomePage() {
   const funilRows = useMemo<FunilRow[]>(() => {
     if (!pinnedFunis.length) return []
     const configs = getState().flowTagConfigs
+    // Divisor de gasto compartilhado sobre TODOS os funis do sistema (não só os pinados) — mesmo
+    // escopo usado na tela de Funis e no painel de Detalhes, pra bater com o que já se vê lá.
+    const funisPorCampanha = contarFunisPorCampanha(Object.values(configs))
 
     return pinnedFunis.map((funilNome) => {
       const flowIdsValidos = new Set(Object.values(fluxosMap).flat().map(f => f.id))
@@ -637,6 +667,16 @@ export default function HomePage() {
       const ftds = liveTrackingLoaded
         ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
         : (cache?.ftds ?? 0)
+
+      // Gasto em Ads (Meta) — soma o gasto de cada flowId desse grupo de funil, dividindo entre
+      // funis que compartilham a mesma campanha (mesmo princípio de funis/apresentar e da tela de
+      // Funis: escopo sempre o sistema inteiro, não só os funis pinados).
+      const gastoMeta = campanhasMetaDoPeriodo
+        ? flows.reduce((acc, [, c]) => acc + gastoDoFunil(c.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha), 0)
+        : 0
+      const custoEntradaMeta = gastoMeta > 0 && leadsHoje > 0 ? gastoMeta / leadsHoje : null
+      const custoRegMeta = gastoMeta > 0 && registros > 0 ? gastoMeta / registros : null
+      const custoFtdMeta = gastoMeta > 0 && ftds > 0 ? gastoMeta / ftds : null
 
       // per-bot breakdown (also carries UTM info for base cost matching)
       const porBot = new Map<string, { flowIds: string[]; tagsSet: Set<string>; utms: Set<string> }>()
@@ -777,9 +817,9 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, bots, tipo }
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
 
@@ -787,16 +827,25 @@ export default function HomePage() {
   const trafficRows = funilRows.filter((r) => r.tipo === 'traffic')
 
   const totalTraffic = useMemo(() => {
-    return trafficRows.reduce(
+    const somas = trafficRows.reduce(
       (acc, r) => ({
         leadsHoje: acc.leadsHoje + r.leadsHoje,
         leadsHojeCarregando: acc.leadsHojeCarregando || r.leadsHojeCarregando,
         leadsTotal: acc.leadsTotal + r.leadsTotal,
         registros: acc.registros + r.registros,
         ftds: acc.ftds + r.ftds,
+        gastoMeta: acc.gastoMeta + r.gastoMeta,
       }),
-      { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0 },
+      { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0, gastoMeta: 0 },
     )
+    // Recalculado a partir das somas agregadas (não é média/soma dos custos já calculados por
+    // linha) — matematicamente correto mesmo com denominadores diferentes por funil.
+    return {
+      ...somas,
+      custoEntradaMeta: somas.gastoMeta > 0 && somas.leadsHoje > 0 ? somas.gastoMeta / somas.leadsHoje : null,
+      custoRegMeta: somas.gastoMeta > 0 && somas.registros > 0 ? somas.gastoMeta / somas.registros : null,
+      custoFtdMeta: somas.gastoMeta > 0 && somas.ftds > 0 ? somas.gastoMeta / somas.ftds : null,
+    }
   }, [trafficRows])
 
   const disparosDoModal = useMemo<Disparo[]>(() => {
@@ -1007,6 +1056,25 @@ export default function HomePage() {
               </span>
             )}
           </td>
+          {!isDisparo && (
+            <>
+              <td className="py-3 px-3 text-right">
+                <span className="text-xs font-mono text-[var(--text-muted)]">
+                  {row.custoEntradaMeta === null ? '—' : `R$ ${row.custoEntradaMeta.toFixed(2).replace('.', ',')}`}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className="text-xs font-mono text-[var(--text-muted)]">
+                  {row.custoRegMeta === null ? '—' : `R$ ${row.custoRegMeta.toFixed(2).replace('.', ',')}`}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
+                <span className="text-xs font-mono text-[var(--text-muted)]">
+                  {row.custoFtdMeta === null ? '—' : `R$ ${row.custoFtdMeta.toFixed(2).replace('.', ',')}`}
+                </span>
+              </td>
+            </>
+          )}
           <td className="py-3 px-3">
             <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
               {formatarTempoRelativo(row.ultimoLeadAt).texto}
@@ -1035,7 +1103,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 19 : 12} className="p-0">
+            <td colSpan={isDisparo ? 19 : 15} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1477,6 +1545,9 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Leads hoje">Custo/Entrada</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros">Custo/Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs">Custo/FTD</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1522,6 +1593,21 @@ export default function HomePage() {
                               {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                            {totalTraffic.custoEntradaMeta === null ? '—' : `R$ ${totalTraffic.custoEntradaMeta.toFixed(2).replace('.', ',')}`}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                            {totalTraffic.custoRegMeta === null ? '—' : `R$ ${totalTraffic.custoRegMeta.toFixed(2).replace('.', ',')}`}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                            {totalTraffic.custoFtdMeta === null ? '—' : `R$ ${totalTraffic.custoFtdMeta.toFixed(2).replace('.', ',')}`}
+                          </span>
                         </td>
                         <td className="py-3 px-3" />
                         <td className="py-3 px-3" />

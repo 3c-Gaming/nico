@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
-import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, type ResultadoDia } from '@/lib/funis'
+import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, type ResultadoDia } from '@/lib/funis'
 import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -25,32 +25,6 @@ function formatPercent(n: number | null): string {
 
 function formatMoeda(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-/** Quantos funis dessa comparação têm cada campanha atribuída — uma mesma campanha do Meta pode
- * ter rodado pra vários funis ao mesmo tempo (ex: um anúncio que manda pra 4 variantes de teste).
- * Nesse caso o gasto dela não pode ser contado inteiro em cada funil, senão o total da comparação
- * fica multiplicado pelo número de funis que compartilham a campanha. */
-function contarFunisPorCampanha(linhas: { campanhasMeta?: string[] }[]): Map<string, number> {
-  const contagem = new Map<string, number>()
-  for (const linha of linhas) {
-    for (const nome of linha.campanhasMeta ?? []) {
-      contagem.set(nome, (contagem.get(nome) ?? 0) + 1)
-    }
-  }
-  return contagem
-}
-
-/** Soma o gasto das campanhas do Meta atribuídas manualmente a esse funil (ver painel de
- * Detalhes) — campanhas não atribuídas ou nomes que não aparecem no período não contam. Campanhas
- * compartilhadas com outros funis da mesma comparação (ver contarFunisPorCampanha) têm o gasto
- * dividido entre eles, pra não contar o mesmo real gasto mais de uma vez no total. */
-function gastoDoFunil(campanhasMeta: string[] | undefined, campanhas: CampanhaMeta[], funisPorCampanha: Map<string, number>): number {
-  if (!campanhasMeta || campanhasMeta.length === 0) return 0
-  const atribuidas = new Set(campanhasMeta)
-  return campanhas
-    .filter((c) => atribuidas.has(c.nome))
-    .reduce((soma, c) => soma + c.gasto / (funisPorCampanha.get(c.nome) ?? 1), 0)
 }
 
 function formatDataExtenso(data: string): string {

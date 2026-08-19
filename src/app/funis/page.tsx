@@ -14,8 +14,13 @@ import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
-import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo } from '@/lib/funis'
+import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
+import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
+
+function formatMoeda(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
 function csvCampo(valor: string): string {
   if (valor.includes(',') || valor.includes('"') || valor.includes('\n')) {
@@ -415,6 +420,11 @@ function FunisPageInner() {
   const [trackingLoaded, setTrackingLoaded] = useState(false)
   // flow.id -> ainda esperando a contagem de leads de hoje daquele fluxo especificamente
   const [carregandoFlows, setCarregandoFlows] = useState<Set<string>>(new Set())
+  // Campanhas do Meta no período selecionado — usado pras colunas de Custo/Entrada, Custo/Reg e
+  // Custo/FTD, só preenchidas pra funis com campanhas atribuídas (ver "Atribuir campanhas" no
+  // painel de Detalhes). Uma chamada só pro período inteiro, mesmo padrão de
+  // funis/apresentar/page.tsx.
+  const [campanhasMetaDoPeriodo, setCampanhasMetaDoPeriodo] = useState<CampanhaMeta[] | null>(null)
 
   async function carregarDados() {
     setLoading(!refreshing)
@@ -622,6 +632,26 @@ function FunisPageInner() {
 
     fetchTracking()
   }, [trackingDataInicio, trackingDataFim, saveVersion])
+
+  useEffect(() => {
+    let ativo = true
+    fetch(`/api/meta-ads/campanhas?from=${trackingDataInicio}&to=${trackingDataFim}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ativo) return
+        if (data.error) return
+        setCampanhasMetaDoPeriodo(data.campanhas ?? [])
+      })
+      .catch(() => {})
+    return () => { ativo = false }
+  }, [trackingDataInicio, trackingDataFim])
+
+  // Divisor de gasto compartilhado calculado sobre TODOS os funis do sistema (não só os
+  // filtrados/visíveis) — assim o "quinhão" de uma campanha atribuída a vários funis não muda
+  // conforme o usuário filtra a tela, e bate com o que já se vê no painel de Detalhes. Cálculo
+  // barato (percorre os configs uma vez) — recomputa a cada render em vez de useMemo pra não
+  // depender de getState() (fora do grafo reativo do React) numa lista de dependências.
+  const funisPorCampanha = contarFunisPorCampanha(Object.values(getState().flowTagConfigs))
 
   const flowRows = useMemo(() => {
     const termo = filtroBusca.toLowerCase()
@@ -1149,6 +1179,9 @@ function FunisPageInner() {
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Total de leads do período">Custo/Entrada</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros do período">Custo/Reg</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs do período">Custo/FTD</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                 </tr>
               </thead>
@@ -1300,6 +1333,34 @@ function FunisPageInner() {
                             </span>
                           )}
                         </td>
+                        {(() => {
+                          const campanhasMeta = getState().flowTagConfigs[row.flow.id]?.campanhasMeta
+                          const gasto = campanhasMetaDoPeriodo ? gastoDoFunil(campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha) : 0
+                          const registros = trackingMap[row.flow.id]?.registros ?? 0
+                          const ftds = trackingMap[row.flow.id]?.ftds ?? 0
+                          const custoEntrada = gasto > 0 && row.total > 0 ? gasto / row.total : null
+                          const custoReg = gasto > 0 && registros > 0 ? gasto / registros : null
+                          const custoFtd = gasto > 0 && ftds > 0 ? gasto / ftds : null
+                          return (
+                            <>
+                              <td className="py-3 px-3 text-right">
+                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                  {custoEntrada === null ? '—' : formatMoeda(custoEntrada)}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                  {custoReg === null ? '—' : formatMoeda(custoReg)}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                  {custoFtd === null ? '—' : formatMoeda(custoFtd)}
+                                </span>
+                              </td>
+                            </>
+                          )
+                        })()}
                         <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end gap-0.5">
                             {row.funil && (
@@ -1341,7 +1402,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={14} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={17} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}
