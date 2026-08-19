@@ -969,11 +969,6 @@ export default function HomePage() {
             )}
           </td>
           <td className="py-3 px-3 text-right">
-            <span className={`font-semibold font-mono ${row.leadsTotal > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-              {row.leadsTotal > 0 ? row.leadsTotal.toLocaleString('pt-BR') : '—'}
-            </span>
-          </td>
-          <td className="py-3 px-3 text-right">
             {row.leadsHojeCarregando ? (
               <div className="flex justify-end"><Spinner size={12} /></div>
             ) : (
@@ -1064,17 +1059,17 @@ export default function HomePage() {
                 </span>
               </td>
               <td className="py-3 px-3 text-right">
-                <span className="text-xs font-mono text-[var(--text-muted)]">
+                <span className={`text-xs font-mono ${row.custoEntradaMeta === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                   {row.custoEntradaMeta === null ? '—' : `R$ ${row.custoEntradaMeta.toFixed(2).replace('.', ',')}`}
                 </span>
               </td>
               <td className="py-3 px-3 text-right">
-                <span className="text-xs font-mono text-[var(--text-muted)]">
+                <span className={`text-xs font-mono ${row.custoRegMeta === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                   {row.custoRegMeta === null ? '—' : `R$ ${row.custoRegMeta.toFixed(2).replace('.', ',')}`}
                 </span>
               </td>
               <td className="py-3 px-3 text-right">
-                <span className="text-xs font-mono text-[var(--text-muted)]">
+                <span className={`text-xs font-mono ${row.custoFtdMeta === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                   {row.custoFtdMeta === null ? '—' : `R$ ${row.custoFtdMeta.toFixed(2).replace('.', ',')}`}
                 </span>
               </td>
@@ -1108,7 +1103,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 19 : 16} className="p-0">
+            <td colSpan={isDisparo ? 18 : 15} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1500,7 +1495,6 @@ export default function HomePage() {
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo/Gasto</th>
@@ -1544,7 +1538,6 @@ export default function HomePage() {
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Total histórico de leads da tag">Total</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
@@ -1564,9 +1557,6 @@ export default function HomePage() {
                     <tfoot>
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
                         <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={4}>Total</td>
-                        <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.leadsTotal.toLocaleString('pt-BR')}</span>
-                        </td>
                         <td className="py-3 px-3 text-right">
                           {totalTraffic.leadsHojeCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>

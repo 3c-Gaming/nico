@@ -1350,17 +1350,17 @@ function FunisPageInner() {
                                 </span>
                               </td>
                               <td className="py-3 px-3 text-right">
-                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                <span className={`text-xs font-mono ${custoEntrada === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                                   {custoEntrada === null ? '—' : formatMoeda(custoEntrada)}
                                 </span>
                               </td>
                               <td className="py-3 px-3 text-right">
-                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                <span className={`text-xs font-mono ${custoReg === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                                   {custoReg === null ? '—' : formatMoeda(custoReg)}
                                 </span>
                               </td>
                               <td className="py-3 px-3 text-right">
-                                <span className="text-xs font-mono text-[var(--text-muted)]">
+                                <span className={`text-xs font-mono ${custoFtd === null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                                   {custoFtd === null ? '—' : formatMoeda(custoFtd)}
                                 </span>
                               </td>
