@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { listarContasSendpulse, contaParaBot, registrarContaDoBot, type ContaSendpulse } from '../integrações/contasSendpulse'
+import { listarContasSendpulse, contaParaBot, registrarContaDoBot, canalParaBot, registrarCanalDoBot, type ContaSendpulse } from '../integrações/contasSendpulse'
 
 function headersMCP(conta: ContaSendpulse): Record<string, string> {
   return {
@@ -51,12 +51,12 @@ export interface TagInfo {
   contactCount: number
 }
 
-async function buscarTagsDaConta(conta: ContaSendpulse, botId: string): Promise<TagInfo[]> {
+async function buscarTagsDaConta(conta: ContaSendpulse, botId: string, canal: 'whatsapp' | 'telegram'): Promise<TagInfo[]> {
   const mcp = await getClient(conta)
   const result = await mcp.callTool({
     name: 'chatbots_bots_tags_list',
     arguments: {
-      channel: 'whatsapp',
+      channel: canal,
       botId,
     },
   })
@@ -86,26 +86,33 @@ async function buscarTagsDaConta(conta: ContaSendpulse, botId: string): Promise<
 }
 
 /** Cada rota da API roda isolada como function serverless na Vercel — o palpite de
- * conta (contaParaBot) só é confiável dentro da mesma invocação que populou o cache.
- * Tenta o palpite primeiro e, se a ferramenta MCP der isError (conta errada), tenta as
- * outras contas configuradas em sequência — sempre acerta, mesmo a frio. */
+ * conta/canal (contaParaBot/canalParaBot) só é confiável dentro da mesma invocação que populou o
+ * cache. Tenta o palpite primeiro e, se a ferramenta MCP der isError (conta ou canal errado),
+ * tenta as outras combinações de conta×canal em sequência — sempre acerta, mesmo a frio. Sem
+ * tentar os dois canais, um bot de Telegram nunca resolvia (a chamada saía sempre com
+ * channel: 'whatsapp' fixo) e a lista de tags ficava vazia/"desconectado" pra ele. */
 export async function listarTags(botId: string): Promise<TagInfo[]> {
   const contas = listarContasSendpulse()
   if (!contas.length) return []
-  const palpite = contaParaBot(botId)
-  const ordem = palpite ? [palpite, ...contas.filter((c) => c.id !== palpite.id)] : contas
+  const palpiteConta = contaParaBot(botId)
+  const ordemContas = palpiteConta ? [palpiteConta, ...contas.filter((c) => c.id !== palpiteConta.id)] : contas
+  const palpiteCanal = canalParaBot(botId)
+  const ordemCanais: ('whatsapp' | 'telegram')[] = palpiteCanal === 'telegram' ? ['telegram', 'whatsapp'] : ['whatsapp', 'telegram']
 
   let ultimoErro: unknown
-  for (const conta of ordem) {
-    try {
-      const tags = await buscarTagsDaConta(conta, botId)
-      registrarContaDoBot(botId, conta.id)
-      return tags
-    } catch (err) {
-      ultimoErro = err
+  for (const conta of ordemContas) {
+    for (const canal of ordemCanais) {
+      try {
+        const tags = await buscarTagsDaConta(conta, botId, canal)
+        registrarContaDoBot(botId, conta.id)
+        registrarCanalDoBot(botId, canal)
+        return tags
+      } catch (err) {
+        ultimoErro = err
+      }
     }
   }
-  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta SendPulse reconheceu o bot ${botId}`)
+  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta/canal SendPulse reconheceu o bot ${botId}`)
 }
 
 export async function listAvailableTools(contaId?: string) {
