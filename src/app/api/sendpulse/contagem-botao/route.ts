@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buscarContatosPorTagIntervaloSendpulse } from '@/lib/integrações/sendpulse'
 import { buscarMensagensDoContatoNaConta, filtrarConversaPorFluxo, acharTagDeCliqueLink } from '@/lib/integrações/sendpulseConversaFluxo'
-import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
+import { comContaECanalDoBot } from '@/lib/integrações/contasSendpulse'
 
 // Varre a conversa de TODO lead do período (não só uma amostra) pra contar cliques únicos num
 // botão específico — pode levar mais tempo que as rotas de contagem simples em fluxos com muito
@@ -26,12 +26,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'botId, tag, flowId, botaoTitulo, tipo, dataInicio e dataFim são obrigatórios' }, { status: 400 })
     }
 
-    const contagem = await comContaDoBot(botId, async (apiKey) => {
-      const contatos = await buscarContatosPorTagIntervaloSendpulse(botId, tag, apiKey, dataInicio, dataFim)
+    const contagem = await comContaECanalDoBot(botId, async (apiKey, canal) => {
+      const contatos = await buscarContatosPorTagIntervaloSendpulse(botId, tag, apiKey, dataInicio, dataFim, undefined, canal)
 
       const resolvidos = await Promise.allSettled(
         contatos.map(async (contato) => {
-          const brutas = await buscarMensagensDoContatoNaConta(apiKey, contato.id)
+          const brutas = await buscarMensagensDoContatoNaConta(apiKey, contato.id, canal)
           const mensagens = filtrarConversaPorFluxo(brutas, flowId)
 
           if (tipo === 'link') {

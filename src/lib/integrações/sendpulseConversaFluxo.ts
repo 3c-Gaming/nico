@@ -15,8 +15,15 @@
 // ENVIADO, nunca que foi CLICADO.
 
 import { listarContasSendpulse } from './contasSendpulse'
+import type { Canal } from './sendpulse'
 
-const BASE_URL = 'https://api.sendpulse.com/whatsapp'
+// Mesmo princípio de sendpulse.ts: a SendPulse expõe um namespace REST por canal
+// (/whatsapp/chats/messages, /telegram/chats/messages, etc.) — confirmado ao vivo que um
+// contact_id de Telegram dá 400 "Contact does not exist" no namespace /whatsapp e 200 no
+// /telegram, então cada chamada aqui precisa saber o canal certo do contato/bot em questão.
+function baseUrl(canal: Canal): string {
+  return `https://api.sendpulse.com/${canal}`
+}
 const TAMANHO_PAGINA = 100
 // Trava de segurança — histórico de um único contato não deveria chegar nem perto disso.
 const MAX_MENSAGENS = 2000
@@ -30,12 +37,12 @@ type MensagemBruta = any
 
 /** Busca o histórico completo de mensagens de um contato, já sabendo a API key certa
  * (ex: quando o chamador já tem o botId e resolveu a conta via apiKeyParaBot). */
-export async function buscarMensagensDoContatoNaConta(apiKey: string, contactId: string): Promise<MensagemBruta[]> {
+export async function buscarMensagensDoContatoNaConta(apiKey: string, contactId: string, canal: Canal = 'whatsapp'): Promise<MensagemBruta[]> {
   const todas: MensagemBruta[] = []
   let skip = 0
   while (todas.length < MAX_MENSAGENS) {
     const res = await fetch(
-      `${BASE_URL}/chats/messages?contact_id=${encodeURIComponent(contactId)}&order=asc&size=${TAMANHO_PAGINA}&skip=${skip}`,
+      `${baseUrl(canal)}/chats/messages?contact_id=${encodeURIComponent(contactId)}&order=asc&size=${TAMANHO_PAGINA}&skip=${skip}`,
       { headers: getHeaders(apiKey) },
     )
     if (!res.ok) throw new Error(`Sendpulse chats/messages error ${res.status}`)
@@ -49,19 +56,21 @@ export async function buscarMensagensDoContatoNaConta(apiKey: string, contactId:
   return todas
 }
 
-/** Um contact_id pertence a uma conta SendPulse específica, mas o chamador só tem o
- * contact_id (sem bot_id) — tenta cada conta configurada até uma responder com
- * sucesso, mesmo padrão de obterTelefonePorContactId em integrações/sendpulse.ts. */
+/** Um contact_id pertence a uma conta SendPulse específica e um canal específico, mas o
+ * chamador só tem o contact_id (sem bot_id) — tenta cada combinação de conta×canal até uma
+ * responder com sucesso, mesmo padrão de listarTags em lib/mcp/sendpulse.ts. */
 export async function buscarMensagensDoContato(contactId: string): Promise<MensagemBruta[]> {
   let ultimoErro: unknown
   for (const conta of listarContasSendpulse()) {
-    try {
-      return await buscarMensagensDoContatoNaConta(conta.apiKey, contactId)
-    } catch (err) {
-      ultimoErro = err
+    for (const canal of ['whatsapp', 'telegram'] as const) {
+      try {
+        return await buscarMensagensDoContatoNaConta(conta.apiKey, contactId, canal)
+      } catch (err) {
+        ultimoErro = err
+      }
     }
   }
-  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta SendPulse reconheceu o contato ${contactId}`)
+  throw ultimoErro instanceof Error ? ultimoErro : new Error(`Nenhuma conta/canal SendPulse reconheceu o contato ${contactId}`)
 }
 
 export interface ContatoResumo {
@@ -81,8 +90,9 @@ export async function buscarUltimosContatosPorTag(
   tag: string,
   apiKey: string,
   quantidade: number,
+  canal: Canal = 'whatsapp',
 ): Promise<ContatoResumo[]> {
-  const url = `${BASE_URL}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${quantidade}`
+  const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${quantidade}`
   const res = await fetch(url, { headers: getHeaders(apiKey) })
   if (!res.ok) throw new Error(`Sendpulse getByTag error ${res.status}`)
   const json = await res.json()
@@ -120,7 +130,13 @@ interface Chain {
 }
 
 function extrairChain(msg: MensagemBruta): Chain {
+  // WhatsApp aninha em "chain": { id, block_id }. Telegram devolve os mesmos dados soltos no
+  // nível raiz da mensagem, "chain_id"/"block_id" — confirmado comparando payloads reais dos dois
+  // canais (sem "chain" nenhum na mensagem de Telegram). Sem esse fallback, toda mensagem de
+  // fluxo de Telegram cai como "sem chain" e a correlação com o fluxo (Conversas ao vivo, KPIs de
+  // clique) nunca funciona.
   if (msg.chain?.id) return { chainId: msg.chain.id, blockId: msg.chain.block_id }
+  if (msg.chain_id) return { chainId: msg.chain_id, blockId: msg.block_id }
   return {}
 }
 

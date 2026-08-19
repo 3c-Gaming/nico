@@ -6,7 +6,7 @@ import {
   acharTagDeCliqueLink,
   type MensagemFluxo,
 } from '@/lib/integrações/sendpulseConversaFluxo'
-import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
+import { comContaECanalDoBot } from '@/lib/integrações/contasSendpulse'
 
 export const maxDuration = 60
 
@@ -56,18 +56,17 @@ export async function GET(request: NextRequest) {
   const tagFiltro = request.nextUrl.searchParams.get('tagFiltro') || tag
 
   try {
-    const apiKey = apiKeyParaBot(botId)
-    if (!apiKey) return NextResponse.json({ error: `Nenhuma conta SendPulse reconhece o bot ${botId}` }, { status: 400 })
+    const resolvidos = await comContaECanalDoBot(botId, async (apiKey, canal) => {
+      const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS, canal)
 
-    const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS)
-
-    const resolvidos = await Promise.allSettled(
-      candidatos.map(async (candidato): Promise<LeadComConversa> => {
-        const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId)
-        const mensagens = filtrarConversaPorFluxo(brutas, flowId)
-        return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
-      }),
-    )
+      return Promise.allSettled(
+        candidatos.map(async (candidato): Promise<LeadComConversa> => {
+          const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId, canal)
+          const mensagens = filtrarConversaPorFluxo(brutas, flowId)
+          return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
+        }),
+      )
+    })
 
     // Descarta quem não tem mensagem correlacionável a esse fluxo (ou cuja busca falhou), e
     // ordena por quem respondeu mais recentemente — não pela recência de entrada na tag (que,

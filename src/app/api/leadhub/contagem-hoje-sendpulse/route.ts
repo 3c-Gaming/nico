@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch, invalidate } from '@/lib/cache'
-import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
+import { comContaECanalDoBot } from '@/lib/integrações/contasSendpulse'
 import { contarPorTagHojeSendpulse } from '@/lib/integrações/sendpulse'
 
 const TTL_HOJE = 60_000
@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
           'sendpulse-tag-hoje',
           `${body.botId}:${tag}`,
           TTL_HOJE,
-          () => comContaDoBot(body.botId, (apiKey) =>
-            contarPorTagHojeSendpulse(body.botId, tag, apiKey, AbortSignal.timeout(15_000)),
+          () => comContaECanalDoBot(body.botId, (apiKey, canal) =>
+            contarPorTagHojeSendpulse(body.botId, tag, apiKey, AbortSignal.timeout(15_000), canal),
           ),
         )
         leads[tag] = resultado.hoje

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrFetch, invalidate } from '@/lib/cache'
-import { comContaDoBot } from '@/lib/integrações/contasSendpulse'
+import { comContaECanalDoBot } from '@/lib/integrações/contasSendpulse'
 import { contarPorTagIntervaloSendpulse } from '@/lib/integrações/sendpulse'
 
 const TTL = 60_000
@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
           'sendpulse-tag-intervalo',
           `${body.botId}:${tag}:${body.dataInicio}:${body.dataFim}`,
           TTL,
-          () => comContaDoBot(body.botId, (apiKey) =>
-            contarPorTagIntervaloSendpulse(body.botId, tag, apiKey, body.dataInicio, body.dataFim, AbortSignal.timeout(60_000)),
+          () => comContaECanalDoBot(body.botId, (apiKey, canal) =>
+            contarPorTagIntervaloSendpulse(body.botId, tag, apiKey, body.dataInicio, body.dataFim, AbortSignal.timeout(60_000), canal),
           ),
         )
         leads[tag] = resultado.total

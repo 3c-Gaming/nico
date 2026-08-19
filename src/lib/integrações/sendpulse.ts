@@ -2,7 +2,7 @@ import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasB
 import { listarContasSendpulse, registrarContaDoBot, registrarCanalDoBot, apiKeyParaBot } from './contasSendpulse'
 import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
 
-type Canal = 'whatsapp' | 'telegram'
+export type Canal = 'whatsapp' | 'telegram'
 
 // A SendPulse expõe um namespace REST quase idêntico por canal (confirmado testando ao vivo:
 // /telegram/bots, /telegram/flows e /telegram/bots/statistics respondem com a mesma forma dos
@@ -163,8 +163,8 @@ export interface ContagemTagHoje {
  * acumulados), sem precisar paginar. Pra intervalos de mais de um dia, ver
  * `contarPorTagIntervaloSendpulse` — mesma ideia, mas pagina até cobrir o intervalo inteiro.
  */
-export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiKey: string, signal?: AbortSignal): Promise<ContagemTagHoje> {
-  const url = `${baseUrl('whatsapp')}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=1000`
+export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiKey: string, signal?: AbortSignal, canal: Canal = 'whatsapp'): Promise<ContagemTagHoje> {
+  const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=1000`
   const res = await fetch(url, { headers: getHeaders(apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
@@ -213,13 +213,14 @@ export async function contarPorTagIntervaloSendpulse(
   dataInicio: string,
   dataFim: string,
   signal?: AbortSignal,
+  canal: Canal = 'whatsapp',
 ): Promise<ContagemTagIntervalo> {
   let total = 0
   let ultimoLeadAt: string | null = null
 
   for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
     const skip = pagina * TAMANHO_PAGINA_GETBYTAG
-    const url = `${baseUrl('whatsapp')}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
+    const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
     const res = await fetch(url, { headers: getHeaders(apiKey), signal })
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
@@ -260,12 +261,13 @@ export async function buscarContatosPorTagIntervaloSendpulse(
   dataInicio: string,
   dataFim: string,
   signal?: AbortSignal,
+  canal: Canal = 'whatsapp',
 ): Promise<ContatoNoIntervalo[]> {
   const contatosNoIntervalo: ContatoNoIntervalo[] = []
 
   for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
     const skip = pagina * TAMANHO_PAGINA_GETBYTAG
-    const url = `${baseUrl('whatsapp')}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
+    const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
     const res = await fetch(url, { headers: getHeaders(apiKey), signal })
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
