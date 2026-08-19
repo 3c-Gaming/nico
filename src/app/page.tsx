@@ -15,7 +15,7 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import { contarFunisPorCampanha, gastoDoFunil } from '@/lib/funis'
+import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo } from '@/lib/funis'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -633,14 +633,27 @@ export default function HomePage() {
       const botIds = [...new Set(flows.map(([_, c]) => c.botId))]
       const cache = getState().cacheMetricas[funilNome]
 
+      // Um fluxo acumula várias tags conforme o lead avança na jornada (ver FlowTagEditor) — só a
+      // primeira (tagDeEntradaDoFluxo) representa leads únicos que ENTRARAM; as demais (FC_, CTA_,
+      // COM_ etc.) são o MESMO lead progredindo, não gente nova. Somar todas as tags do funil (como
+      // era antes) multi-contava o mesmo lead uma vez por etapa já cumprida — por isso dois funis
+      // com poucos leads mas várias tags apareciam com números bem maiores que o real (e, por
+      // coincidência de dados, até iguais entre funis diferentes). Soma só a tag de entrada de cada
+      // fluxo do grupo (>1 fluxo quando o mesmo funil roda em mais de um bot).
       const leadsHoje = liveLeadsLoaded
-        ? tags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
+        ? flows.reduce((acc, [, c]) => {
+            const tagEntrada = tagDeEntradaDoFluxo(c.tags)
+            return acc + (tagEntrada ? (contagens[tagEntrada] ?? 0) : 0)
+          }, 0)
         : (cache?.leadsHoje ?? 0)
       // Sem dado ao vivo nem cache pra cair como fallback: mostrar "0" aqui daria a
       // impressão de que já sabemos que é zero, quando na verdade ainda não carregou.
       const leadsHojeCarregando = !liveLeadsLoaded && cache?.leadsHoje == null && tags.length > 0
       const leadsTotal = liveLeadsLoaded
-        ? tags.reduce((acc, t) => acc + (contagensTotal[t] ?? 0), 0)
+        ? flows.reduce((acc, [, c]) => {
+            const tagEntrada = tagDeEntradaDoFluxo(c.tags)
+            return acc + (tagEntrada ? (contagensTotal[tagEntrada] ?? 0) : 0)
+          }, 0)
         : (cache?.totalLeads ?? 0)
       const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
         const ts = ultimoLeadMap[t] ?? null
@@ -795,8 +808,13 @@ export default function HomePage() {
           flowIds: data.flowIds,
           lpUrls: botLpUrls,
           tags: botTags,
+          // Mesmo princípio de leadsHoje acima: soma só a tag de entrada de cada fluxo desse bot,
+          // não todas as tags (senão multi-conta o mesmo lead progredindo na jornada).
           leadsHoje: liveLeadsLoaded
-            ? botTags.reduce((acc, t) => acc + (contagens[t] ?? 0), 0)
+            ? data.flowIds.reduce((acc, fid) => {
+                const tagEntrada = tagDeEntradaDoFluxo(configs[fid]?.tags)
+                return acc + (tagEntrada ? (contagens[tagEntrada] ?? 0) : 0)
+              }, 0)
             : (cache?.leadsHoje ?? 0),
           baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
           baseLinhas: Math.round(baseLinhasPorBot.get(botId) ?? 0),
