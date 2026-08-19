@@ -68,9 +68,12 @@ export function extractText(content: string): string {
   return match ? match[1] : ''
 }
 
-export function replaceDestinations(content: string, destinations: Array<{ phone: string; flowId: string; weight: number }>): string {
+export function replaceDestinations(content: string, destinations: Array<{ phone?: string; flowId: string; weight: number }>): string {
+  const isTelegram = content.includes('goTelegram') || content.includes('tracking-telegram') || content.includes('BOT_USERNAME')
   const newDest = destinations
-    .map(d => `{ phone: "${d.phone}", flowId: "${d.flowId}", weight: ${d.weight} }`)
+    .map(d => isTelegram
+      ? `{ flowId: "${d.flowId}", weight: ${d.weight} }`
+      : `{ phone: "${d.phone || ''}", flowId: "${d.flowId}", weight: ${d.weight} }`)
     .join(', ')
   return content.replace(
     /(?:const|var|let)\s+DESTINATIONS(?::\s*[^=]*)?\s*=\s*\[[\s\S]*?\];/,
