@@ -261,13 +261,18 @@ function showWhatsappView(ctx: Context, pagina: any, paginaIdx: number) {
   texto += `📦 \`${pagina.github_owner}/${pagina.github_repo}\`\n`
   texto = appendCasaFunilInfo(texto, pagina, ctx)
 
+  const isTelegram = pagina.tracking_file?.includes('telegram')
   if (dests.length === 0) {
     texto += '_Nenhum destination configurado_'
   } else {
-    texto += '*Destinos:*\n'
+    texto += isTelegram ? '*Destinos (Telegram):*\n' : '*Destinos:*\n'
     dests.forEach((d: any, i: number) => {
       const flowShort = d.flowId ? '...' + d.flowId.slice(-8) : 'sem flow'
-      texto += `${i + 1}. 📞 \`${d.phone}\` · # \`${flowShort}\` · ${d.weight}%\n`
+      if (isTelegram) {
+        texto += `${i + 1}. 🤖 \`${flowShort}\` · ${d.weight}%\n`
+      } else {
+        texto += `${i + 1}. 📞 \`${d.phone}\` · # \`${flowShort}\` · ${d.weight}%\n`
+      }
     })
     texto += '\n_Clique num destino para editar:_'
   }
