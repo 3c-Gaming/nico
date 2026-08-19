@@ -1059,6 +1059,11 @@ export default function HomePage() {
           {!isDisparo && (
             <>
               <td className="py-3 px-3 text-right">
+                <span className={`text-xs font-mono ${row.gastoMeta > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {row.gastoMeta > 0 ? `R$ ${row.gastoMeta.toFixed(2).replace('.', ',')}` : '—'}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-right">
                 <span className="text-xs font-mono text-[var(--text-muted)]">
                   {row.custoEntradaMeta === null ? '—' : `R$ ${row.custoEntradaMeta.toFixed(2).replace('.', ',')}`}
                 </span>
@@ -1103,7 +1108,7 @@ export default function HomePage() {
         </tr>
         {row.bots.length > 1 && expandedFunis[row.funilNome] && (
           <tr key={`${row.funilNome}-expand`}>
-            <td colSpan={isDisparo ? 19 : 15} className="p-0">
+            <td colSpan={isDisparo ? 19 : 16} className="p-0">
               <div className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
                 <table className="w-full text-xs">
                   <thead>
@@ -1545,6 +1550,7 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em campanhas do Meta atribuídas — dividido entre funis que compartilham a mesma campanha">Gasto</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Leads hoje">Custo/Entrada</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros">Custo/Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs">Custo/FTD</th>
@@ -1593,6 +1599,11 @@ export default function HomePage() {
                               {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                            {totalTraffic.gastoMeta > 0 ? `R$ ${totalTraffic.gastoMeta.toFixed(2).replace('.', ',')}` : '—'}
+                          </span>
                         </td>
                         <td className="py-3 px-3 text-right">
                           <span className="font-bold font-mono text-[var(--text-primary)]">

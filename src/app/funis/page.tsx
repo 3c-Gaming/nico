@@ -1179,6 +1179,7 @@ function FunisPageInner() {
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em campanhas do Meta atribuídas — dividido entre funis que compartilham a mesma campanha">Gasto</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Total de leads do período">Custo/Entrada</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros do período">Custo/Reg</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs do período">Custo/FTD</th>
@@ -1344,6 +1345,11 @@ function FunisPageInner() {
                           return (
                             <>
                               <td className="py-3 px-3 text-right">
+                                <span className={`text-xs font-mono ${gasto > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                                  {gasto > 0 ? formatMoeda(gasto) : '—'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-right">
                                 <span className="text-xs font-mono text-[var(--text-muted)]">
                                   {custoEntrada === null ? '—' : formatMoeda(custoEntrada)}
                                 </span>
@@ -1402,7 +1408,7 @@ function FunisPageInner() {
                       </tr>
                       {isEditing && (
                         <tr>
-                          <td colSpan={17} className="p-0 border-b border-[var(--glass-border)]">
+                          <td colSpan={18} className="p-0 border-b border-[var(--glass-border)]">
                             <div className="px-3 py-3">
                               <FlowTagEditor
                                 flow={row.flow}
