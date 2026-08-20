@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { Loader2, Trophy, ChevronDown, Download } from 'lucide-react'
 import { agruparTagsPorBot } from '@/lib/sendpulseLeads'
 import { buscarLeadsPorDiaLeadHub, type ProgressoLeadHub } from '@/lib/leadhubLeads'
-import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, type ResultadoDia } from '@/lib/funis'
+import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, type ResultadoDia } from '@/lib/funis'
+import { getState } from '@/lib/store'
 import { GraficoLinha, type SerieLinha } from '@/components/ui/GraficoLinha'
 import { GraficoBarraDupla } from '@/components/ui/GraficoBarraDupla'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -188,6 +189,8 @@ function FunisApresentarInner() {
 
   const totais = useMemo(() => {
     if (!linhas) return { leads: 0, registros: 0, ftds: 0, gasto: 0 }
+    const todosConfigs = Object.values(getState().flowTagConfigs)
+    const funisPorUtm = contarFunisPorUtm(todosConfigs)
     let leads = 0
     let registros = 0
     let ftds = 0
@@ -196,14 +199,18 @@ function FunisApresentarInner() {
       const dia = resultadosPorDia.get(data)
       if (!dia) continue
       for (const linha of linhas) {
-        const r = calcularResultadoLinhaNoDia(linha, dia)
+        const r = calcularResultadoLinhaNoDia(linha, dia, funisPorUtm)
         leads += leadsDoFunilNoDia(linha, data)
         registros += r.registros
         ftds += r.ftds
       }
     }
+    // Arredonda só no final — divisão fracionária ao longo do caminho evita erro de
+    // arredondamento acumulado; o "count" exibido continua inteiro.
+    registros = Math.round(registros)
+    ftds = Math.round(ftds)
     if (campanhasMetaDoPeriodo) {
-      const funisPorCampanha = contarFunisPorCampanha(linhas)
+      const funisPorCampanha = contarFunisPorCampanha(todosConfigs)
       for (const linha of linhas) gasto += gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha)
     }
     return { leads, registros, ftds, gasto }
@@ -224,7 +231,9 @@ function FunisApresentarInner() {
 
   const totaisPorFunil = useMemo(() => {
     if (!linhas) return []
-    const funisPorCampanha = contarFunisPorCampanha(linhas)
+    const todosConfigs = Object.values(getState().flowTagConfigs)
+    const funisPorCampanha = contarFunisPorCampanha(todosConfigs)
+    const funisPorUtm = contarFunisPorUtm(todosConfigs)
     return linhas.map((linha) => {
       let leads = 0
       let registros = 0
@@ -232,11 +241,13 @@ function FunisApresentarInner() {
       for (const data of datas) {
         const dia = resultadosPorDia.get(data)
         if (!dia) continue
-        const r = calcularResultadoLinhaNoDia(linha, dia)
+        const r = calcularResultadoLinhaNoDia(linha, dia, funisPorUtm)
         leads += leadsDoFunilNoDia(linha, data)
         registros += r.registros
         ftds += r.ftds
       }
+      registros = Math.round(registros)
+      ftds = Math.round(ftds)
       const convFtd = registros > 0 ? (ftds / registros) * 100 : null
       const convLeadReg = leads > 0 ? (registros / leads) * 100 : null
       const gasto = campanhasMetaDoPeriodo ? gastoDoFunil(linha.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha) : 0
@@ -253,6 +264,7 @@ function FunisApresentarInner() {
 
   const serieDiaria = useMemo(() => {
     if (!linhas) return { registros: [], ftds: [] }
+    const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
     const registros: { label: string; valor: number }[] = []
     const ftds: { label: string; valor: number }[] = []
     for (const data of datas) {
@@ -261,13 +273,13 @@ function FunisApresentarInner() {
       let r = 0
       let f = 0
       for (const linha of linhas) {
-        const res = calcularResultadoLinhaNoDia(linha, dia)
+        const res = calcularResultadoLinhaNoDia(linha, dia, funisPorUtm)
         r += res.registros
         f += res.ftds
       }
       const label = formatDataCurta(data)
-      registros.push({ label, valor: r })
-      ftds.push({ label, valor: f })
+      registros.push({ label, valor: Math.round(r) })
+      ftds.push({ label, valor: Math.round(f) })
     }
     return { registros, ftds }
   }, [linhas, datas, resultadosPorDia])
@@ -276,13 +288,14 @@ function FunisApresentarInner() {
   // funil (mesma cor/legenda do resto da tela) deixa comparar a conversão de cada um dia a dia.
   const serieConversaoPorFunil = useMemo<SerieLinha[]>(() => {
     if (!linhas) return []
+    const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
     const diasComDados = datas.filter((d) => resultadosPorDia.has(d))
     return linhas.map((linha, i) => ({
       nome: linha.nomeFunil,
       cor: PALETA_CORES[i % PALETA_CORES.length],
       pontos: diasComDados.map((data) => {
         const dia = resultadosPorDia.get(data)!
-        const r = calcularResultadoLinhaNoDia(linha, dia)
+        const r = calcularResultadoLinhaNoDia(linha, dia, funisPorUtm)
         return { label: formatDataCurta(data), valor: r.registros > 0 ? (r.ftds / r.registros) * 100 : 0 }
       }),
     }))
@@ -302,6 +315,7 @@ function FunisApresentarInner() {
 
   function exportarCsv() {
     if (!linhas) return
+    const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
     const header = ['Data', 'Funil', 'Leads', 'Registros', 'FTDs', 'Conv. Lead → Reg %', 'Conv. FTD %']
     const linhasCsv: string[] = []
     for (const data of datas) {
@@ -311,14 +325,16 @@ function FunisApresentarInner() {
       let totalRegistros = 0
       let totalFtds = 0
       for (const linha of linhas) {
-        const r = calcularResultadoLinhaNoDia(linha, dia)
+        const r = calcularResultadoLinhaNoDia(linha, dia, funisPorUtm)
         const leads = leadsDoFunilNoDia(linha, data)
+        const registrosArred = Math.round(r.registros)
+        const ftdsArred = Math.round(r.ftds)
         const convFtd = r.registros > 0 ? ((r.ftds / r.registros) * 100).toFixed(1) : ''
         const convLeadReg = leads > 0 ? ((r.registros / leads) * 100).toFixed(1) : ''
         totalLeads += leads
-        totalRegistros += r.registros
-        totalFtds += r.ftds
-        linhasCsv.push([data, linha.nomeFunil, String(leads), String(r.registros), String(r.ftds), convLeadReg, convFtd].map(csvCampo).join(','))
+        totalRegistros += registrosArred
+        totalFtds += ftdsArred
+        linhasCsv.push([data, linha.nomeFunil, String(leads), String(registrosArred), String(ftdsArred), convLeadReg, convFtd].map(csvCampo).join(','))
       }
       const totalConvFtd = totalRegistros > 0 ? ((totalFtds / totalRegistros) * 100).toFixed(1) : ''
       const totalConvLeadReg = totalLeads > 0 ? ((totalRegistros / totalLeads) * 100).toFixed(1) : ''
@@ -584,14 +600,15 @@ function BlocoDia({
   leadHubCarregando: boolean
 }) {
   const [aberto, setAberto] = useState(true)
+  const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
   const linhasComResultado = dia
     ? linhas.map((l) => {
-        const r = calcularResultadoLinhaNoDia(l, dia)
+        const r = calcularResultadoLinhaNoDia(l, dia, funisPorUtm)
         const convFtd = r.registros > 0 ? (r.ftds / r.registros) * 100 : null
         const tagEntradaDia = tagDeEntradaDoFluxo(l.tags)
         const leads = tagEntradaDia ? (leadsPorTagPorDia[tagEntradaDia]?.[data] ?? 0) : 0
         const convLeadReg = leads > 0 ? (r.registros / leads) * 100 : null
-        return { linha: l, leads, registros: r.registros, ftds: r.ftds, convFtd, convLeadReg }
+        return { linha: l, leads, registros: Math.round(r.registros), ftds: Math.round(r.ftds), convFtd, convLeadReg }
       })
     : []
   const totalDia = linhasComResultado.reduce(

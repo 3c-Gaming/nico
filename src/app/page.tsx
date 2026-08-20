@@ -15,7 +15,7 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo } from '@/lib/funis'
+import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia } from '@/lib/funis'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -561,24 +561,21 @@ export default function HomePage() {
         fetch(`/api/tracking/export?casa=superbet&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
         fetch(`/api/tracking/export?casa=betmgm&date=${trackingData}`).then((r) => r.json()).catch(() => ({})),
       ])
+      // Mesma UTM pode estar configurada em mais de um funil (ou mais de um bot do mesmo funil) —
+      // sem dividir, os registros/FTDs batidos por ela seriam contados inteiros em cada um. Escopo
+      // sempre o sistema inteiro (todos os flowTagConfigs), não só os funis pinados aqui.
+      const funisPorUtm = contarFunisPorUtm(Object.values(configs))
+      const diaTracking = {
+        superbetEvents: (superbetRes as any)?.data ?? [],
+        betmgmEvents: (betmgmRes as any)?.data ?? [],
+        leadsPorTag: {},
+      }
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const [fid, c] of flowIdsComUtm) {
-        const utms = utmsDoFluxo(c)
-        let registros = 0
-        let ftds = 0
-        for (const item of (superbetRes as any)?.data ?? []) {
-          if (utms.some((utm) => String(item.acid).includes(utm))) {
-            registros += item.registrations ?? 0
-            ftds += item.ftds ?? 0
-          }
-        }
-        for (const item of (betmgmRes as any)?.data ?? []) {
-          if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
-            registros += item.registrations ?? 0
-            ftds += item.ftds ?? 0
-          }
-        }
-        novo[fid] = { registros, ftds }
+        const r = calcularResultadoLinhaNoDia(c, diaTracking, funisPorUtm)
+        // Arredonda só no final — divisão fracionária ao longo do caminho evita erro de
+        // arredondamento acumulado; o "count" exibido continua inteiro.
+        novo[fid] = { registros: Math.round(r.registros), ftds: Math.round(r.ftds) }
       }
       setTrackingMap(novo)
       setLiveTrackingLoaded(true)

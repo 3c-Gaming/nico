@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Save } from 'lucide-react'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
-import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, type ResultadoDia } from '@/lib/funis'
+import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorUtm, type ResultadoDia } from '@/lib/funis'
+import { getState } from '@/lib/store'
 import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
 import { LeadConversaCard, type LeadComConversa } from '@/components/funis/LeadConversaCard'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -104,11 +105,14 @@ function FunilApresentarUnicoInner() {
     let registros = 0
     let ftds = 0
     if (config) {
+      const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
       for (const dia of resultadosPorDia.values()) {
-        const r = calcularResultadoLinhaNoDia(config, dia)
+        const r = calcularResultadoLinhaNoDia(config, dia, funisPorUtm)
         registros += r.registros
         ftds += r.ftds
       }
+      registros = Math.round(registros)
+      ftds = Math.round(ftds)
     }
     const leadsTotal = tagEntrada ? (leadsPorTag[tagEntrada] ?? 0) : 0
     const convReg = leadsTotal > 0 ? (registros / leadsTotal) * 100 : null

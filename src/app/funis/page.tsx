@@ -14,7 +14,7 @@ import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
-import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil } from '@/lib/funis'
+import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -583,26 +583,24 @@ function FunisPageInner() {
         }
       }))
 
+      // Mesma UTM pode estar configurada em mais de um funil (ou mais de um bot do mesmo funil) —
+      // sem dividir, os registros/FTDs batidos por ela seriam contados inteiros em cada um. Escopo
+      // sempre o sistema inteiro (todos os flowTagConfigs), não só os fluxos com utm sendo
+      // processados aqui, pra bater com o que se vê em qualquer outra tela.
+      const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
+
       const novo: Record<string, { registros: number; ftds: number }> = {}
       for (const cfg of withUtm) {
-        const utms = utmsDoFluxo(cfg)
         let registros = 0
         let ftds = 0
         for (const dia of porDia) {
-          for (const item of dia.superbetEvents) {
-            if (utms.some((utm) => String(item.acid).includes(utm))) {
-              registros += item.registrations ?? 0
-              ftds += item.ftds ?? 0
-            }
-          }
-          for (const item of dia.betmgmEvents) {
-            if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
-              registros += item.registrations ?? 0
-              ftds += item.ftds ?? 0
-            }
-          }
+          const r = calcularResultadoLinhaNoDia(cfg, { ...dia, leadsPorTag: {} }, funisPorUtm)
+          registros += r.registros
+          ftds += r.ftds
         }
-        novo[cfg.flowId] = { registros, ftds }
+        // Arredonda só no final (depois de somar todos os dias) — divisão fracionária ao longo do
+        // caminho evita erro de arredondamento acumulado; o "count" exibido continua inteiro.
+        novo[cfg.flowId] = { registros: Math.round(registros), ftds: Math.round(ftds) }
       }
       setTrackingMap(novo)
 

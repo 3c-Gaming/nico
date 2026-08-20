@@ -6,7 +6,7 @@ import { X, ChevronRight, CheckCircle2, Funnel, Save, NotebookText, CalendarDays
 import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
-import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, type ResultadoLinhaDia } from '@/lib/funis'
+import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, type ResultadoLinhaDia } from '@/lib/funis'
 import type { KpiBotao, KpiCusto, FlowTagConfig, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
@@ -599,6 +599,7 @@ export function PainelConversasFluxo({
     if (funisComparados.length === 0) return
     let ativo = true
     const datas = gerarRangeDatas(dataInicio, dataReferencia)
+    const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
     Promise.all(
       funisComparados.map(async (flowIdComparado): Promise<[string, ResultadoFunilComparado | null]> => {
         const config = todosFunis.find((f) => f.flowId === flowIdComparado)
@@ -612,13 +613,13 @@ export function PainelConversasFluxo({
         let ftds = 0
         const contagensPorTag: Record<string, number> = {}
         for (const dia of dias) {
-          const r = calcularResultadoLinhaNoDia(config, dia)
+          const r = calcularResultadoLinhaNoDia(config, dia, funisPorUtm)
           leads += tagEntrada ? (dia.leadsPorTag[tagEntrada] ?? 0) : 0
           registros += r.registros
           ftds += r.ftds
           for (const [t, c] of Object.entries(dia.leadsPorTag)) contagensPorTag[t] = (contagensPorTag[t] ?? 0) + c
         }
-        return [flowIdComparado, { leads, registros, ftds, contagensPorTag }]
+        return [flowIdComparado, { leads, registros: Math.round(registros), ftds: Math.round(ftds), contagensPorTag }]
       }),
     ).then((entradas) => {
       if (!ativo) return
@@ -643,9 +644,11 @@ export function PainelConversasFluxo({
   useEffect(() => {
     if (!dataComparacao || !botId || tags.length === 0) return
     const dataAlvo = dataComparacao
+    const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
     buscarResultadosDoDia(dataAlvo, [{ botId, tags }])
       .then((dia) => {
-        const resultado = calcularResultadoLinhaNoDia({ tags, utm, utmsExtras }, dia)
+        const r = calcularResultadoLinhaNoDia({ tags, utm, utmsExtras }, dia, funisPorUtm)
+        const resultado = { ...r, registros: Math.round(r.registros), ftds: Math.round(r.ftds) }
         setResultadoComparacao({ data: dataAlvo, resultado, leadsPorTag: dia.leadsPorTag, erro: null })
       })
       .catch(() => setResultadoComparacao({ data: dataAlvo, resultado: null, leadsPorTag: null, erro: 'Erro ao buscar comparação' }))

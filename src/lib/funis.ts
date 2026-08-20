@@ -69,23 +69,40 @@ export interface ResultadoLinhaDia {
 /** Aplica o resultado de um dia (ver buscarResultadosDoDia) numa linha (config de fluxo com
  * tags/utm) — mesma conta usada tanto na exportação de CSV por intervalo quanto na apresentação
  * por dia, pra não divergir entre as duas telas. */
+/** Acha, entre as UTMs do fluxo, qual bate com o valor do item de tracking — "includes" pra
+ * Superbet (acid costuma trazer a UTM embutida num id maior), igualdade exata pra BetMGM
+ * (marketing_source_id é a própria UTM). Retorna a UTM específica que casou (não só um booleano)
+ * pra dar pra saber o divisor certo quando ela é compartilhada com outros funis. */
+function utmQueCasou(utms: string[], valor: string, exato: boolean): string | undefined {
+  return utms.find((utm) => (exato ? valor === utm : valor.includes(utm)))
+}
+
+/** Aplica o cálculo pra um dia — opcionalmente recebe o divisor de UTMs compartilhadas (ver
+ * contarFunisPorUtm) pra dividir registros/FTDs quando a UTM que bateu também está configurada em
+ * outro(s) funil(is)/config(s). Sem o parâmetro (undefined), divisor sempre 1 — comportamento
+ * idêntico ao de antes dessa função existir. */
 export function calcularResultadoLinhaNoDia(
   cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[] },
   dia: ResultadoDia,
+  funisPorUtm?: Map<string, number>,
 ): ResultadoLinhaDia {
   const utms = utmsDoFluxo(cfg)
   let registros = 0
   let ftds = 0
   for (const item of dia.superbetEvents) {
-    if (utms.some((utm) => String(item.acid).includes(utm))) {
-      registros += item.registrations ?? 0
-      ftds += item.ftds ?? 0
+    const utmCasada = utmQueCasou(utms, String(item.acid), false)
+    if (utmCasada) {
+      const divisor = funisPorUtm?.get(utmCasada) ?? 1
+      registros += (item.registrations ?? 0) / divisor
+      ftds += (item.ftds ?? 0) / divisor
     }
   }
   for (const item of dia.betmgmEvents) {
-    if (utms.some((utm) => String(item.marketing_source_id) === utm)) {
-      registros += item.registrations ?? 0
-      ftds += item.ftds ?? 0
+    const utmCasada = utmQueCasou(utms, String(item.marketing_source_id), true)
+    if (utmCasada) {
+      const divisor = funisPorUtm?.get(utmCasada) ?? 1
+      registros += (item.registrations ?? 0) / divisor
+      ftds += (item.ftds ?? 0) / divisor
     }
   }
   const tagEntrada = tagDeEntradaDoFluxo(cfg.tags)
@@ -93,6 +110,25 @@ export function calcularResultadoLinhaNoDia(
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   return { leads, registros, ftds, convFtd, convReg }
+}
+
+/** Quantos configs (do sistema inteiro) referenciam cada UTM/PID — a mesma UTM pode estar
+ * configurada em mais de um funil, ou em mais de um bot/config do MESMO funil (ex: número antigo
+ * e novo, WhatsApp e Telegram apontando pro mesmo link rastreado). Sem dividir, os registros/FTDs
+ * batidos por essa UTM no tracking (Superbet/BetMGM) seriam contados inteiros em cada config que
+ * a referencia — mesmo princípio de contarFunisPorCampanha, mas pra tracking em vez de gasto do
+ * Meta. Conta por config (não por nome de funil deduplicado) de propósito: isso cobre tanto o
+ * caso de dois funis diferentes compartilharem a UTM quanto o de vários bots do MESMO funil
+ * compartilharem — a soma final bate com o real independente de como os configs se agrupam
+ * depois numa tela. */
+export function contarFunisPorUtm(configs: { utm?: string | null; utmsExtras?: string[] }[]): Map<string, number> {
+  const contagem = new Map<string, number>()
+  for (const c of configs) {
+    for (const utm of utmsDoFluxo(c)) {
+      contagem.set(utm, (contagem.get(utm) ?? 0) + 1)
+    }
+  }
+  return contagem
 }
 
 /** Quantos funis (do sistema inteiro, não só os visíveis numa tela filtrada) têm cada campanha do
