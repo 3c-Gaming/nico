@@ -214,6 +214,19 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
     texto = interactive.body.text
   }
 
+  // Telegram não usa "interactive" (isso é só WhatsApp) — botões de teclado inline vêm soltos em
+  // data.reply_markup.inline_keyboard (matriz de linhas x botões, cada um com "text"), tanto pra
+  // botão de resposta (postback) quanto de link (web_url). Sobrepõe independente do que casou
+  // acima, já que mensagens de WhatsApp nunca têm esse campo.
+  if (!botoesOferecidos && Array.isArray(data.reply_markup?.inline_keyboard)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const labels = (data.reply_markup.inline_keyboard as any[][])
+      .flat()
+      .map((b) => b?.text)
+      .filter((t): t is string => typeof t === 'string')
+    if (labels.length > 0) botoesOferecidos = labels
+  }
+
   return {
     id: String(msg.id ?? ''),
     direcao: msg.direction === 1 ? 'entrada' : 'saida',
@@ -262,6 +275,24 @@ export function filtrarConversaPorFluxo(mensagensBrutas: MensagemBruta[], flowId
     if (chain.chainId) chainAtual = chain
     if (chain.chainId === flowId) resultado.push(normalizarMensagem(msg, chain))
   }
+
+  // Telegram não reporta clique em botão de resposta rápida (postback) como um tipo de mensagem
+  // separado igual o button_reply/list_reply do WhatsApp — o clique chega como uma mensagem de
+  // ENTRADA comum, com data.text igual ao texto do botão clicado. Reclassifica pra
+  // 'botao_clicado' quando o texto bate com algum botão oferecido pela última mensagem de SAÍDA
+  // com botões — dá o mesmo destaque visual (ícone + "clicou: ...") que já existe pro WhatsApp,
+  // em vez de mostrar como um balão de texto solto igual qualquer resposta livre do lead.
+  let botoesRecentes: string[] = []
+  for (const msg of resultado) {
+    if (msg.direcao === 'saida') {
+      if (msg.botoesOferecidos && msg.botoesOferecidos.length > 0) botoesRecentes = msg.botoesOferecidos
+    } else if (msg.tipo === 'texto' && msg.texto && botoesRecentes.includes(msg.texto)) {
+      msg.tipo = 'botao_clicado'
+      msg.botaoTitulo = msg.texto
+      botoesRecentes = []
+    }
+  }
+
   return resultado
 }
 
