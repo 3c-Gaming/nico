@@ -15,7 +15,7 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
-import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia } from '@/lib/funis'
+import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -374,6 +374,10 @@ export default function HomePage() {
   const [pinnedNumeros, setPinnedNumeros] = useState<string[]>([])
   const [pinnedFunis, setPinnedFunis] = useState<string[]>([])
   const [trackingMap, setTrackingMap] = useState<Record<string, { registros: number; ftds: number }>>({})
+  // Igual a trackingMap, mas por NOME de funil em vez de flowId — usado pro total exibido no card do
+  // funil (registros/ftds já corretamente divididos, sem risco de somar o mesmo dado mais de uma vez
+  // quando o funil tem mais de um bot/config apontando pra mesma UTM; ver comentário em fetchTracking).
+  const [trackingPorFunil, setTrackingPorFunil] = useState<Record<string, { registros: number; ftds: number }>>({})
   const [trackingData, setTrackingData] = useState(getLocalDate())
   const [expandedFunis, setExpandedFunis] = useState<Record<string, boolean>>({})
   const [modalLinkFunil, setModalLinkFunil] = useState<string | null>(null)
@@ -578,6 +582,40 @@ export default function HomePage() {
         novo[fid] = { registros: Math.round(r.registros), ftds: Math.round(r.ftds) }
       }
       setTrackingMap(novo)
+
+      // Total exibido no card do funil: calcula UMA VEZ por nome de funil (união das UTMs de todos
+      // os configs/bots daquele funil), não soma o resultado já dividido de cada config — um funil
+      // com 2+ configs (WhatsApp antigo/novo, Telegram) reaproveitando a mesma UTM faria cada config
+      // reportar o mesmo quinhão já dividido, e somar esses quinhões de novo contaria aquele
+      // resultado mais de uma vez (ver contarFunisPorUtm acima).
+      const utmsPorFunil = new Map<string, Set<string>>()
+      for (const [, c] of flowIdsComUtm) {
+        if (!c.funil) continue
+        if (!utmsPorFunil.has(c.funil)) utmsPorFunil.set(c.funil, new Set())
+        for (const utm of utmsDoFluxo(c)) utmsPorFunil.get(c.funil)!.add(utm)
+      }
+      // Mantém fracionário aqui — arredondar cada funil isoladamente (Math.round) pode fazer a soma
+      // do grupo passar do total real (ex: 1.5 + 1.5 vira 2 + 2 = 4 em vez de 3). Reconcilia por
+      // GRUPO de UTM compartilhada (arredondarPreservandoTotalPorGrupo), não pelo total de todos os
+      // funis pinados de uma vez só — senão o "resto" do arredondamento de uma UTM compartilhada
+      // entre dois funis podia vazar pra um terceiro funil pinado sem nenhuma relação com ela.
+      const registrosRaw: Record<string, number> = {}
+      const ftdsRaw: Record<string, number> = {}
+      const utmsPorFunilArr: Record<string, string[]> = {}
+      for (const [funilNome, utms] of utmsPorFunil) {
+        const utmsArr = [...utms]
+        utmsPorFunilArr[funilNome] = utmsArr
+        const r = calcularResultadoLinhaNoDia({ utmsExtras: utmsArr }, diaTracking, funisPorUtm)
+        registrosRaw[funilNome] = r.registros
+        ftdsRaw[funilNome] = r.ftds
+      }
+      const registrosArredondados = arredondarPreservandoTotalPorGrupo(registrosRaw, utmsPorFunilArr)
+      const ftdsArredondados = arredondarPreservandoTotalPorGrupo(ftdsRaw, utmsPorFunilArr)
+      const novoPorFunil: Record<string, { registros: number; ftds: number }> = {}
+      for (const funilNome of utmsPorFunil.keys()) {
+        novoPorFunil[funilNome] = { registros: registrosArredondados[funilNome], ftds: ftdsArredondados[funilNome] }
+      }
+      setTrackingPorFunil(novoPorFunil)
       setLiveTrackingLoaded(true)
     }
 
@@ -671,18 +709,24 @@ export default function HomePage() {
       const utms = [...new Set(flows.flatMap(([_, c]) => utmsDoFluxo(c)))]
       const utm = utms.length > 0 ? utms.join(', ') : ''
 
+      // Calculado UMA VEZ por funil (não por config/bot então somado) — ver comentário em
+      // fetchTracking/trackingPorFunil sobre por que somar o valor já dividido de cada config do
+      // grupo contaria o mesmo registro/FTD mais de uma vez.
       const registros = liveTrackingLoaded
-        ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.registros ?? 0), 0)
+        ? (trackingPorFunil[funilNome]?.registros ?? 0)
         : (cache?.registros ?? 0)
       const ftds = liveTrackingLoaded
-        ? flows.reduce((acc, [fid]) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
+        ? (trackingPorFunil[funilNome]?.ftds ?? 0)
         : (cache?.ftds ?? 0)
 
-      // Gasto em Ads (Meta) — soma o gasto de cada flowId desse grupo de funil, dividindo entre
-      // funis que compartilham a mesma campanha (mesmo princípio de funis/apresentar e da tela de
-      // Funis: escopo sempre o sistema inteiro, não só os funis pinados).
+      // Gasto em Ads (Meta) — união das campanhas atribuídas a cada config desse grupo de funil
+      // (evita contar 2x quando 2+ configs do mesmo funil têm a campanha marcada) e chama
+      // gastoDoFunil UMA VEZ, dividindo entre funis que compartilham a mesma campanha (mesmo
+      // princípio de funis/apresentar e da tela de Funis: escopo sempre o sistema inteiro, não só os
+      // funis pinados).
+      const campanhasMetaDoGrupo = [...new Set(flows.flatMap(([, c]) => c.campanhasMeta ?? []))]
       const gastoMeta = campanhasMetaDoPeriodo
-        ? flows.reduce((acc, [, c]) => acc + gastoDoFunil(c.campanhasMeta, campanhasMetaDoPeriodo, funisPorCampanha), 0)
+        ? gastoDoFunil(campanhasMetaDoGrupo, campanhasMetaDoPeriodo, funisPorCampanha)
         : 0
       const custoEntradaMeta = gastoMeta > 0 && leadsHoje > 0 ? gastoMeta / leadsHoje : null
       const custoRegMeta = gastoMeta > 0 && registros > 0 ? gastoMeta / registros : null
@@ -834,7 +878,7 @@ export default function HomePage() {
 
       return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo])
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
 

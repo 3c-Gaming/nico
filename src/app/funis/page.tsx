@@ -14,7 +14,7 @@ import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
-import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm } from '@/lib/funis'
+import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -589,7 +589,9 @@ function FunisPageInner() {
       // processados aqui, pra bater com o que se vê em qualquer outra tela.
       const funisPorUtm = contarFunisPorUtm(Object.values(getState().flowTagConfigs))
 
-      const novo: Record<string, { registros: number; ftds: number }> = {}
+      const registrosRaw: Record<string, number> = {}
+      const ftdsRaw: Record<string, number> = {}
+      const utmsPorFlow: Record<string, string[]> = {}
       for (const cfg of withUtm) {
         let registros = 0
         let ftds = 0
@@ -598,9 +600,20 @@ function FunisPageInner() {
           registros += r.registros
           ftds += r.ftds
         }
-        // Arredonda só no final (depois de somar todos os dias) — divisão fracionária ao longo do
-        // caminho evita erro de arredondamento acumulado; o "count" exibido continua inteiro.
-        novo[cfg.flowId] = { registros: Math.round(registros), ftds: Math.round(ftds) }
+        // Mantém fracionário aqui — arredondar cada linha isoladamente (Math.round) pode fazer a
+        // soma de linhas que dividem a mesma UTM passar do total real (ex: duas linhas com 1.5 cada
+        // viram 2 + 2 = 4 em vez de 3). arredondarPreservandoTotalPorGrupo reconcilia isso só entre
+        // as linhas que de fato compartilham uma UTM (não o conjunto inteiro de ~80 linhas da
+        // tela) — senão o resto do arredondamento podia vazar pra uma linha sem relação nenhuma.
+        registrosRaw[cfg.flowId] = registros
+        ftdsRaw[cfg.flowId] = ftds
+        utmsPorFlow[cfg.flowId] = utmsDoFluxo(cfg)
+      }
+      const registrosArredondados = arredondarPreservandoTotalPorGrupo(registrosRaw, utmsPorFlow)
+      const ftdsArredondados = arredondarPreservandoTotalPorGrupo(ftdsRaw, utmsPorFlow)
+      const novo: Record<string, { registros: number; ftds: number }> = {}
+      for (const cfg of withUtm) {
+        novo[cfg.flowId] = { registros: registrosArredondados[cfg.flowId], ftds: ftdsArredondados[cfg.flowId] }
       }
       setTrackingMap(novo)
 

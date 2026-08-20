@@ -112,37 +112,106 @@ export function calcularResultadoLinhaNoDia(
   return { leads, registros, ftds, convFtd, convReg }
 }
 
-/** Quantos configs (do sistema inteiro) referenciam cada UTM/PID — a mesma UTM pode estar
- * configurada em mais de um funil, ou em mais de um bot/config do MESMO funil (ex: número antigo
- * e novo, WhatsApp e Telegram apontando pro mesmo link rastreado). Sem dividir, os registros/FTDs
- * batidos por essa UTM no tracking (Superbet/BetMGM) seriam contados inteiros em cada config que
- * a referencia — mesmo princípio de contarFunisPorCampanha, mas pra tracking em vez de gasto do
- * Meta. Conta por config (não por nome de funil deduplicado) de propósito: isso cobre tanto o
- * caso de dois funis diferentes compartilharem a UTM quanto o de vários bots do MESMO funil
- * compartilharem — a soma final bate com o real independente de como os configs se agrupam
- * depois numa tela. */
-export function contarFunisPorUtm(configs: { utm?: string | null; utmsExtras?: string[] }[]): Map<string, number> {
-  const contagem = new Map<string, number>()
-  for (const c of configs) {
-    for (const utm of utmsDoFluxo(c)) {
-      contagem.set(utm, (contagem.get(utm) ?? 0) + 1)
-    }
+/** Arredonda um grupo de valores fracionários (ex: registros/FTDs já divididos por funil, ver
+ * trackingPorFunil) preservando a soma total — arredondar cada um isoladamente (Math.round) pode
+ * fazer a soma "vazar": 1.5 + 1.5 = 3, mas Math.round(1.5) + Math.round(1.5) = 4. Método do maior
+ * resto: arredonda todo mundo pra baixo, depois dá +1 pros valores com maior parte fracionária até
+ * bater com round(total) — exatamente o que o usuário pediu ("se o número for dar quebrado, pode
+ * balancear e deixar um a mais pra um dos funis sem problema"), sem nunca estourar o total real. */
+export function arredondarPreservandoTotal(valores: Record<string, number>): Record<string, number> {
+  const entradas = Object.entries(valores)
+  const totalArredondado = Math.round(entradas.reduce((soma, [, v]) => soma + v, 0))
+  const pisos = entradas.map(([chave, v]) => [chave, Math.floor(v), v - Math.floor(v)] as const)
+  const resultado: Record<string, number> = {}
+  for (const [chave, piso] of pisos) resultado[chave] = piso
+  let restante = totalArredondado - pisos.reduce((soma, [, piso]) => soma + piso, 0)
+  const porMaiorResto = [...pisos].sort((a, b) => b[2] - a[2])
+  for (let i = 0; i < porMaiorResto.length && restante > 0; i++, restante--) {
+    resultado[porMaiorResto[i][0]] += 1
   }
-  return contagem
+  return resultado
 }
 
-/** Quantos funis (do sistema inteiro, não só os visíveis numa tela filtrada) têm cada campanha do
- * Meta atribuída — uma mesma campanha pode ter rodado pra vários funis ao mesmo tempo (ex: um
- * anúncio que manda pra 4 variantes de teste). Nesse caso o gasto dela não pode ser contado
- * inteiro em cada funil, senão o total fica multiplicado pelo número de funis que a compartilham. */
-export function contarFunisPorCampanha(linhas: { campanhasMeta?: string[] }[]): Map<string, number> {
-  const contagem = new Map<string, number>()
-  for (const linha of linhas) {
-    for (const nome of linha.campanhasMeta ?? []) {
-      contagem.set(nome, (contagem.get(nome) ?? 0) + 1)
+/** Como arredondarPreservandoTotal, mas primeiro separa as entradas em grupos (union-find) conforme
+ * quais UTMs cada uma referencia, e reconcilia o total DENTRO de cada grupo separadamente — chamar
+ * arredondarPreservandoTotal direto no conjunto inteiro da tela (ex: as 80+ linhas de /funis)
+ * preserva a soma geral, mas pode "vazar" o resto de arredondamento pra um funil sem nenhuma relação
+ * com a UTM compartilhada que gerou a fração, em vez de mantê-lo entre os funis que de fato dividem
+ * aquele tráfego. `utmsPorEntrada` é a lista de UTMs (utmsDoFluxo) que cada entrada referencia —
+ * entradas que compartilham qualquer UTM caem no mesmo grupo (transitivamente). */
+export function arredondarPreservandoTotalPorGrupo(
+  valores: Record<string, number>,
+  utmsPorEntrada: Record<string, string[]>,
+): Record<string, number> {
+  const pai = new Map<string, string>()
+  function raiz(x: string): string {
+    if (!pai.has(x)) pai.set(x, x)
+    let r = x
+    while (pai.get(r) !== r) r = pai.get(r)!
+    pai.set(x, r)
+    return r
+  }
+  function unir(a: string, b: string) {
+    const ra = raiz(a)
+    const rb = raiz(b)
+    if (ra !== rb) pai.set(ra, rb)
+  }
+  const chaves = Object.keys(valores)
+  for (const k of chaves) raiz(k)
+  const donoDaUtm = new Map<string, string>()
+  for (const k of chaves) {
+    for (const utm of utmsPorEntrada[k] ?? []) {
+      if (donoDaUtm.has(utm)) unir(k, donoDaUtm.get(utm)!)
+      else donoDaUtm.set(utm, k)
     }
   }
-  return contagem
+  const grupos = new Map<string, string[]>()
+  for (const k of chaves) {
+    const r = raiz(k)
+    if (!grupos.has(r)) grupos.set(r, [])
+    grupos.get(r)!.push(k)
+  }
+  const resultado: Record<string, number> = {}
+  for (const membros of grupos.values()) {
+    const sub: Record<string, number> = {}
+    for (const m of membros) sub[m] = valores[m]
+    Object.assign(resultado, arredondarPreservandoTotal(sub))
+  }
+  return resultado
+}
+
+/** Quantos FUNIS distintos (do sistema inteiro, deduplicados por nome — não por config bruto)
+ * referenciam cada UTM/PID. Conta por nome de propósito: o mesmo funil às vezes tem mais de um
+ * config/bot (número antigo e novo, WhatsApp e Telegram) reaproveitando a UTM idêntica — se
+ * contasse por config, o divisor ficaria maior que o número real de funis distintos disputando
+ * aquele tráfego, sub-atribuindo o resultado a cada um. Configs sem `funil` não contam (não têm
+ * como competir por nada). */
+export function contarFunisPorUtm(configs: { funil?: string | null; utm?: string | null; utmsExtras?: string[] }[]): Map<string, number> {
+  const porUtm = new Map<string, Set<string>>()
+  for (const c of configs) {
+    if (!c.funil) continue
+    for (const utm of utmsDoFluxo(c)) {
+      if (!porUtm.has(utm)) porUtm.set(utm, new Set())
+      porUtm.get(utm)!.add(c.funil)
+    }
+  }
+  return new Map([...porUtm.entries()].map(([utm, funis]) => [utm, funis.size]))
+}
+
+/** Quantos FUNIS distintos (do sistema inteiro, deduplicados por nome, não por config bruto) têm
+ * cada campanha do Meta atribuída — mesmo princípio de contarFunisPorUtm: um funil pode ter mais
+ * de um config/bot com a mesma campanha marcada em "Atribuir campanhas", e contar por config
+ * infla o divisor além do número real de funis competindo pelo gasto. */
+export function contarFunisPorCampanha(linhas: { funil?: string | null; campanhasMeta?: string[] }[]): Map<string, number> {
+  const porCampanha = new Map<string, Set<string>>()
+  for (const linha of linhas) {
+    if (!linha.funil) continue
+    for (const nome of linha.campanhasMeta ?? []) {
+      if (!porCampanha.has(nome)) porCampanha.set(nome, new Set())
+      porCampanha.get(nome)!.add(linha.funil)
+    }
+  }
+  return new Map([...porCampanha.entries()].map(([nome, funis]) => [nome, funis.size]))
 }
 
 /** Soma o gasto das campanhas do Meta atribuídas manualmente a esse funil (ver painel de
