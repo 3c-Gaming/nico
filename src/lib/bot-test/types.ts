@@ -6,6 +6,8 @@ export interface BotConfig {
   botNumero: string
   nome: string
   status: 'ativo' | 'inativo'
+  contaId?: string
+  contaNome?: string
 }
 
 export interface BotTestResult {

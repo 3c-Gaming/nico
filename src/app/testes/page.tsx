@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Send, CheckCircle, XCircle, Clock, Timer, Settings, ChevronDown, ChevronUp, Play, Pause, Zap, Save } from 'lucide-react'
+import Image from 'next/image'
+import { RefreshCw, Send, Check, Copy, Clock, Settings, ChevronDown, ChevronUp, Zap, Save } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 
 interface CronConfig {
@@ -9,7 +10,7 @@ interface CronConfig {
   cronPaused: boolean
   lastRunAt: string | null
   botContactIds: Record<string, string>
-  bots: { botId: string; nome: string; numero: string }[]
+  bots: { botId: string; nome: string; numero: string; contaNome?: string }[]
 }
 
 interface BotTestResult {
@@ -45,12 +46,8 @@ function formatTempoRelativo(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function formatIntervalo(ms: number): string {
-  const min = Math.round(ms / 60_000)
-  if (min < 60) return `${min}min`
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  return m > 0 ? `${h}h${m}min` : `${h}h`
+function formatUltimosQuatro(numero: string): string {
+  return numero.replace(/\D/g, '').slice(-4)
 }
 
 function JsonBlock({ data }: { data: unknown }) {
@@ -69,10 +66,10 @@ export default function TestesPage() {
   const [carregando, setCarregando] = useState(true)
   const [testando, setTestando] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [editIntervalo, setEditIntervalo] = useState('')
   const [erro, setErro] = useState('')
   const [editBotContactIds, setEditBotContactIds] = useState<Record<string, string>>({})
-  const [salvandoContactIds, setSalvandoContactIds] = useState(false)
+  const [salvandoBotId, setSalvandoBotId] = useState<string | null>(null)
+  const [botIdCopiado, setBotIdCopiado] = useState<string | null>(null)
 
   const fetchResultados = useCallback(async () => {
     try {
@@ -81,7 +78,7 @@ export default function TestesPage() {
         const data = await res.json()
         setResultados(data.resultados || [])
       }
-    } catch {}
+    } catch { }
   }, [])
 
   const fetchConfig = useCallback(async () => {
@@ -90,10 +87,9 @@ export default function TestesPage() {
       if (res.ok) {
         const data = await res.json()
         setConfig(data)
-        setEditIntervalo(String(Math.round(data.pollIntervalMs / 60_000)))
         setEditBotContactIds(data.botContactIds ?? {})
       }
-    } catch {}
+    } catch { }
   }, [])
 
   useEffect(() => {
@@ -126,63 +122,36 @@ export default function TestesPage() {
     }
   }
 
-  const handleSalvarIntervalo = async () => {
-    const min = Number(editIntervalo)
-    if (isNaN(min) || min < 15) {
-      setErro('Intervalo mínimo: 15 minutos')
-      return
-    }
+  const handleSalvarContactId = async (botId: string) => {
+    setSalvandoBotId(botId)
     setErro('')
     try {
       const res = await fetch('/api/testes/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pollIntervalMs: min * 60_000 }),
+        body: JSON.stringify({ botId, botContactId: editBotContactIds[botId] ?? '' }),
       })
       if (res.ok) {
         const data = await res.json()
         setConfig(data)
-      }
-    } catch (err) {
-      setErro((err as Error).message)
-    }
-  }
-
-  const handleTogglePausar = async () => {
-    if (!config) return
-    setErro('')
-    try {
-      const res = await fetch('/api/testes/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cronPaused: !config.cronPaused }),
-      })
-      if (res.ok) {
+      } else {
         const data = await res.json()
-        setConfig(data)
-      }
-    } catch (err) {
-      setErro((err as Error).message)
-    }
-  }
-
-  const handleSalvarContactIds = async () => {
-    setSalvandoContactIds(true)
-    setErro('')
-    try {
-      const res = await fetch('/api/testes/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ botContactIds: editBotContactIds }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setConfig(data)
+        throw new Error(data.error || 'Erro ao salvar contact_id')
       }
     } catch (err) {
       setErro((err as Error).message)
     } finally {
-      setSalvandoContactIds(false)
+      setSalvandoBotId(null)
+    }
+  }
+
+  const handleCopiarBotId = async (botId: string) => {
+    try {
+      await navigator.clipboard.writeText(botId)
+      setBotIdCopiado(botId)
+      window.setTimeout(() => setBotIdCopiado(null), 1500)
+    } catch {
+      setErro('Não foi possível copiar o bot ID')
     }
   }
 
@@ -191,20 +160,16 @@ export default function TestesPage() {
   const botIdsAtivos = new Set((config?.bots ?? []).map((b) => b.botId))
   const resultadosAtivos = resultados.filter((r) => botIdsAtivos.has(r.botId))
 
+  // Mesmo bot_id nunca se repete entre contas SendPulse diferentes — mapa auxiliar pra achar de
+  // qual conta cada resultado/histórico veio sem precisar cruzar de novo com a lista de bots.
+  const contaNomePorBot = new Map((config?.bots ?? []).map((b) => [b.botId, b.contaNome]))
+
   const stats = {
     total: resultadosAtivos.length,
     ok: resultadosAtivos.filter((r) => r.status === 'ok').length,
     erro: resultadosAtivos.filter((r) => r.status === 'erro').length,
     outros: resultadosAtivos.filter((r) => r.status !== 'ok' && r.status !== 'erro').length,
   }
-
-  const proximoTeste = config?.lastRunAt && config?.pollIntervalMs && !config.cronPaused
-    ? new Date(new Date(config.lastRunAt).getTime() + config.pollIntervalMs)
-    : null
-
-  const proximoTesteEm = proximoTeste
-    ? Math.max(0, Math.round((proximoTeste.getTime() - Date.now()) / 1000))
-    : null
 
   return (
     <>
@@ -229,96 +194,73 @@ export default function TestesPage() {
           </div>
         )}
 
-        {/* Configuração do Cron */}
-        <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <Settings size={16} className="text-[var(--d1)]" />
-            Configuração do Cron
-          </h2>
-          <div className="flex items-end gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-[var(--text-muted)]">Intervalo (minutos):</label>
-              <input
-                type="number"
-                min={15}
-                value={editIntervalo}
-                onChange={(e) => setEditIntervalo(e.target.value)}
-                className="w-20 h-8 rounded-md px-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)] text-center"
-              />
-              <button
-                onClick={handleSalvarIntervalo}
-                className="flex items-center gap-1 px-3 h-8 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--d1)' }}
-              >
-                Salvar
-              </button>
-            </div>
-
-            <button
-              onClick={handleTogglePausar}
-              className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium border transition-colors ${
-                config?.cronPaused
-                  ? 'text-green-500 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
-                  : 'text-amber-400 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'
-              }`}
-            >
-              {config?.cronPaused ? <Play size={12} /> : <Pause size={12} />}
-              {config?.cronPaused ? 'Retomar' : 'Pausar'}
-            </button>
-
-            <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
-              <Timer size={12} />
-              {config?.cronPaused ? (
-                <span className="text-amber-400">Cron pausado</span>
-              ) : proximoTesteEm !== null ? (
-                <span>Próximo teste em {proximoTesteEm < 60 ? `${proximoTesteEm}s` : `${Math.round(proximoTesteEm / 60)}min`}</span>
-              ) : config ? (
-                <span>Intervalo: {formatIntervalo(config.pollIntervalMs)}</span>
-              ) : null}
-              {config?.lastRunAt && (
-                <span className="text-[var(--text-muted)]">· Último: {formatTempoRelativo(config.lastRunAt)}</span>
-              )}
-            </div>
-          </div>
-        </section>
-
         {/* Contact IDs dos Bots */}
         <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
             <Settings size={16} className="text-[var(--d1)]" />
             Contact IDs dos Bots
           </h2>
-          <p className="text-[10px] text-[var(--text-muted)] mb-3">
-            Configure o SendPulse contact_id de cada bot. Se definido, o teste será enviado para o telefone resolvido via SendPulse.
+          <p className="text-[12px] mb-3">
+            Interaja com os números e resgate seu contact_id para cada bot. Insira o contact_id no campo abaixo e clique em &quot;Salvar&quot;.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${(config?.bots.length ?? 0) % 2 === 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {(config?.bots ?? []).map((bot) => (
-              <div key={bot.botId} className="flex flex-col gap-1 rounded-md p-2 bg-[var(--bg-surface)] border border-[var(--border)]">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium text-[var(--text-primary)]">{bot.nome}</span>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)] truncate" title={bot.numero}>{bot.numero}</span>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)]/50 truncate" title={bot.botId}>{bot.botId}</span>
+              <div key={bot.botId} className="relative flex flex-col gap-1 rounded-md p-2 bg-[var(--bg-surface)] border border-[var(--border)]">
+                <div onClick={() => handleCopiarBotId(bot.botId)} className="absolute top-2 right-2 flex items-center gap-1 max-w-[55%] cursor-pointer select-none hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] ">
+                  <span className="text-[12px] font-mono truncate" title={bot.botId}>{bot.botId}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 p-1 rounded cursor-pointer transition-colors"
+                    title={botIdCopiado === bot.botId ? 'Copiado' : 'Copiar bot ID'}
+                    aria-label={botIdCopiado === bot.botId ? 'Bot ID copiado' : 'Copiar bot ID'}
+                  >
+                    {botIdCopiado === bot.botId ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  value={editBotContactIds[bot.botId] ?? ''}
-                  onChange={(e) => setEditBotContactIds((prev) => ({ ...prev, [bot.botId]: e.target.value }))}
-                  placeholder="contact_id"
-                  className="h-7 rounded-md px-2 text-[10px] font-mono bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
-                />
+                <div className="flex items-center px-5 gap-2 flex-wrap">
+                  <Image
+                    src={"/PILHADO.jpg"}
+                    alt={bot.nome}
+                    width={55}
+                    height={55}
+                    className="rounded-full object-cover border-2 border-green-500 shadow-2xl"
+                  />
+                  <div className="grid grid-cols-1 gap-1 py-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-md font-semibold">{bot.nome}</span>
+                      {bot.contaNome && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                          {bot.contaNome}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[14px] font-mono truncate" title="Últimos 4 dígitos do telefone">
+                      FINAL {formatUltimosQuatro(bot.numero)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 m-2">
+                  <input
+                    type="text"
+                    value={editBotContactIds[bot.botId] ?? ''}
+                    onChange={(e) => setEditBotContactIds((prev) => ({ ...prev, [bot.botId]: e.target.value }))}
+                    placeholder="CONTACT_ID DE TESTES"
+                    className="h-10 min-w-0 flex-1 rounded-md px-2 text-[12px] font-mono bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSalvarContactId(bot.botId)}
+                    disabled={salvandoBotId !== null}
+                    className="flex shrink-0 items-center gap-1 rounded-md px-2 h-8 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--d1)' }}
+                    title="Salvar contact_id"
+                  >
+                    {salvandoBotId === bot.botId ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+                    Salvar
+                  </button>
+                </div>
               </div>
             ))}
-          </div>
-          <div className="mt-3">
-            <button
-              onClick={handleSalvarContactIds}
-              disabled={salvandoContactIds}
-              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: 'var(--d1)' }}
-            >
-              {salvandoContactIds ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-              Salvar Contact IDs
-            </button>
           </div>
         </section>
 
@@ -349,7 +291,14 @@ export default function TestesPage() {
                   >
                     <div className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-[var(--text-primary)] truncate">{r.nome}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-[var(--text-primary)] truncate">{r.nome}</span>
+                        {contaNomePorBot.get(r.botId) && (
+                          <span className="shrink-0 px-1 py-0.5 rounded text-[9px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                            {contaNomePorBot.get(r.botId)}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className={`text-[10px] font-medium ${st.cor}`}>{st.label}</span>
                         {r.ultimoTeste && (
@@ -422,6 +371,11 @@ export default function TestesPage() {
                     >
                       <div className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
                       <span className="text-xs font-medium text-[var(--text-primary)] min-w-[100px]">{r.nome}</span>
+                      {contaNomePorBot.get(r.botId) && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border)]">
+                          {contaNomePorBot.get(r.botId)}
+                        </span>
+                      )}
                       <span className={`text-xs font-semibold ${st.cor}`}>{st.label}</span>
                       <span className="text-xs text-[var(--text-muted)]">{formatMs(r.duracaoMs)}</span>
                       <span className="text-xs text-[var(--text-muted)]">{formatTempoRelativo(r.ultimoTeste)}</span>

@@ -19,12 +19,12 @@ export async function GET() {
   try {
     const { data: configRes } = await supabase().from('bot_test_config').select('*').eq('id', 1).maybeSingle()
 
-    let bots: { botId: string; nome: string; numero: string }[] = []
+    let bots: { botId: string; nome: string; numero: string; contaNome?: string }[] = []
     try {
       const botList = await obterBots()
       bots = botList
         .filter((b) => b.status === 'ativo')
-        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
+        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero, contaNome: b.contaNome }))
     } catch {}
 
     return NextResponse.json({
@@ -56,7 +56,14 @@ export async function POST(req: Request) {
       update.cron_paused = Boolean(body.cronPaused)
     }
 
-    if (body.botContactIds !== undefined) {
+    if (body.botId !== undefined) {
+      const { data: currentConfig } = await supabase().from('bot_test_config').select('bot_contact_ids').eq('id', 1).maybeSingle()
+      const botContactIds = currentConfig?.bot_contact_ids ?? {}
+      update.bot_contact_ids = {
+        ...botContactIds,
+        [body.botId]: String(body.botContactId ?? ''),
+      }
+    } else if (body.botContactIds !== undefined) {
       update.bot_contact_ids = body.botContactIds
     }
 
@@ -64,12 +71,12 @@ export async function POST(req: Request) {
 
     const { data: configRes } = await supabase().from('bot_test_config').select('*').eq('id', 1).maybeSingle()
 
-    let bots: { botId: string; nome: string; numero: string }[] = []
+    let bots: { botId: string; nome: string; numero: string; contaNome?: string }[] = []
     try {
       const botList = await obterBots()
       bots = botList
         .filter((b) => b.status === 'ativo')
-        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero }))
+        .map((b) => ({ botId: b.botId, nome: b.nome, numero: b.numero, contaNome: b.contaNome }))
     } catch {}
 
     return NextResponse.json({
