@@ -382,6 +382,8 @@ function FunisPageInner() {
   const [filtroBusca, setFiltroBusca] = useState(searchParams.get('busca') ?? '')
   const [filtroCasas, setFiltroCasas] = useState<string[]>([])
   const [filtroTipo, setFiltroTipo] = useState<'' | 'traffic' | 'disparo'>('')
+  const [filtroConta, setFiltroConta] = useState<string>('')
+  const [filtroCanal, setFiltroCanal] = useState<'' | 'whatsapp' | 'telegram'>('')
   const { list: casasList } = useCasasAposta()
   // flowTagConfigs vem do DataInitializer (fetch assíncrono à parte) — sem isso, o efeito de
   // "Total" abaixo pode disparar antes das configs chegarem, ver getState().flowTagConfigs vazio,
@@ -523,6 +525,8 @@ function FunisPageInner() {
       const itensVisiveis: { botId?: string; tags: string[] }[] = []
       for (const num of numeros) {
         if (filtroBot && num.id !== filtroBot) continue
+        if (filtroConta && num.contaId !== filtroConta) continue
+        if (filtroCanal && num.canal !== filtroCanal) continue
         if (naoMonitorados.includes(num.id)) continue
         for (const flow of fluxosMap[num.id] ?? []) {
           const tags = configs[flow.id]?.tags ?? []
@@ -560,7 +564,7 @@ function FunisPageInner() {
 
     carregarTotalIntervalo()
     return () => { cancelado = true }
-  }, [trackingDataInicio, trackingDataFim, saveVersion, flowTagConfigsProntas, intervaloEhHojeUnico, numeros, fluxosMap, filtroBot, filtroBusca, filtroCasas, filtroTipo])
+  }, [trackingDataInicio, trackingDataFim, saveVersion, flowTagConfigsProntas, intervaloEhHojeUnico, numeros, fluxosMap, filtroBot, filtroBusca, filtroCasas, filtroTipo, filtroConta, filtroCanal])
 
   // Busca tracking 3CGG para todos os flows que têm utm
   useEffect(() => {
@@ -664,11 +668,25 @@ function FunisPageInner() {
   // depender de getState() (fora do grafo reativo do React) numa lista de dependências.
   const funisPorCampanha = contarFunisPorCampanha(Object.values(getState().flowTagConfigs))
 
+  // Contas SendPulse distintas entre os números carregados — pra popular o filtro "Conta" sem
+  // precisar de outra chamada (contaId/contaNome já vêm junto de cada número, ver
+  // listarNumerosTodasContas). Com uma conta só configurada, fica com 1 item — o filtro continua
+  // aparecendo mas não faz diferença.
+  const contasList = useMemo(() => {
+    const mapa = new Map<string, string>()
+    for (const num of numeros) {
+      if (num.contaId) mapa.set(num.contaId, num.contaNome || num.contaId)
+    }
+    return [...mapa.entries()].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [numeros])
+
   const flowRows = useMemo(() => {
     const termo = filtroBusca.toLowerCase()
     const rows: FlowRow[] = []
     for (const num of numeros) {
       if (filtroBot && num.id !== filtroBot) continue
+      if (filtroConta && num.contaId !== filtroConta) continue
+      if (filtroCanal && num.canal !== filtroCanal) continue
       if (getState().numerosNaoMonitorados.includes(num.id)) continue
       const flows = fluxosMap[num.id]
       if (!flows) continue
@@ -715,7 +733,7 @@ function FunisPageInner() {
       return a.botNome.localeCompare(b.botNome)
     })
     return rows
-  }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervaloBots, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo])
+  }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervaloBots, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo, filtroConta, filtroCanal])
 
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
@@ -1098,6 +1116,44 @@ function FunisPageInner() {
                   <button
                     key={valor}
                     onClick={() => setFiltroTipo(valor)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
+                  >
+                    <span className="flex-1 text-left">{label}</span>
+                    {selected && <Check size={14} className="text-[var(--d1)]" />}
+                  </button>
+                )
+              })}
+            </div>
+          </Dropdown>
+
+          {contasList.length > 1 && (
+            <Dropdown label={filtroConta ? `Conta: ${contasList.find((c) => c.id === filtroConta)?.nome ?? filtroConta}` : 'Conta'}>
+              <div className="p-1 min-w-[160px]">
+                {[{ id: '', nome: 'Todas' }, ...contasList].map((conta) => {
+                  const selected = filtroConta === conta.id
+                  return (
+                    <button
+                      key={conta.id || 'todas'}
+                      onClick={() => setFiltroConta(conta.id)}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
+                    >
+                      <span className="flex-1 text-left truncate">{conta.nome}</span>
+                      {selected && <Check size={14} className="text-[var(--d1)]" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </Dropdown>
+          )}
+
+          <Dropdown label={filtroCanal ? (filtroCanal === 'whatsapp' ? 'Canal: WhatsApp' : 'Canal: Telegram') : 'Canal'}>
+            <div className="p-1 min-w-[140px]">
+              {([['', 'Todos'], ['whatsapp', 'WhatsApp'], ['telegram', 'Telegram']] as const).map(([valor, label]) => {
+                const selected = filtroCanal === valor
+                return (
+                  <button
+                    key={valor}
+                    onClick={() => setFiltroCanal(valor)}
                     className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
                   >
                     <span className="flex-1 text-left">{label}</span>
