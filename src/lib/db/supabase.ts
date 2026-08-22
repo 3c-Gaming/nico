@@ -162,7 +162,7 @@ function tb(name: string) {
 
 // --- Preferências (pins) ---
 
-export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[]; pinnedDisparos: string[]; numerosNaoMonitorados: string[] }> {
+export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinnedFunis: string[]; pinnedDisparos: string[]; numerosNaoMonitorados: string[]; contaNomes: Record<string, string> }> {
   try {
     const { data } = await tb('user_preferences').select('*').eq('id', 'global').single()
     const raw = data as any
@@ -171,15 +171,39 @@ export async function getPreferencias(): Promise<{ pinnedNumeros: string[]; pinn
       if (typeof v === 'string') try { return JSON.parse(v) } catch { return [] }
       return []
     }
+    const parseObj = (v: unknown): Record<string, string> => {
+      if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, string>
+      if (typeof v === 'string') try { return JSON.parse(v) } catch { return {} }
+      return {}
+    }
     return {
       pinnedNumeros: parse(raw?.pinned_numeros),
       pinnedFunis: parse(raw?.pinned_funis),
       pinnedDisparos: parse(raw?.pinned_disparos),
       numerosNaoMonitorados: parse(raw?.numeros_nao_monitorados),
+      contaNomes: parseObj(raw?.conta_nomes),
     }
   } catch {
-    return { pinnedNumeros: [], pinnedFunis: [], pinnedDisparos: [], numerosNaoMonitorados: [] }
+    return { pinnedNumeros: [], pinnedFunis: [], pinnedDisparos: [], numerosNaoMonitorados: [], contaNomes: {} }
   }
+}
+
+/** Nome amigável que o usuário deu a uma conta SendPulse (ver tela de Configurações) —
+ * sobrepõe o `nome`/`SENDPULSE_NN_NOME` do .env, que sem isso cai no fallback genérico
+ * "Conta 01"/"Conta 02" quando ninguém preencheu essa env var. */
+export async function atualizarNomeConta(contaId: string, nome: string): Promise<Record<string, string>> {
+  const { contaNomes } = await getPreferencias()
+  const atualizado = { ...contaNomes, [contaId]: nome }
+  // Verifica o erro explicitamente (em vez de só `await`) — o client do Supabase não lança
+  // exceção sozinho quando o upsert falha (ex: coluna conta_nomes ainda não migrada), então sem
+  // isso o chamador acha que salvou quando na verdade não persistiu nada.
+  const { error } = await tb('user_preferences').upsert({
+    id: 'global',
+    conta_nomes: atualizado,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) throw new Error(error.message)
+  return atualizado
 }
 
 export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: string[], numerosNaoMonitorados: string[], pinnedDisparos: string[]): Promise<void> {

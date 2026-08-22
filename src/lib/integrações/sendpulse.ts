@@ -1,6 +1,18 @@
 import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse } from '@/types'
 import { listarContasSendpulse, registrarContaDoBot, registrarCanalDoBot, apiKeyParaBot } from './contasSendpulse'
 import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
+import { getPreferencias } from '@/lib/db/supabase'
+
+/** Nome amigável que o usuário deu à conta na tela de Configurações sobrepõe o nome vindo do
+ * .env (SENDPULSE_NN_NOME) — sem isso, contas sem essa env var preenchida caem no fallback
+ * genérico "Conta 01"/"Conta 02" pra sempre, sem jeito de trocar sem redeploy. */
+async function resolverNomesContas(): Promise<Record<string, string>> {
+  try {
+    return (await getPreferencias()).contaNomes
+  } catch {
+    return {}
+  }
+}
 
 export type Canal = 'whatsapp' | 'telegram'
 
@@ -64,11 +76,14 @@ export async function listarNumeros(apiKey: string, canal: Canal, signal?: Abort
  * só-WhatsApp preserva o comportamento de todo chamador existente que não sabe de Telegram. */
 export async function listarNumerosTodasContas(signal?: AbortSignal, canais: Canal[] = ['whatsapp']): Promise<NumeroSendpulse[]> {
   const contas = listarContasSendpulse()
-  const resultados = await Promise.allSettled(
-    contas.flatMap((conta) => canais.map((canal) =>
-      listarNumeros(conta.apiKey, canal, signal).then((numeros) => ({ conta, numeros })),
-    )),
-  )
+  const [resultados, nomesPersonalizados] = await Promise.all([
+    Promise.allSettled(
+      contas.flatMap((conta) => canais.map((canal) =>
+        listarNumeros(conta.apiKey, canal, signal).then((numeros) => ({ conta, numeros })),
+      )),
+    ),
+    resolverNomesContas(),
+  ])
 
   const todos: NumeroSendpulse[] = []
   for (const r of resultados) {
@@ -77,7 +92,7 @@ export async function listarNumerosTodasContas(signal?: AbortSignal, canais: Can
     for (const numero of numeros) {
       registrarContaDoBot(numero.id, conta.id)
       registrarCanalDoBot(numero.id, numero.canal)
-      todos.push({ ...numero, contaId: conta.id, contaNome: conta.nome })
+      todos.push({ ...numero, contaId: conta.id, contaNome: nomesPersonalizados[conta.id] ?? conta.nome })
     }
   }
   return todos
@@ -94,14 +109,14 @@ export interface StatusPlanoSendpulse {
   maxBots: number
 }
 
-async function buscarStatusPlano(conta: { id: string; nome: string; apiKey: string }, signal?: AbortSignal): Promise<StatusPlanoSendpulse> {
+async function buscarStatusPlano(conta: { id: string; nome: string; apiKey: string }, nomesPersonalizados: Record<string, string>, signal?: AbortSignal): Promise<StatusPlanoSendpulse> {
   const res = await fetch(`${baseUrl('whatsapp')}/account`, { headers: getHeaders(conta.apiKey), signal })
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const t = json.data?.tariff ?? {}
   return {
     contaId: conta.id,
-    contaNome: conta.nome,
+    contaNome: nomesPersonalizados[conta.id] ?? conta.nome,
     tariffCode: t.code ?? '',
     isExpired: !!t.is_expired,
     isExceeded: !!t.is_exceeded,
@@ -115,7 +130,8 @@ async function buscarStatusPlano(conta: { id: string; nome: string; apiKey: stri
  * quando um plano já expirou ou está perto de expirar (a SendPulse não avisa sozinha). */
 export async function buscarStatusPlanoTodasContas(signal?: AbortSignal): Promise<StatusPlanoSendpulse[]> {
   const contas = listarContasSendpulse()
-  const resultados = await Promise.allSettled(contas.map((conta) => buscarStatusPlano(conta, signal)))
+  const nomesPersonalizados = await resolverNomesContas()
+  const resultados = await Promise.allSettled(contas.map((conta) => buscarStatusPlano(conta, nomesPersonalizados, signal)))
   return resultados
     .filter((r): r is PromiseFulfilledResult<StatusPlanoSendpulse> => r.status === 'fulfilled')
     .map((r) => r.value)

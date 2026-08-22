@@ -374,6 +374,94 @@ function BotTestConfigSection() {
   )
 }
 
+interface ContaSendpulseNome {
+  id: string
+  nome: string
+}
+
+// A SendPulse não expõe nome/e-mail do dono da conta pela API (só plano/uso) — sem preencher
+// SENDPULSE_NN_NOME no .env, cada conta cai no fallback genérico "Conta 01"/"Conta 02". Essa
+// seção permite renomear direto pelo front (salvo no Supabase), sem precisar mexer no .env nem
+// redeployar.
+function ContasSendpulseSection() {
+  const [contas, setContas] = useState<ContaSendpulseNome[]>([])
+  const [edicoes, setEdicoes] = useState<Record<string, string>>({})
+  const [carregando, setCarregando] = useState(true)
+  const [salvandoId, setSalvandoId] = useState<string | null>(null)
+  const [salvoId, setSalvoId] = useState<string | null>(null)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    fetch('/api/sendpulse/contas')
+      .then((r) => r.json())
+      .then((data) => {
+        setContas(data.contas ?? [])
+        setEdicoes(Object.fromEntries((data.contas ?? []).map((c: ContaSendpulseNome) => [c.id, c.nome])))
+      })
+      .catch(() => setErro('Não foi possível carregar as contas'))
+      .finally(() => setCarregando(false))
+  }, [])
+
+  async function handleSalvar(contaId: string) {
+    setSalvandoId(contaId)
+    setSalvoId(null)
+    setErro('')
+    try {
+      const res = await fetch('/api/sendpulse/contas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contaId, nome: edicoes[contaId] ?? '' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar')
+      setContas(data.contas ?? [])
+      setSalvoId(contaId)
+      window.setTimeout(() => setSalvoId((atual) => (atual === contaId ? null : atual)), 1500)
+    } catch (err) {
+      setErro((err as Error).message)
+    } finally {
+      setSalvandoId(null)
+    }
+  }
+
+  if (carregando) return <Spinner size={16} />
+
+  return (
+    <div className="space-y-3">
+      {erro && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
+          <AlertTriangle size={14} />
+          {erro}
+        </div>
+      )}
+      {contas.length === 0 && !erro && (
+        <p className="text-xs text-[var(--text-muted)]">Nenhuma conta SendPulse configurada no .env.</p>
+      )}
+      {contas.map((conta) => (
+        <div key={conta.id} className="flex items-center gap-2">
+          <span className="text-xs font-mono text-[var(--text-muted)] w-8 shrink-0">{conta.id}</span>
+          <input
+            type="text"
+            value={edicoes[conta.id] ?? ''}
+            onChange={(e) => setEdicoes((prev) => ({ ...prev, [conta.id]: e.target.value }))}
+            placeholder="Nome da conta"
+            className="h-8 flex-1 max-w-xs px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <Button size="sm" variant="secondary" onClick={() => handleSalvar(conta.id)} loading={salvandoId === conta.id} disabled={!edicoes[conta.id]?.trim()}>
+            <Save size={12} />
+            Salvar
+          </Button>
+          {salvoId === conta.id && (
+            <span className="flex items-center gap-1 text-xs text-green-500">
+              <Check size={12} />
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ConfiguracoesPage() {
   const [numeros, setNumeros] = useState<NumeroSendpulse[]>([])
   const [fluxosPorBot, setFluxosPorBot] = useState<Record<string, FluxoSendpulse[]>>({})
@@ -439,6 +527,15 @@ export default function ConfiguracoesPage() {
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Token daxX</h2>
 
         <DaxxTokenSection />
+      </div>
+
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Contas SendPulse</h2>
+        <p className="text-xs text-[var(--text-muted)] mb-4">
+          Nome amigável de cada conta configurada — aparece como rótulo nos números/bots que vêm de mais de uma conta.
+        </p>
+
+        <ContasSendpulseSection />
       </div>
 
       <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
