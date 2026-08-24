@@ -136,11 +136,13 @@ export default function TestesPage() {
   const fetchBilhetes = useCallback(async () => {
     try {
       const res = await fetch('/api/betting-links/status', { signal: AbortSignal.timeout(15000) })
-      if (res.ok) {
-        const data = await res.json()
-        setBilheteResultados(data.resultados ?? [])
-      }
-    } catch { }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao carregar bilhetes')
+      setBilheteResultados(data.resultados ?? [])
+      setErroBilhetes('')
+    } catch (err) {
+      setErroBilhetes((err as Error).message)
+    }
   }, [])
 
   useEffect(() => {

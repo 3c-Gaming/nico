@@ -14,7 +14,8 @@ function supabase(): any {
  * pro resto da config de Testes (mesmo padrão de bot_contact_ids). */
 export async function GET() {
   try {
-    const { data } = await supabase().from('bot_test_config').select('bilhete_casas').eq('id', 1).maybeSingle()
+    const { data, error } = await supabase().from('bot_test_config').select('bilhete_casas').eq('id', 1).maybeSingle()
+    if (error) throw new Error(error.message)
     const casas = Array.isArray(data?.bilhete_casas) ? data.bilhete_casas : []
     return NextResponse.json({ casas })
   } catch (err) {

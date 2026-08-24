@@ -15,7 +15,8 @@ export const maxDuration = 30
  * paralelo — uma casa falhando (ex: nome errado) não derruba as outras. */
 export async function GET() {
   try {
-    const { data } = await supabase().from('bot_test_config').select('bilhete_casas').eq('id', 1).maybeSingle()
+    const { data, error } = await supabase().from('bot_test_config').select('bilhete_casas').eq('id', 1).maybeSingle()
+    if (error) throw new Error(error.message)
     const casas: string[] = Array.isArray(data?.bilhete_casas) ? data.bilhete_casas : []
 
     const resultados = await Promise.all(
