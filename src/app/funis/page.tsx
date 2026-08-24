@@ -1313,7 +1313,7 @@ function FunisPageInner() {
                         <td className="py-3 px-3">
                           {row.tags.length === 0 ? (
                             <span className="text-[10px] text-[var(--text-muted)]/40 italic">sem tags</span>
-                          ) : row.tags.length > 3 ? (
+                          ) : row.tags.length > 1 ? (
                             <span title={row.tags.join(', ')}>
                               <TagChip label={`${row.tags.length} tags`} />
                             </span>
