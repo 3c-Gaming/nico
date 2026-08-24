@@ -1,40 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buscarJogosPorData } from '@/lib/integrações/sofascoreBridge'
+import { buscarJogosPorIntervalo } from '@/lib/integrações/footballData'
 import { getOrFetch } from '@/lib/cache'
-import { hojeBrasilISO } from '@/lib/datas'
 
-const UM_DIA = 24 * 60 * 60 * 1000
+const TTL_JOGOS = 3 * 60 * 60 * 1000 // 3h — o intervalo visível sempre inclui hoje (pode ter jogo ao vivo)
 
-// O scraper serializa as buscas (uma data de cada vez, pra não sobrecarregar a página
-// compartilhada do Playwright) — um dia que cai no fim da fila de uma carga de calendário inteira
-// (até 16 dias de uma vez) pode esperar bem mais que os 30s de antes.
-export const maxDuration = 200
+export const maxDuration = 30
 
-/**
- * TTL por tipo de data — cachear bem evita reabrir sessão/refazer os 7 fetches (um por liga) no
- * scraper a cada navegação no calendário:
- * - Passado: os jogos já aconteceram, o placar não muda mais — cache mais longo.
- * - Hoje: pode ter jogo ao vivo — TTL de algumas horas.
- * - Futuro: tabela raramente muda (adiamento é raro) — cache também longo. O SofaScore não tem a
- *   restrição de janela de dias que a API-Football tinha no plano free, então isso vale pra
- *   qualquer data futura, não só amanhã.
- */
-function ttlParaData(dataISO: string): number {
-  const hoje = hojeBrasilISO()
-  if (dataISO < hoje) return 3 * UM_DIA
-  if (dataISO === hoje) return 6 * 60 * 60 * 1000
-  return UM_DIA
-}
-
+/** Um único request pro football-data.org cobre o intervalo (dateFrom/dateTo) inteiro pedido
+ * pelo calendário da tela de Jogos — ver buscarJogosPorIntervalo sobre por que não é um request
+ * por dia. */
 export async function GET(request: NextRequest) {
-  const date = request.nextUrl.searchParams.get('date')
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: 'Parâmetro "date" obrigatório (YYYY-MM-DD)' }, { status: 400 })
+  const dateFrom = request.nextUrl.searchParams.get('dateFrom')
+  const dateTo = request.nextUrl.searchParams.get('dateTo')
+  if (!dateFrom || !dateTo || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    return NextResponse.json({ error: 'Parâmetros "dateFrom" e "dateTo" obrigatórios (YYYY-MM-DD)' }, { status: 400 })
   }
 
   try {
-    const jogos = await getOrFetch('jogos-fixtures-sofascore', date, ttlParaData(date), () =>
-      buscarJogosPorData(date, AbortSignal.timeout(180_000)),
+    const jogos = await getOrFetch('jogos-fixtures-football-data', `${dateFrom}..${dateTo}`, TTL_JOGOS, () =>
+      buscarJogosPorIntervalo(dateFrom, dateTo, AbortSignal.timeout(20_000)),
     )
     return NextResponse.json({ jogos })
   } catch (err) {

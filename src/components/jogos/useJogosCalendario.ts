@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import type { Jogo } from '@/types'
-import { gerarRangeDias, adicionarDias, isMesmaData, formatarData } from '@/lib/datas'
+import { gerarRangeDias, adicionarDias, isMesmaData, formatarData, dataParaBrasilISO } from '@/lib/datas'
 
 const DIAS_ANTES = 2
 const DIAS_DEPOIS = 13
@@ -35,25 +35,28 @@ export function useJogosCalendario() {
       setCarregando(true)
       setErro(null)
       try {
-        const resultados = await Promise.allSettled(
-          diasVisiveis.map(async (dia) => {
-            const key = chaveDia(dia)
-            const res = await fetch(`/api/jogos/fixtures?date=${key}`)
-            if (!res.ok) throw new Error('Erro ao buscar jogos')
-            const json = await res.json()
-            return { key, jogos: (json.jogos ?? []) as Jogo[] }
-          }),
-        )
+        // Um único request pro intervalo inteiro (não um por dia) — a fonte atual (football-data.org)
+        // aceita dateFrom/dateTo nativamente, e o plano gratuito tem limite de req/min que um
+        // request por dia (até 16 de uma vez) estouraria na primeira carga.
+        const dateFrom = chaveDia(diasVisiveis[0])
+        const dateTo = chaveDia(diasVisiveis[diasVisiveis.length - 1])
+        const res = await fetch(`/api/jogos/fixtures?dateFrom=${dateFrom}&dateTo=${dateTo}`)
+        if (!res.ok) throw new Error('Erro ao buscar jogos')
+        const json = await res.json()
+        const jogos = (json.jogos ?? []) as Jogo[]
         if (cancelado) return
 
+        // Agrupa por dia em horário de Brasília (não UTC) — um jogo às 21h de Brasília em 23/08 é
+        // 00h UTC de 24/08, cairia no dia errado se agrupasse pela data UTC crua.
         const mapa = new Map<string, Jogo[]>()
-        let algumErro = false
-        for (const r of resultados) {
-          if (r.status === 'fulfilled') mapa.set(r.value.key, r.value.jogos)
-          else algumErro = true
+        for (const dia of diasVisiveis) mapa.set(chaveDia(dia), [])
+        for (const jogo of jogos) {
+          const key = dataParaBrasilISO(jogo.date)
+          if (mapa.has(key)) mapa.get(key)!.push(jogo)
         }
         setJogosPorDia(mapa)
-        if (algumErro) setErro('Alguns dias não carregaram — tente recarregar')
+      } catch {
+        if (!cancelado) setErro('Erro ao buscar jogos — tente recarregar')
       } finally {
         if (!cancelado) setCarregando(false)
       }
