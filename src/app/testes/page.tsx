@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { RefreshCw, Send, Check, Copy, Clock, Settings, ChevronDown, ChevronUp, Zap, Save, Ticket, ExternalLink, X, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Modal } from '@/components/ui/Modal'
 
 interface CronConfig {
   pollIntervalMs: number
@@ -106,6 +107,7 @@ export default function TestesPage() {
   const [carregandoBilhetes, setCarregandoBilhetes] = useState(true)
   const [novoCurl, setNovoCurl] = useState('')
   const [salvandoCasa, setSalvandoCasa] = useState(false)
+  const [modalCasaAberto, setModalCasaAberto] = useState(false)
   const [removendoCasa, setRemovendoCasa] = useState<string | null>(null)
   const [erroBilhetes, setErroBilhetes] = useState('')
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null)
@@ -166,6 +168,7 @@ export default function TestesPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao adicionar casa')
       setNovoCurl('')
+      setModalCasaAberto(false)
       await fetchBilhetes()
     } catch (err) {
       setErroBilhetes((err as Error).message)
@@ -454,24 +457,14 @@ export default function TestesPage() {
             </div>
           )}
 
-          <div className="flex items-start gap-2 mb-3">
-            <textarea
-              value={novoCurl}
-              onChange={(e) => setNovoCurl(e.target.value)}
-              placeholder={"Cole o curl inteiro (ex: da SendPulse/Supabase) ou só o valor da casa, ex: superbet_odm"}
-              rows={2}
-              className="flex-1 max-w-xl px-2 py-1.5 text-xs font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-y"
-            />
-            <button
-              onClick={handleAdicionarCasa}
-              disabled={salvandoCasa || !extrairCasaDoCurl(novoCurl)}
-              className="flex shrink-0 items-center gap-1 rounded-md px-2 h-8 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: 'var(--d1)' }}
-            >
-              {salvandoCasa ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-              Adicionar
-            </button>
-          </div>
+          <button
+            onClick={() => setModalCasaAberto(true)}
+            className="flex items-center gap-1.5 rounded-md px-2.5 h-8 text-xs font-medium text-white transition-opacity hover:opacity-90 mb-3"
+            style={{ backgroundColor: 'var(--d1)' }}
+          >
+            <Plus size={12} />
+            Adicionar casa
+          </button>
 
           {carregandoBilhetes ? (
             <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] py-4">
@@ -558,6 +551,45 @@ export default function TestesPage() {
             </div>
           )}
         </section>
+
+        <Modal open={modalCasaAberto} onClose={() => setModalCasaAberto(false)} title="Adicionar casa">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Curl inteiro ou só o valor da casa</label>
+              <textarea
+                value={novoCurl}
+                onChange={(e) => setNovoCurl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAdicionarCasa() }}
+                placeholder={"Cole o curl inteiro (ex: da SendPulse/Supabase) ou só o valor da casa, ex: superbet_odm"}
+                rows={5}
+                autoFocus
+                className="w-full px-2 py-1.5 text-xs font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-y"
+              />
+            </div>
+            {erroBilhetes && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
+                {erroBilhetes}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setModalCasaAberto(false)}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAdicionarCasa}
+                disabled={salvandoCasa || !extrairCasaDoCurl(novoCurl)}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--d1)' }}
+              >
+                {salvandoCasa ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </Modal>
 
         {/* Estatísticas */}
         <div className="grid grid-cols-4 gap-3">
