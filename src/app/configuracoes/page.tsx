@@ -7,7 +7,6 @@ import { Spinner } from '@/components/ui/Spinner'
 import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, X, Check, AlertTriangle, UserPlus, UserX } from 'lucide-react'
 import { getState, updateFlowTagConfig, addUsuarioResponsavel, deletarUsuarioResponsavel } from '@/lib/store'
 import { TagComboBox } from '@/components/ui/TagComboBox'
-import { AlertaPlanosSendpulse } from '@/components/sendpulse/AlertaPlanosSendpulse'
 import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig, UsuarioResponsavel } from '@/types'
 
 function TagChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -507,8 +506,6 @@ export default function ConfiguracoesPage() {
   return (
     <div className="flex-1 flex flex-col p-6 space-y-6">
       <h1 className="text-lg font-mono text-[var(--text-primary)]">Configurações</h1>
-
-      <AlertaPlanosSendpulse />
 
       <div className="flex items-center justify-between max-w-sm p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <span className="text-sm text-[var(--text-primary)]">Tema</span>

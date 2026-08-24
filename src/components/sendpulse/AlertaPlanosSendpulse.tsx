@@ -10,6 +10,9 @@ function formatarData(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
+/** Faixa amarela no topo do app inteiro (ver ClientLayout), acima até do título da página atual —
+ * plano da SendPulse expirado/expirando é o tipo de coisa que não pode passar despercebido
+ * enfiado no meio do conteúdo de uma tela só. */
 export function AlertaPlanosSendpulse() {
   const [planos, setPlanos] = useState<StatusPlanoSendpulse[]>([])
 
@@ -23,18 +26,15 @@ export function AlertaPlanosSendpulse() {
   }, [])
 
   const { expirados, expirando: expirandoLogo } = classificarPlanosSendpulse(planos)
+  const avisos = [...expirados, ...expirandoLogo]
 
-  if (!expirados.length && !expirandoLogo.length) return null
+  if (!avisos.length) return null
 
   return (
-    <div className="space-y-2">
+    <div className="bg-yellow-400 text-black divide-y divide-black/10">
       {expirados.map((p) => (
-        <div
-          key={p.contaId}
-          className="flex items-center gap-2 px-3 py-2 rounded-md text-xs"
-          style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}
-        >
-          <AlertTriangle size={14} className="shrink-0" />
+        <div key={p.contaId} className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium">
+          <AlertTriangle size={13} className="shrink-0" />
           <span>
             <strong>Plano da SendPulse expirado</strong> — {p.contaNome}
             {p.tariffCode ? ` (${p.tariffCode})` : ''} expirou em {p.expiredAt ? formatarData(p.expiredAt) : '—'}.
@@ -42,12 +42,8 @@ export function AlertaPlanosSendpulse() {
         </div>
       ))}
       {expirandoLogo.map((p) => (
-        <div
-          key={p.contaId}
-          className="flex items-center gap-2 px-3 py-2 rounded-md text-xs"
-          style={{ backgroundColor: 'var(--warning)15', border: '1px solid var(--warning)30', color: 'var(--warning)' }}
-        >
-          <AlertTriangle size={14} className="shrink-0" />
+        <div key={p.contaId} className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium">
+          <AlertTriangle size={13} className="shrink-0" />
           <span>
             <strong>Plano da SendPulse expirando</strong> — {p.contaNome}
             {p.tariffCode ? ` (${p.tariffCode})` : ''} expira em {diasAte(p.expiredAt!)} dia(s) ({formatarData(p.expiredAt!)}).

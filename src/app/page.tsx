@@ -7,7 +7,6 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { StatNumber } from '@/components/ui/StatNumber'
 import { ModalLinkDaxx } from '@/components/home/ModalLinkDaxx'
-import { AlertaPlanosSendpulse } from '@/components/sendpulse/AlertaPlanosSendpulse'
 import { GradeHomeSection } from '@/components/jogos/GradeHomeSection'
 import { useMonitoramento } from '@/hooks/useMonitoramento'
 import { useDisparos } from '@/hooks/useDisparos'
@@ -1302,8 +1301,6 @@ export default function HomePage() {
       />
 
       <div className="p-6 space-y-8">
-        <AlertaPlanosSendpulse />
-
         <GradeHomeSection />
 
         {error && (
