@@ -21,6 +21,7 @@ export function useJogosCalendario() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [ligasSelecionadas, setLigasSelecionadas] = useState<number[]>([])
+  const [filtroTime, setFiltroTime] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
   const diasVisiveis = useMemo(
@@ -67,13 +68,18 @@ export function useJogosCalendario() {
   }, [diasVisiveis])
 
   const jogosPorDiaFiltrado = useMemo(() => {
-    if (!ligasSelecionadas.length) return jogosPorDia
+    const termo = filtroTime.trim().toLowerCase()
+    if (!ligasSelecionadas.length && !termo) return jogosPorDia
     const mapa = new Map<string, Jogo[]>()
     for (const [key, jogos] of jogosPorDia) {
-      mapa.set(key, jogos.filter((j) => ligasSelecionadas.includes(j.ligaId)))
+      mapa.set(key, jogos.filter((j) => {
+        if (ligasSelecionadas.length && !ligasSelecionadas.includes(j.ligaId)) return false
+        if (termo && !j.homeTeam.toLowerCase().includes(termo) && !j.awayTeam.toLowerCase().includes(termo)) return false
+        return true
+      }))
     }
     return mapa
-  }, [jogosPorDia, ligasSelecionadas])
+  }, [jogosPorDia, ligasSelecionadas, filtroTime])
 
   const indexHoje = useMemo(() => diasVisiveis.findIndex((d) => isMesmaData(d, hoje)), [diasVisiveis, hoje])
 
@@ -100,6 +106,8 @@ export function useJogosCalendario() {
     erro,
     ligasSelecionadas,
     setLigasSelecionadas,
+    filtroTime,
+    setFiltroTime,
     avancar,
     recuar,
     irParaHoje,

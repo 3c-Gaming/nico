@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Search } from 'lucide-react'
 import { useJogosCalendario } from './useJogosCalendario'
 import { ColunaDataJogo } from './ColunaDataJogo'
 import { JogosFiltros } from './JogosFiltros'
@@ -15,6 +15,8 @@ export function JogosTimeline() {
     erro,
     ligasSelecionadas,
     setLigasSelecionadas,
+    filtroTime,
+    setFiltroTime,
     avancar,
     recuar,
     irParaHoje,
@@ -47,8 +49,18 @@ export function JogosTimeline() {
             </Button>
           </div>
         </div>
-        <div className="px-4 pb-2.5">
+        <div className="px-4 pb-2.5 flex items-center gap-3 flex-wrap">
           <JogosFiltros selecionadas={ligasSelecionadas} onChange={setLigasSelecionadas} />
+          <div className="flex items-center gap-1.5 flex-1 min-w-[160px] max-w-xs">
+            <Search size={14} className="text-[var(--text-muted)] shrink-0" />
+            <input
+              type="text"
+              value={filtroTime}
+              onChange={(e) => setFiltroTime(e.target.value)}
+              placeholder="Buscar time…"
+              className="flex-1 h-8 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+          </div>
         </div>
       </div>
 
