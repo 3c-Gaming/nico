@@ -1,8 +1,11 @@
 // football-data.org — substitui o daxx-scrapping-bridge (SofaScore via Playwright, fora do ar)
-// como fonte da tela de Jogos. Cobre só 4 das 7 competições acompanhadas (ver LIGAS_ACOMPANHADAS
-// em @/lib/jogos): Brasileirão, Champions League, La Liga e Premier League estão no plano
-// gratuito; Copa do Brasil, Libertadores e Sul-Americana não são cobertas (sem alternativa
-// gratuita encontrada pra elas até agora — ficam sem jogos na tela por enquanto).
+// como fonte da tela de Jogos. Cobre 5 das 7 competições acompanhadas (ver LIGAS_ACOMPANHADAS em
+// @/lib/jogos): Brasileirão, Copa Libertadores, Champions League, La Liga e Premier League.
+// Libertadores aparece como "TIER_FOUR" no catálogo da API mas funciona normalmente com a key
+// gratuita (confirmado ao vivo, com jogos reais das quartas de final) — só o rótulo do plano é
+// enganoso. Copa do Brasil e Sul-Americana não existem no catálogo da football-data.org de jeito
+// nenhum (testados vários códigos, todos 404) — sem alternativa gratuita encontrada pra elas até
+// agora, ficam sem jogos na tela.
 
 import type { Jogo } from '@/types'
 
@@ -13,6 +16,7 @@ const BASE_URL = 'https://api.football-data.org/v4'
 // troca de fonte de dados não exige mudar nada fora dessa camada de integração.
 const LIGA_ID_POR_CODIGO: Record<string, number> = {
   BSA: 71, // Campeonato Brasileiro Série A
+  CLI: 13, // Copa Libertadores
   CL: 2, // UEFA Champions League
   PD: 140, // La Liga (Primera División)
   PL: 39, // Premier League
