@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-import { RefreshCw, Send, Check, Copy, Clock, Settings, ChevronDown, ChevronUp, Zap, Save } from 'lucide-react'
+import { RefreshCw, Send, Check, Copy, Clock, Settings, ChevronDown, ChevronUp, Zap, Save, Ticket, ExternalLink, X, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 
 interface CronConfig {
@@ -11,6 +11,22 @@ interface CronConfig {
   lastRunAt: string | null
   botContactIds: Record<string, string>
   bots: { botId: string; nome: string; numero: string; contaNome?: string }[]
+}
+
+interface BettingLink {
+  id: string
+  casa: string
+  dataJogo: string
+  horarioJogo: string
+  link: string
+  ativo: boolean
+  criadoEm: string
+}
+
+interface BilheteResultado {
+  casa: string
+  bilhetes: BettingLink[]
+  erro: string | null
 }
 
 interface BotTestResult {
@@ -50,6 +66,12 @@ function formatUltimosQuatro(numero: string): string {
   return numero.replace(/\D/g, '').slice(-4)
 }
 
+function formatDataJogo(dataJogo: string, horarioJogo: string): string {
+  const [, mes, dia] = dataJogo.split('-')
+  const hora = horarioJogo.slice(0, 5)
+  return dia && mes ? `${dia}/${mes} ${hora}` : `${dataJogo} ${hora}`
+}
+
 function JsonBlock({ data }: { data: unknown }) {
   if (!data) return <span className="text-[var(--text-muted)]">—</span>
   const texto = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
@@ -70,6 +92,13 @@ export default function TestesPage() {
   const [editBotContactIds, setEditBotContactIds] = useState<Record<string, string>>({})
   const [salvandoBotId, setSalvandoBotId] = useState<string | null>(null)
   const [botIdCopiado, setBotIdCopiado] = useState<string | null>(null)
+  const [bilheteResultados, setBilheteResultados] = useState<BilheteResultado[]>([])
+  const [carregandoBilhetes, setCarregandoBilhetes] = useState(true)
+  const [novaCasa, setNovaCasa] = useState('')
+  const [salvandoCasa, setSalvandoCasa] = useState(false)
+  const [removendoCasa, setRemovendoCasa] = useState<string | null>(null)
+  const [erroBilhetes, setErroBilhetes] = useState('')
+  const [linkCopiado, setLinkCopiado] = useState<string | null>(null)
 
   const fetchResultados = useCallback(async () => {
     try {
@@ -92,14 +121,78 @@ export default function TestesPage() {
     } catch { }
   }, [])
 
+  const fetchBilhetes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/betting-links/status', { signal: AbortSignal.timeout(15000) })
+      if (res.ok) {
+        const data = await res.json()
+        setBilheteResultados(data.resultados ?? [])
+      }
+    } catch { }
+  }, [])
+
   useEffect(() => {
     Promise.all([fetchResultados(), fetchConfig()]).finally(() => setCarregando(false))
-  }, [fetchResultados, fetchConfig])
+    fetchBilhetes().finally(() => setCarregandoBilhetes(false))
+  }, [fetchResultados, fetchConfig, fetchBilhetes])
 
   useEffect(() => {
     const interval = setInterval(fetchResultados, 15_000)
     return () => clearInterval(interval)
   }, [fetchResultados])
+
+  const handleAdicionarCasa = async () => {
+    const casa = novaCasa.trim()
+    if (!casa) return
+    setSalvandoCasa(true)
+    setErroBilhetes('')
+    try {
+      const casasAtuais = bilheteResultados.map((r) => r.casa)
+      const res = await fetch('/api/betting-links/casas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ casas: [...casasAtuais, casa] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao adicionar casa')
+      setNovaCasa('')
+      await fetchBilhetes()
+    } catch (err) {
+      setErroBilhetes((err as Error).message)
+    } finally {
+      setSalvandoCasa(false)
+    }
+  }
+
+  const handleRemoverCasa = async (casa: string) => {
+    setRemovendoCasa(casa)
+    setErroBilhetes('')
+    try {
+      const casasAtuais = bilheteResultados.map((r) => r.casa).filter((c) => c !== casa)
+      const res = await fetch('/api/betting-links/casas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ casas: casasAtuais }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao remover casa')
+      await fetchBilhetes()
+    } catch (err) {
+      setErroBilhetes((err as Error).message)
+    } finally {
+      setRemovendoCasa(null)
+    }
+  }
+
+  const handleCopiarLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setLinkCopiado(link)
+      window.setTimeout(() => setLinkCopiado(null), 1500)
+    } catch {
+      setErroBilhetes('Não foi possível copiar o link')
+    }
+  }
 
   const handleTestarBot = async (botId: string) => {
     setTestando(botId)
@@ -316,6 +409,117 @@ export default function TestesPage() {
                         <RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" />
                       ) : (
                         <Send size={12} className="text-[var(--text-muted)]" />
+                      )}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Bilhetes de Aposta Pronta */}
+        <section className="rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <Ticket size={16} className="text-[var(--d1)]" />
+              Bilhetes de Aposta Pronta
+            </h2>
+            <button
+              onClick={() => { setCarregandoBilhetes(true); fetchBilhetes().finally(() => setCarregandoBilhetes(false)) }}
+              disabled={carregandoBilhetes}
+              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={12} className={carregandoBilhetes ? 'animate-spin' : ''} />
+              Recarregar
+            </button>
+          </div>
+          <p className="text-[12px] mb-3">
+            Consulta ao vivo (GET betting_links) por casa — mostra o bilhete mais recente ainda ativo de cada uma.
+          </p>
+
+          {erroBilhetes && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs mb-3" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
+              {erroBilhetes}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 mb-3 max-w-sm">
+            <input
+              type="text"
+              value={novaCasa}
+              onChange={(e) => setNovaCasa(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAdicionarCasa() }}
+              placeholder="casa (ex: superbet_odm)"
+              className="h-8 flex-1 px-2 text-xs font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+            <button
+              onClick={handleAdicionarCasa}
+              disabled={salvandoCasa || !novaCasa.trim()}
+              className="flex shrink-0 items-center gap-1 rounded-md px-2 h-8 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--d1)' }}
+            >
+              {salvandoCasa ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+              Adicionar
+            </button>
+          </div>
+
+          {carregandoBilhetes ? (
+            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] py-4">
+              <RefreshCw size={12} className="animate-spin" />
+              Carregando...
+            </div>
+          ) : bilheteResultados.length === 0 ? (
+            <div className="text-xs text-[var(--text-muted)] text-center py-4">
+              Nenhuma casa configurada ainda — adicione uma acima.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {bilheteResultados.map((r) => {
+                const bilhete = r.bilhetes[0]
+                return (
+                  <div key={r.casa} className="flex items-center gap-3 rounded-md p-2.5 bg-[var(--bg-surface)] border border-[var(--border)] group">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${r.erro ? 'bg-red-500' : bilhete ? 'bg-green-500' : 'bg-[var(--text-muted)]'}`} />
+                    <span className="text-xs font-mono font-medium text-[var(--text-primary)] w-36 shrink-0 truncate" title={r.casa}>{r.casa}</span>
+                    <div className="min-w-0 flex-1">
+                      {r.erro ? (
+                        <span className="text-xs text-red-400">{r.erro}</span>
+                      ) : bilhete ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] text-[var(--text-muted)] shrink-0">{formatDataJogo(bilhete.dataJogo, bilhete.horarioJogo)}</span>
+                          <a
+                            href={bilhete.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-[var(--d1)] hover:underline truncate"
+                          >
+                            <ExternalLink size={11} className="shrink-0" />
+                            <span className="truncate">{bilhete.link}</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleCopiarLink(bilhete.link)}
+                            className="shrink-0 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title={linkCopiado === bilhete.link ? 'Copiado' : 'Copiar link'}
+                          >
+                            {linkCopiado === bilhete.link ? <Check size={11} /> : <Copy size={11} />}
+                          </button>
+                          <span className="text-[10px] text-[var(--text-muted)] shrink-0">{formatTempoRelativo(bilhete.criadoEm)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">Sem bilhete ativo</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRemoverCasa(r.casa)}
+                      disabled={removendoCasa !== null}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-[var(--bg-elevated)] disabled:opacity-30"
+                      title="Parar de monitorar essa casa"
+                    >
+                      {removendoCasa === r.casa ? (
+                        <RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" />
+                      ) : (
+                        <X size={12} className="text-[var(--text-muted)]" />
                       )}
                     </button>
                   </div>
