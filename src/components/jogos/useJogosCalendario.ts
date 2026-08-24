@@ -38,9 +38,13 @@ export function useJogosCalendario() {
       try {
         // Um único request pro intervalo inteiro (não um por dia) — a fonte atual (football-data.org)
         // aceita dateFrom/dateTo nativamente, e o plano gratuito tem limite de req/min que um
-        // request por dia (até 16 de uma vez) estouraria na primeira carga.
+        // request por dia (até 16 de uma vez) estouraria na primeira carga. dateTo pede 2 dias de
+        // folga a mais (confirmado ao vivo: dateTo=X exclui o dia X inteiro, não só o que vem
+        // depois dele) — um jogo do último dia visível às 21h+ em Brasília (UTC-3) já é UTC do dia
+        // seguinte, e esse dia só entra no resultado se dateTo for 2 dias depois dele. O
+        // agrupamento por dataParaBrasilISO abaixo descarta o que sobrar fora de diasVisiveis.
         const dateFrom = chaveDia(diasVisiveis[0])
-        const dateTo = chaveDia(diasVisiveis[diasVisiveis.length - 1])
+        const dateTo = chaveDia(adicionarDias(diasVisiveis[diasVisiveis.length - 1], 2))
         const res = await fetch(`/api/jogos/fixtures?dateFrom=${dateFrom}&dateTo=${dateTo}`)
         if (!res.ok) throw new Error('Erro ao buscar jogos')
         const json = await res.json()
