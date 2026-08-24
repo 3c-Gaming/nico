@@ -72,6 +72,16 @@ function formatDataJogo(dataJogo: string, horarioJogo: string): string {
   return dia && mes ? `${dia}/${mes} ${hora}` : `${dataJogo} ${hora}`
 }
 
+/** Aceita tanto o curl inteiro (copiado do exemplo da SendPulse/Supabase) quanto só o valor da
+ * casa digitado direto — o que muda de um bilhete pra outro é sempre o "casa=eq.<valor>" na URL,
+ * então basta procurar por esse pedaço; se não achar, assume que o texto inteiro já É o valor da
+ * casa (uso digitando direto, sem colar curl nenhum). */
+function extrairCasaDoCurl(texto: string): string {
+  const match = texto.match(/casa=eq\.([^&\s'"]+)/)
+  if (match) return decodeURIComponent(match[1])
+  return texto.trim()
+}
+
 function JsonBlock({ data }: { data: unknown }) {
   if (!data) return <span className="text-[var(--text-muted)]">—</span>
   const texto = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
@@ -94,7 +104,7 @@ export default function TestesPage() {
   const [botIdCopiado, setBotIdCopiado] = useState<string | null>(null)
   const [bilheteResultados, setBilheteResultados] = useState<BilheteResultado[]>([])
   const [carregandoBilhetes, setCarregandoBilhetes] = useState(true)
-  const [novaCasa, setNovaCasa] = useState('')
+  const [novoCurl, setNovoCurl] = useState('')
   const [salvandoCasa, setSalvandoCasa] = useState(false)
   const [removendoCasa, setRemovendoCasa] = useState<string | null>(null)
   const [erroBilhetes, setErroBilhetes] = useState('')
@@ -142,7 +152,7 @@ export default function TestesPage() {
   }, [fetchResultados])
 
   const handleAdicionarCasa = async () => {
-    const casa = novaCasa.trim()
+    const casa = extrairCasaDoCurl(novoCurl)
     if (!casa) return
     setSalvandoCasa(true)
     setErroBilhetes('')
@@ -155,7 +165,7 @@ export default function TestesPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao adicionar casa')
-      setNovaCasa('')
+      setNovoCurl('')
       await fetchBilhetes()
     } catch (err) {
       setErroBilhetes((err as Error).message)
@@ -444,18 +454,17 @@ export default function TestesPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 mb-3 max-w-sm">
-            <input
-              type="text"
-              value={novaCasa}
-              onChange={(e) => setNovaCasa(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdicionarCasa() }}
-              placeholder="casa (ex: superbet_odm)"
-              className="h-8 flex-1 px-2 text-xs font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          <div className="flex items-start gap-2 mb-3">
+            <textarea
+              value={novoCurl}
+              onChange={(e) => setNovoCurl(e.target.value)}
+              placeholder={"Cole o curl inteiro (ex: da SendPulse/Supabase) ou só o valor da casa, ex: superbet_odm"}
+              rows={2}
+              className="flex-1 max-w-xl px-2 py-1.5 text-xs font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-y"
             />
             <button
               onClick={handleAdicionarCasa}
-              disabled={salvandoCasa || !novaCasa.trim()}
+              disabled={salvandoCasa || !extrairCasaDoCurl(novoCurl)}
               className="flex shrink-0 items-center gap-1 rounded-md px-2 h-8 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: 'var(--d1)' }}
             >
@@ -474,57 +483,78 @@ export default function TestesPage() {
               Nenhuma casa configurada ainda — adicione uma acima.
             </div>
           ) : (
-            <div className="space-y-1.5">
-              {bilheteResultados.map((r) => {
-                const bilhete = r.bilhetes[0]
-                return (
-                  <div key={r.casa} className="flex items-center gap-3 rounded-md p-2.5 bg-[var(--bg-surface)] border border-[var(--border)] group">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${r.erro ? 'bg-red-500' : bilhete ? 'bg-green-500' : 'bg-[var(--text-muted)]'}`} />
-                    <span className="text-xs font-mono font-medium text-[var(--text-primary)] w-36 shrink-0 truncate" title={r.casa}>{r.casa}</span>
-                    <div className="min-w-0 flex-1">
-                      {r.erro ? (
-                        <span className="text-xs text-red-400">{r.erro}</span>
-                      ) : bilhete ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] text-[var(--text-muted)] shrink-0">{formatDataJogo(bilhete.dataJogo, bilhete.horarioJogo)}</span>
-                          <a
-                            href={bilhete.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-[var(--d1)] hover:underline truncate"
-                          >
-                            <ExternalLink size={11} className="shrink-0" />
-                            <span className="truncate">{bilhete.link}</span>
-                          </a>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--glass-border)]">
+                    <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Casa</th>
+                    <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Data jogo</th>
+                    <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Link</th>
+                    <th className="text-left py-1.5 px-2 font-medium text-[var(--text-muted)]">Criado</th>
+                    <th className="w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {bilheteResultados.map((r) => {
+                    const bilhete = r.bilhetes[0]
+                    return (
+                      <tr key={r.casa} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors group">
+                        <td className="py-2 px-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${r.erro ? 'bg-red-500' : bilhete ? 'bg-green-500' : 'bg-[var(--text-muted)]'}`} />
+                            <span className="font-mono font-medium text-[var(--text-primary)]" title={r.casa}>{r.casa}</span>
+                          </div>
+                        </td>
+                        {r.erro ? (
+                          <td colSpan={3} className="py-2 px-2 text-red-400">{r.erro}</td>
+                        ) : bilhete ? (
+                          <>
+                            <td className="py-2 px-2 text-[var(--text-secondary)] whitespace-nowrap">{formatDataJogo(bilhete.dataJogo, bilhete.horarioJogo)}</td>
+                            <td className="py-2 px-2 max-w-xs">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <a
+                                  href={bilhete.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-[var(--d1)] hover:underline truncate min-w-0"
+                                >
+                                  <ExternalLink size={11} className="shrink-0" />
+                                  <span className="truncate">{bilhete.link}</span>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopiarLink(bilhete.link)}
+                                  className="shrink-0 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                                  title={linkCopiado === bilhete.link ? 'Copiado' : 'Copiar link'}
+                                >
+                                  {linkCopiado === bilhete.link ? <Check size={11} /> : <Copy size={11} />}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 text-[var(--text-muted)] whitespace-nowrap">{formatTempoRelativo(bilhete.criadoEm)}</td>
+                          </>
+                        ) : (
+                          <td colSpan={3} className="py-2 px-2 text-[var(--text-muted)]">Sem bilhete ativo</td>
+                        )}
+                        <td className="py-2 px-2">
                           <button
-                            type="button"
-                            onClick={() => handleCopiarLink(bilhete.link)}
-                            className="shrink-0 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-                            title={linkCopiado === bilhete.link ? 'Copiado' : 'Copiar link'}
+                            onClick={() => handleRemoverCasa(r.casa)}
+                            disabled={removendoCasa !== null}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--bg-elevated)] disabled:opacity-30"
+                            title="Parar de monitorar essa casa"
                           >
-                            {linkCopiado === bilhete.link ? <Check size={11} /> : <Copy size={11} />}
+                            {removendoCasa === r.casa ? (
+                              <RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" />
+                            ) : (
+                              <X size={12} className="text-[var(--text-muted)]" />
+                            )}
                           </button>
-                          <span className="text-[10px] text-[var(--text-muted)] shrink-0">{formatTempoRelativo(bilhete.criadoEm)}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">Sem bilhete ativo</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleRemoverCasa(r.casa)}
-                      disabled={removendoCasa !== null}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-[var(--bg-elevated)] disabled:opacity-30"
-                      title="Parar de monitorar essa casa"
-                    >
-                      {removendoCasa === r.casa ? (
-                        <RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" />
-                      ) : (
-                        <X size={12} className="text-[var(--text-muted)]" />
-                      )}
-                    </button>
-                  </div>
-                )
-              })}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
