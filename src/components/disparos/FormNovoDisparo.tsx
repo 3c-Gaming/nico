@@ -217,20 +217,24 @@ export function FormNovoDisparo() {
             </span>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Campanha vinculada a um disparo já feito na DAXX' },
-                { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Envio de SMS direto pelo app' },
+                { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Campanha vinculada a um disparo já feito na DAXX', disabled: false },
+                { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Esse fluxo ainda não foi construído — use "Disparo SMS" na sidebar', disabled: true },
               ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => setCanal(opt.value)}
+                  onClick={() => !opt.disabled && setCanal(opt.value)}
+                  disabled={opt.disabled}
+                  title={opt.disabled ? 'Em construção nesse wizard — use a tela "Disparo SMS" na sidebar' : undefined}
                   className={`p-4 rounded-md border text-left transition-all ${
-                    canal === opt.value
-                      ? 'border-[var(--d1)] bg-[var(--d1)]/10'
-                      : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
+                    opt.disabled
+                      ? 'border-[var(--border)] bg-[var(--bg-surface)] opacity-40 cursor-not-allowed'
+                      : canal === opt.value
+                        ? 'border-[var(--d1)] bg-[var(--d1)]/10'
+                        : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
                   }`}
                 >
                   <span
-                    className={`text-sm font-semibold ${canal === opt.value ? 'text-[var(--d1)]' : 'text-[var(--text-primary)]'}`}
+                    className={`text-sm font-semibold ${!opt.disabled && canal === opt.value ? 'text-[var(--d1)]' : 'text-[var(--text-primary)]'}`}
                   >
                     {opt.label}
                   </span>
