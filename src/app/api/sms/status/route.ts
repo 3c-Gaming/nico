@@ -5,7 +5,13 @@ import { getSupabase } from '@/lib/db/supabase'
 // Valor real de `status` na resposta da Solvefy vem sem prefixo (ex: "delivered", não
 // "message.delivered" — esse prefixo é só o nome do evento de webhook, confirmado testando
 // GET /cpaas/v1/sms/messages/{id} ao vivo).
-const STATUS_FINAIS = ['delivered', 'undelivered', 'failed', 'erro']
+//
+// "delivered" NÃO entra aqui: clique no link encurtado (evento message.clicked, só existe com
+// useShortener+trackClicks ligados) só pode acontecer DEPOIS da entrega — se parar de reconsultar
+// em "delivered", nunca captura o clique que vem em seguida. Só para de verificar em estados que
+// realmente não mudam mais: falha (a mensagem não chegou e não tem como ainda ser clicada) ou
+// clique (já é o fim da linha da jornada — entregue E clicado).
+const STATUS_FINAIS = ['clicked', 'undelivered', 'failed', 'erro']
 
 /** GET /api/sms/status?campanha=... — lista os envios já registrados dessa campanha (sem bater
  * na Solvefy de novo, só lê o que já está salvo). */

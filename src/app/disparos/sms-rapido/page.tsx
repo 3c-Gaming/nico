@@ -55,6 +55,15 @@ function resolverExemplo(texto: string, variables: Record<string, string>): stri
   return texto.replace(/\{\{([^}]*)\}\}/g, (match, nome) => variables[nome.trim()] ?? match)
 }
 
+// Cor por status — "clicked" ganha destaque próprio (é o sinal de engajamento real, não só
+// entrega) e só existe quando useShortener + trackClicks estavam ligados no envio.
+function corDoStatus(status: string): string {
+  if (status === 'clicked') return 'text-violet-400 font-semibold'
+  if (status === 'delivered') return 'text-emerald-400'
+  if (status === 'undelivered' || status === 'failed') return 'text-[var(--error)]'
+  return 'text-[var(--text-primary)]'
+}
+
 const COLUNAS_TELEFONE = ['telefone', 'phone', 'numero', 'número', 'celular', 'whatsapp', 'to']
 
 // Parser simples de CSV — trata campos entre aspas (podem ter vírgula dentro), sem dependência
@@ -417,8 +426,11 @@ export default function SmsRapidoPage() {
                   {resultados.map((r) => (
                     <tr key={r.telefone} className="border-t border-[var(--border)]">
                       <td className="px-3 py-1.5 font-mono text-[var(--text-primary)]">{r.telefone}</td>
-                      <td className={`px-3 py-1.5 ${r.ok ? 'text-[var(--text-primary)]' : 'text-[var(--error)]'}`}>
-                        {r.ok ? (r.status ?? 'queued') : (r.erro ?? 'erro')}
+                      <td className={`px-3 py-1.5 ${r.ok ? corDoStatus(r.status ?? 'queued') : 'text-[var(--error)]'}`}>
+                        <span className="inline-flex items-center gap-1">
+                          {r.ok ? (r.status ?? 'queued') : (r.erro ?? 'erro')}
+                          {r.ok && r.status === 'clicked' && <Link2 size={11} />}
+                        </span>
                       </td>
                     </tr>
                   ))}
