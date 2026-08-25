@@ -1,10 +1,33 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Upload, Send, RefreshCw, Link2, Save, BookmarkPlus } from 'lucide-react'
+import { Upload, Send, RefreshCw, Link2, Save, BookmarkPlus, Pin } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
+import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { useToast } from '@/components/ui/Toast'
+import { useDisparos } from '@/hooks/useDisparos'
+import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
+import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
+import type { Disparo } from '@/types'
+
+const CASA_TRACKING_INFO = {
+  superbet: { label: 'Superbet' },
+  betmgm: { label: 'BetMGM' },
+} as const
+type CasaTracking = keyof typeof CASA_TRACKING_INFO
+
+function getLocalDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getLocalHora(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 interface LinhaBase {
   telefone: string
@@ -94,11 +117,29 @@ function parsearCsv(texto: string): { headers: string[]; linhas: string[][] } {
 
 export default function SmsRapidoPage() {
   const { addToast } = useToast()
+  const { create: createDisparo } = useDisparos()
+  const { toggle: togglePin, isPinned } = usePinnedDisparos()
+  const { list: casasList } = useCasasAposta()
 
   const [campanha, setCampanha] = useState(() => `sms-${new Date().toISOString().slice(0, 10)}`)
   const [from, setFrom] = useState('DISPARO')
   const [corpo, setCorpo] = useState('')
   const [useShortener, setUseShortener] = useState(true)
+
+  // Tracking (opcional, mas é o que faz Reg/FTD/CPA aparecerem depois — mesma UTM+casa usada em
+  // /funis e /utms) e custo fixo por SMS (a Solvefy não retorna preço, então é digitado aqui).
+  const [casaTracking, setCasaTracking] = useState<CasaTracking | ''>('')
+  const [utmValor, setUtmValor] = useState('')
+  const [custoPorSms, setCustoPorSms] = useState('')
+  const [disparoCriado, setDisparoCriado] = useState<Disparo | null>(null)
+
+  const { resultado: resultadoTracking, custo: custoTracking, carregando: carregandoTracking } = useResultadoDisparo({
+    utmValor: disparoCriado?.utm || disparoCriado?.betmgmPid,
+    casa: disparoCriado ? (disparoCriado.utm ? 'superbet' : disparoCriado.betmgmPid ? 'betmgm' : null) : null,
+    data: disparoCriado?.dataDisparo,
+    entregues: disparoCriado?.base.totalRegistros,
+    custoPorUnidade: disparoCriado?.custoPorEnvio,
+  })
 
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
@@ -203,6 +244,7 @@ export default function SmsRapidoPage() {
     setEnviando(true)
     setProgresso(`Enviando 0 / ${linhas.length}...`)
     setResultados(null)
+    setDisparoCriado(null)
     try {
       const res = await fetch('/api/sms/enviar', {
         method: 'POST',
@@ -213,6 +255,47 @@ export default function SmsRapidoPage() {
       if (data.error) throw new Error(data.error)
       setResultados(data.resultados)
       addToast(data.falhas > 0 ? 'warning' : 'success', `${data.enviados} enviado(s), ${data.falhas} falha(s)`)
+
+      // Cria um Disparo de verdade só quando casa+UTM foram preenchidos — é o que permite ver
+      // Reg/FTD/CPA depois (mesmo tracking de /funis e /utms) e pinar na Home. Sem isso, o envio
+      // já aconteceu normalmente, só fica sem esse acompanhamento agregado.
+      if (casaTracking && utmValor.trim()) {
+        const casaId = casasList.find((c) => c.nome.toLowerCase().includes(casaTracking === 'superbet' ? 'super' : 'mgm'))?.id
+        const agora = new Date()
+        const novoDisparo: Disparo = {
+          id: crypto.randomUUID(),
+          tipo: 'PONTUAL',
+          canal: 'sms',
+          nomenclatura: campanha,
+          status: 'executado',
+          casasAposta: casaId ? [casaId] : [],
+          dataDisparo: getLocalDate(),
+          horarioDisparo: getLocalHora(),
+          base: { status: 'disponivel', totalRegistros: linhas.length, nomeArquivo: nomeArquivo ?? undefined },
+          utm: casaTracking === 'superbet' ? utmValor.trim() : undefined,
+          betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() : undefined,
+          custoPorEnvio: custoPorSms ? Number(custoPorSms) : undefined,
+          criadoEm: agora.toISOString(),
+          atualizadoEm: agora.toISOString(),
+          notas: `Disparo SMS via Solvefy — campanha "${campanha}"`,
+        }
+        try {
+          const resDisparo = await fetch('/api/disparos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disparo: novoDisparo }),
+          })
+          const dataDisparo = await resDisparo.json()
+          if (dataDisparo.disparo) {
+            createDisparo(dataDisparo.disparo)
+            togglePin(dataDisparo.disparo.id)
+            setDisparoCriado(dataDisparo.disparo)
+            addToast('success', 'Disparo criado e pinado na Home')
+          }
+        } catch {
+          addToast('warning', 'SMS enviado, mas não deu pra criar o registro de tracking')
+        }
+      }
     } catch (err) {
       addToast('error', (err as Error).message)
     } finally {
@@ -380,6 +463,44 @@ export default function SmsRapidoPage() {
           Encurtar links automaticamente (encurtador nativo da Solvefy, com tracking de cliques)
         </label>
 
+        <div className="space-y-1.5 p-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)]">
+          <p className="text-xs font-medium text-[var(--text-primary)]">Tracking (opcional, mas é o que traz Reg/FTD/CPA depois)</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1 bg-[var(--bg-base)] border border-[var(--border)] rounded p-0.5">
+              {(['', 'superbet', 'betmgm'] as const).map((opcao) => (
+                <button
+                  key={opcao || 'nenhuma'}
+                  type="button"
+                  onClick={() => { setCasaTracking(opcao); setUtmValor('') }}
+                  className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${casaTracking === opcao ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                >
+                  {opcao === '' ? 'Sem tracking' : CASA_TRACKING_INFO[opcao].label}
+                </button>
+              ))}
+            </div>
+            {casaTracking && (
+              <div className="flex-1 min-w-[180px]">
+                <UtmComboBox value={utmValor} onChange={setUtmValor} casa={casaTracking} placeholder="UTM/PID dessa campanha..." />
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[var(--text-muted)]">Custo/SMS R$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={custoPorSms}
+                onChange={(e) => setCustoPorSms(e.target.value)}
+                placeholder="0,00"
+                className="w-20 h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+              />
+            </div>
+          </div>
+          {casaTracking && !utmValor.trim() && (
+            <p className="text-[10px] text-amber-400">Sem UTM/PID preenchida, o disparo não vai virar um registro rastreável — só o SMS em si vai ser enviado.</p>
+          )}
+        </div>
+
         {linhas.length > 0 && (
           <div className="rounded-md border border-[var(--border)] overflow-hidden max-h-40 overflow-y-auto">
             <table className="w-full text-xs">
@@ -410,10 +531,44 @@ export default function SmsRapidoPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-[var(--text-primary)]">Resultado do envio</h3>
-              <Button variant="secondary" size="sm" icon={<RefreshCw size={12} className={atualizandoStatus ? 'animate-spin' : ''} />} onClick={handleAtualizarStatus} loading={atualizandoStatus}>
-                Atualizar status
-              </Button>
+              <div className="flex items-center gap-2">
+                {disparoCriado && (
+                  <Button
+                    variant={isPinned(disparoCriado.id) ? 'primary' : 'secondary'}
+                    size="sm"
+                    icon={<Pin size={12} />}
+                    onClick={() => togglePin(disparoCriado.id)}
+                  >
+                    {isPinned(disparoCriado.id) ? 'Pinado na Home' : 'Pinar na Home'}
+                  </Button>
+                )}
+                <Button variant="secondary" size="sm" icon={<RefreshCw size={12} className={atualizandoStatus ? 'animate-spin' : ''} />} onClick={handleAtualizarStatus} loading={atualizandoStatus}>
+                  Atualizar status
+                </Button>
+              </div>
             </div>
+
+            {disparoCriado && (
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
+                  <div className="text-lg font-bold text-[var(--text-primary)]">{carregandoTracking ? '…' : formatNumero(resultadoTracking?.registros ?? 0)}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">Registros</div>
+                </div>
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
+                  <div className="text-lg font-bold text-[var(--text-primary)]">{carregandoTracking ? '…' : formatNumero(resultadoTracking?.ftds ?? 0)}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">FTDs</div>
+                </div>
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
+                  <div className="text-lg font-bold text-[var(--text-primary)]">{carregandoTracking ? '…' : resultadoTracking?.cpas ?? '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">CPAs</div>
+                </div>
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
+                  <div className="text-lg font-bold text-emerald-400">{custoTracking > 0 ? formatMoeda(custoTracking) : '—'}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">Custo</div>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-md border border-[var(--border)] overflow-hidden max-h-80 overflow-y-auto">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-[var(--bg-elevated)]">

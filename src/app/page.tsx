@@ -139,13 +139,17 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   const utmValor = disparo.utm || disparo.betmgmPid
   const daxx = daxxCampanhas.find((c) => c.id === (disparo.daxxCampanhaId ?? disparo.templateDaxx?.id))
-  const entregues = daxx?.entregues
+  // SMS não tem campanha DAXX pra buscar "entregues" — usa o tamanho da base enviada (já é o
+  // total de destinatários reais, salvo na criação do disparo) e o custo fixo por envio digitado
+  // então, em vez do CUSTO_POR_ENTREGUE fixo (pensado pro WhatsApp).
+  const entregues = disparo.canal === 'sms' ? disparo.base.totalRegistros : daxx?.entregues
 
   const { resultado, carregando, custo, receita, roi } = useResultadoDisparo({
     utmValor,
     casa: casaAtiva,
     data: disparo.dataDisparo,
     entregues,
+    custoPorUnidade: disparo.canal === 'sms' ? disparo.custoPorEnvio : undefined,
   })
 
   // Leads hoje: mesma tag do fluxo(s) vinculado(s) ao disparo (se houver), via LeadHub —

@@ -87,6 +87,10 @@ export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
       return await dbCriarDisparo(disparo)
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('DUPLICATE_DAXX_CAMPANHA')) throw err
+      // Sem isso, um insert real que falha (coluna faltando, tipo errado etc.) cai pro store em
+      // memória sem deixar rastro nenhum — parece funcionar (200, objeto de volta) mas nunca
+      // grava de verdade. Já aconteceu (custo_por_envio sem migration) e o erro ficou invisível.
+      console.error('[api-store] criarDisparo caiu pro fallback em memória:', err)
     }
   }
   getMemStore().disparos[disparo.id] = disparo

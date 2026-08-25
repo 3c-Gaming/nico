@@ -305,6 +305,9 @@ export interface Disparo {
   resultados?: ResultadoDisparo
   valorTotalBase?: number
   conversao?: ConversaoDisparo
+  /** Custo fixo por envio (R$) — usado por disparos SMS, que não têm um custo previsível como o
+   * CUSTO_POR_ENTREGUE do WhatsApp (a Solvefy não retorna preço por SMS). Digitado na criação. */
+  custoPorEnvio?: number
 }
 
 export interface Esteira {

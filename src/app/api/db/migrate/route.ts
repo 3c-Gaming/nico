@@ -53,6 +53,7 @@ export async function POST() {
       `ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS conta_nomes JSONB NOT NULL DEFAULT '{}'::jsonb`,
       `ALTER TABLE bot_test_config ADD COLUMN IF NOT EXISTS bilhete_casas JSONB NOT NULL DEFAULT '[]'::jsonb`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS canal TEXT`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS custo_por_envio NUMERIC`,
       `CREATE TABLE IF NOT EXISTS sms_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         nome TEXT NOT NULL,

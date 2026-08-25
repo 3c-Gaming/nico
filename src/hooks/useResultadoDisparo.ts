@@ -9,6 +9,10 @@ interface UseResultadoDisparoParams {
   casa: 'superbet' | 'betmgm' | null
   data?: string
   entregues?: number
+  /** Sobrescreve CUSTO_POR_ENTREGUE (fixo, pensado pro WhatsApp) — usado por disparos SMS, cujo
+   * custo por envio é digitado na criação (Disparo.custoPorEnvio), não previsível como o do
+   * WhatsApp. */
+  custoPorUnidade?: number
 }
 
 interface UseResultadoDisparoReturn {
@@ -22,7 +26,7 @@ interface UseResultadoDisparoReturn {
 const REFETCH_MS = 5 * 60_000
 
 /** Busca e calcula registros/FTDs/CPAs/custo/receita/ROI pra uma UTM/PID+casa+data — mesma lógica usada no card do calendário, reaproveitável em qualquer lugar que precise mostrar o resultado de um disparo já cadastrado. Rebusca periodicamente pra pegar novos registros/FTDs ao longo do dia e, principalmente, pra passar a trazer CPA/ROI sozinho assim que o dia vira, sem precisar recarregar a página. */
-export function useResultadoDisparo({ utmValor, casa, data, entregues }: UseResultadoDisparoParams): UseResultadoDisparoReturn {
+export function useResultadoDisparo({ utmValor, casa, data, entregues, custoPorUnidade }: UseResultadoDisparoParams): UseResultadoDisparoReturn {
   const [resultado, setResultado] = useState<ResultadoUtm | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [tick, setTick] = useState(0)
@@ -46,7 +50,7 @@ export function useResultadoDisparo({ utmValor, casa, data, entregues }: UseResu
   }, [utmValor, casa, data, tick])
 
   const valorCPA = casa ? VALOR_CPA[casa] : 0
-  const custo = entregues != null ? entregues * CUSTO_POR_ENTREGUE : 0
+  const custo = entregues != null ? entregues * (custoPorUnidade ?? CUSTO_POR_ENTREGUE) : 0
   const receita = resultado?.cpas != null ? resultado.cpas * valorCPA : 0
   const roi = resultado?.cpas != null && custo > 0 && valorCPA > 0 ? receita / custo : null
 
