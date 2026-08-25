@@ -7,6 +7,8 @@ import { Select } from '@/components/ui/Select'
 import { Chip } from '@/components/ui/Chip'
 import { useToast } from '@/components/ui/Toast'
 import { useUtmConfigs } from '@/hooks/useUtmConfigs'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
+import { formatNumero } from '@/lib/resultadoDisparo'
 import { Plus, Trash2, Pencil, X, Check, Copy, Search } from 'lucide-react'
 import type { UtmConfig } from '@/types'
 
@@ -17,12 +19,42 @@ const CASA_INFO = {
 
 type Casa = keyof typeof CASA_INFO
 
+function getLocalDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** REG/FTD/CPA de uma UTM numa data — mesma fonte/lógica do card do calendário (ver
+ * useResultadoDisparo). CPA só existe depois que o dia fecha (a fonte de CPA não cobre hoje),
+ * então pra data de hoje ele sempre aparece como "—" mesmo com REG/FTD já preenchidos. */
+function UtmStatCells({ valor, casa, data }: { valor: string; casa: Casa; data: string }) {
+  const { resultado, carregando } = useResultadoDisparo({ utmValor: valor, casa, data })
+  const semDado = !resultado && carregando
+  return (
+    <>
+      <span className="text-right text-sm font-mono text-[var(--text-primary)]">
+        {semDado ? '…' : resultado ? formatNumero(resultado.registros) : '—'}
+      </span>
+      <span className="text-right text-sm font-mono text-[var(--d1)]">
+        {semDado ? '…' : resultado ? formatNumero(resultado.ftds) : '—'}
+      </span>
+      <span
+        className="text-right text-sm font-mono text-emerald-400"
+        title={resultado && resultado.cpas == null ? 'CPA só fica disponível depois que o dia fecha' : undefined}
+      >
+        {semDado ? '…' : resultado?.cpas != null ? formatNumero(resultado.cpas) : '—'}
+      </span>
+    </>
+  )
+}
+
 export default function UtmsPage() {
   const { list, add, update, remove } = useUtmConfigs()
   const { addToast } = useToast()
 
   const [busca, setBusca] = useState('')
   const [filtroCasa, setFiltroCasa] = useState<'all' | Casa>('all')
+  const [dataStats, setDataStats] = useState(getLocalDate())
 
   const [novoAberto, setNovoAberto] = useState(false)
   const [novoNome, setNovoNome] = useState('')
@@ -136,18 +168,28 @@ export default function UtmsPage() {
               </button>
             ))}
           </div>
+          <input
+            type="date"
+            value={dataStats}
+            onChange={(e) => setDataStats(e.target.value)}
+            title="Data dos números de REG/FTD/CPA"
+            className="h-9 px-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
           <Button size="sm" icon={<Plus size={14} />} onClick={handleStartNovo} disabled={novoAberto}>
             Nova
           </Button>
         </div>
 
         <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
-          <div className="grid grid-cols-6 gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
+          <div className="grid grid-cols-9 gap-3 px-4 py-2 border-b border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
             <span>Casa</span>
             <span>UTM</span>
             <span>Nome</span>
             <span>Valor</span>
             <span>Site ID</span>
+            <span className="text-right">Reg</span>
+            <span className="text-right">FTD</span>
+            <span className="text-right">CPA</span>
             <span className="text-right">Ações</span>
           </div>
 
@@ -269,7 +311,7 @@ export default function UtmsPage() {
             return (
               <div
                 key={item.id}
-                className="group grid grid-cols-6 gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
+                className="group grid grid-cols-9 gap-3 px-4 py-2.5 border-b border-[var(--border)] last:border-b-0 items-center hover:bg-[var(--bg-elevated)]/50 transition-colors"
               >
                 <div className="flex items-center">
                   <Chip label={info.label} cor={info.cor} size="md" />
@@ -286,6 +328,7 @@ export default function UtmsPage() {
                 <span className="text-sm text-[var(--text-muted)] font-mono truncate">
                   {item.casa === 'superbet' ? (item.siteId || '—') : '—'}
                 </span>
+                <UtmStatCells valor={item.valor} casa={item.casa} data={dataStats} />
                 <div className="grid grid-cols-3 text-text-primary">
                   <button
                     onClick={() => handleCopy(item)}
