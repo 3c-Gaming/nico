@@ -235,7 +235,7 @@ export default function SmsRapidoPage() {
   return (
     <>
       <PageHeader titulo="Disparo SMS" descricao="Envio direto via Solvefy — base, copy e tracking numa tela só" />
-      <div className="p-6 space-y-5 max-w-3xl">
+      <div className="p-6 space-y-5 max-w-3xl mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs font-medium text-[var(--text-muted)]">Nome da campanha</label>
