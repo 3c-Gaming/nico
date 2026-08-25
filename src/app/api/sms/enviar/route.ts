@@ -46,6 +46,11 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = getSupabase() as any
     const resultados: ResultadoEnvio[] = []
+    // Deriva do próprio request (não hardcoded) — funciona em produção e em preview deployments;
+    // em localhost a Solvefy simplesmente não vai conseguir alcançar essa URL, então nenhum
+    // callback chega (comportamento aceitável em dev — só produção recebe clique/status via
+    // webhook de verdade).
+    const callbackUrl = `${request.nextUrl.origin}/api/sms/webhook`
 
     for (let i = 0; i < body.destinatarios.length; i += TAMANHO_LOTE) {
       const lote = body.destinatarios.slice(i, i + TAMANHO_LOTE)
@@ -60,6 +65,7 @@ export async function POST(request: NextRequest) {
             reference: sanitizarReference(`${body.campanha}-${telefone}`),
             useShortener: body.useShortener,
             shortenerSettings: body.useShortener ? { trackClicks: true, expiryDays: 7 } : undefined,
+            callbackUrl,
           })
 
           if (supabase) {

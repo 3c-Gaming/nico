@@ -19,6 +19,7 @@ export interface EnviarSmsParams {
   reference?: string
   useShortener?: boolean
   shortenerSettings?: { trackClicks?: boolean; expiryDays?: number }
+  callbackUrl?: string
 }
 
 export interface EnviarSmsResultado {
@@ -51,6 +52,7 @@ export async function enviarSms(params: EnviarSmsParams): Promise<EnviarSmsResul
       reference: params.reference,
       useShortener: params.useShortener,
       shortenerSettings: params.shortenerSettings,
+      callbackUrl: params.callbackUrl,
       encoding: 'AUTO',
       expiresIn: 86400,
     }),
