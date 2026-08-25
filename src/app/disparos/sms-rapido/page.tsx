@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Upload, Send, RefreshCw, Link2, Save, BookmarkPlus, Pin } from 'lucide-react'
+import { Upload, Send, RefreshCw, Link2, Save, BookmarkPlus, Pin, CalendarClock } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
@@ -133,6 +133,12 @@ export default function SmsRapidoPage() {
   const [custoPorSms, setCustoPorSms] = useState('')
   const [disparoCriado, setDisparoCriado] = useState<Disparo | null>(null)
 
+  // Agendamento — em vez de mandar na hora, cria o Disparo com status 'agendado' e deixa o cron
+  // (/api/cron/sms-agendados, a cada 5min) disparar quando a data/hora chegar.
+  const [agendar, setAgendar] = useState(false)
+  const [dataAgendada, setDataAgendada] = useState(() => getLocalDate())
+  const [horarioAgendado, setHorarioAgendado] = useState('')
+
   const { resultado: resultadoTracking, custo: custoTracking, carregando: carregandoTracking } = useResultadoDisparo({
     utmValor: disparoCriado?.utm || disparoCriado?.betmgmPid,
     casa: disparoCriado ? (disparoCriado.utm ? 'superbet' : disparoCriado.betmgmPid ? 'betmgm' : null) : null,
@@ -237,9 +243,69 @@ export default function SmsRapidoPage() {
   )
 
   const podeEnviar = campanha.trim() && from.trim() && corpo.trim() && linhas.length > 0 && !enviando
+    && (!agendar || !!horarioAgendado)
+
+  // Todo envio (imediato ou agendado) vira um Disparo real — é o que faz a campanha aparecer
+  // listada em /disparos ("Campanhas de Disparos"), independente de ter UTM/casa configurada.
+  async function criarRegistroDisparo(status: 'executado' | 'agendado'): Promise<Disparo | null> {
+    const casaId = casaTracking
+      ? casasList.find((c) => c.nome.toLowerCase().includes(casaTracking === 'superbet' ? 'super' : 'mgm'))?.id
+      : undefined
+    const agora = new Date()
+    const novoDisparo: Disparo = {
+      id: crypto.randomUUID(),
+      tipo: 'PONTUAL',
+      canal: 'sms',
+      nomenclatura: campanha,
+      status,
+      casasAposta: casaId ? [casaId] : [],
+      dataDisparo: status === 'agendado' ? dataAgendada : getLocalDate(),
+      horarioDisparo: status === 'agendado' ? horarioAgendado : getLocalHora(),
+      base: { status: 'disponivel', totalRegistros: linhas.length, nomeArquivo: nomeArquivo ?? undefined },
+      utm: casaTracking === 'superbet' ? utmValor.trim() || undefined : undefined,
+      betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() || undefined : undefined,
+      custoPorEnvio: custoPorSms ? Number(custoPorSms) : undefined,
+      smsCorpo: corpo,
+      smsFrom: from,
+      smsUseShortener: useShortener,
+      smsDestinatarios: linhas,
+      criadoEm: agora.toISOString(),
+      atualizadoEm: agora.toISOString(),
+      notas: `Disparo SMS via Solvefy — campanha "${campanha}"`,
+    }
+    const resDisparo = await fetch('/api/disparos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disparo: novoDisparo }),
+    })
+    const data = await resDisparo.json()
+    if (!data.disparo) return null
+    createDisparo(data.disparo)
+    togglePin(data.disparo.id)
+    setDisparoCriado(data.disparo)
+    return data.disparo
+  }
 
   async function handleEnviar() {
     if (!podeEnviar) return
+
+    if (agendar) {
+      const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
+      if (quando <= new Date()) { addToast('error', 'Escolha uma data/hora no futuro'); return }
+      if (!confirm(`Agendar SMS pra ${linhas.length} número(s) em ${dataAgendada} às ${horarioAgendado}? Vai disparar sozinho nessa hora.`)) return
+      setEnviando(true)
+      try {
+        const disparo = await criarRegistroDisparo('agendado')
+        if (disparo) addToast('success', `Agendado pra ${dataAgendada} às ${horarioAgendado} — vai disparar sozinho e aparece em Disparos`)
+        else addToast('error', 'Não deu pra agendar')
+      } catch (err) {
+        addToast('error', (err as Error).message)
+      } finally {
+        setEnviando(false)
+      }
+      return
+    }
+
     if (!confirm(`Enviar SMS pra ${linhas.length} número(s) agora? Essa ação é real, não tem como desfazer.`)) return
     setEnviando(true)
     setProgresso(`Enviando 0 / ${linhas.length}...`)
@@ -256,45 +322,10 @@ export default function SmsRapidoPage() {
       setResultados(data.resultados)
       addToast(data.falhas > 0 ? 'warning' : 'success', `${data.enviados} enviado(s), ${data.falhas} falha(s)`)
 
-      // Cria um Disparo de verdade só quando casa+UTM foram preenchidos — é o que permite ver
-      // Reg/FTD/CPA depois (mesmo tracking de /funis e /utms) e pinar na Home. Sem isso, o envio
-      // já aconteceu normalmente, só fica sem esse acompanhamento agregado.
-      if (casaTracking && utmValor.trim()) {
-        const casaId = casasList.find((c) => c.nome.toLowerCase().includes(casaTracking === 'superbet' ? 'super' : 'mgm'))?.id
-        const agora = new Date()
-        const novoDisparo: Disparo = {
-          id: crypto.randomUUID(),
-          tipo: 'PONTUAL',
-          canal: 'sms',
-          nomenclatura: campanha,
-          status: 'executado',
-          casasAposta: casaId ? [casaId] : [],
-          dataDisparo: getLocalDate(),
-          horarioDisparo: getLocalHora(),
-          base: { status: 'disponivel', totalRegistros: linhas.length, nomeArquivo: nomeArquivo ?? undefined },
-          utm: casaTracking === 'superbet' ? utmValor.trim() : undefined,
-          betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() : undefined,
-          custoPorEnvio: custoPorSms ? Number(custoPorSms) : undefined,
-          criadoEm: agora.toISOString(),
-          atualizadoEm: agora.toISOString(),
-          notas: `Disparo SMS via Solvefy — campanha "${campanha}"`,
-        }
-        try {
-          const resDisparo = await fetch('/api/disparos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ disparo: novoDisparo }),
-          })
-          const dataDisparo = await resDisparo.json()
-          if (dataDisparo.disparo) {
-            createDisparo(dataDisparo.disparo)
-            togglePin(dataDisparo.disparo.id)
-            setDisparoCriado(dataDisparo.disparo)
-            addToast('success', 'Disparo criado e pinado na Home')
-          }
-        } catch {
-          addToast('warning', 'SMS enviado, mas não deu pra criar o registro de tracking')
-        }
+      try {
+        await criarRegistroDisparo('executado')
+      } catch {
+        addToast('warning', 'SMS enviado, mas não deu pra criar o registro em Disparos')
       }
     } catch (err) {
       addToast('error', (err as Error).message)
@@ -497,7 +528,33 @@ export default function SmsRapidoPage() {
             </div>
           </div>
           {casaTracking && !utmValor.trim() && (
-            <p className="text-[10px] text-amber-400">Sem UTM/PID preenchida, o disparo não vai virar um registro rastreável — só o SMS em si vai ser enviado.</p>
+            <p className="text-[10px] text-amber-400">Sem UTM/PID preenchida, esse disparo aparece listado mas sem Reg/FTD/CPA calculado.</p>
+          )}
+        </div>
+
+        <div className="space-y-1.5 p-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)]">
+          <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-primary)] cursor-pointer w-fit">
+            <input type="checkbox" checked={agendar} onChange={(e) => setAgendar(e.target.checked)} />
+            <CalendarClock size={13} className="text-[var(--text-muted)]" />
+            Agendar pra depois (em vez de enviar agora)
+          </label>
+          {agendar && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="date"
+                value={dataAgendada}
+                onChange={(e) => setDataAgendada(e.target.value)}
+                min={getLocalDate()}
+                className="h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+              />
+              <input
+                type="time"
+                value={horarioAgendado}
+                onChange={(e) => setHorarioAgendado(e.target.value)}
+                className="h-8 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)]"
+              />
+              <span className="text-[10px] text-[var(--text-muted)]">Um cron verifica a fila a cada 5min e dispara sozinho na hora — não precisa deixar essa aba aberta.</span>
+            </div>
           )}
         </div>
 
@@ -523,8 +580,12 @@ export default function SmsRapidoPage() {
           </div>
         )}
 
-        <Button icon={<Send size={14} />} onClick={handleEnviar} disabled={!podeEnviar} loading={enviando}>
-          {enviando ? (progresso || 'Enviando...') : `Enviar pra ${linhas.length || 0} número(s)`}
+        <Button icon={agendar ? <CalendarClock size={14} /> : <Send size={14} />} onClick={handleEnviar} disabled={!podeEnviar} loading={enviando}>
+          {enviando
+            ? (progresso || (agendar ? 'Agendando...' : 'Enviando...'))
+            : agendar
+              ? `Agendar pra ${linhas.length || 0} número(s)`
+              : `Enviar pra ${linhas.length || 0} número(s)`}
         </Button>
 
         {resultados && (

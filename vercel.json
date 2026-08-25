@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/pilhado-premios-sync",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sms-agendados",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

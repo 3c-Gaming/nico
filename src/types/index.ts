@@ -35,6 +35,7 @@ export type StatusDisparo =
   | 'rascunho'
   | 'pronto'
   | 'em_validacao'
+  | 'agendado'
   | 'executado'
   | 'cancelado'
 
@@ -308,6 +309,14 @@ export interface Disparo {
   /** Custo fixo por envio (R$) — usado por disparos SMS, que não têm um custo previsível como o
    * CUSTO_POR_ENTREGUE do WhatsApp (a Solvefy não retorna preço por SMS). Digitado na criação. */
   custoPorEnvio?: number
+  /** Payload de envio do SMS — só quando canal === 'sms'. Guardado no próprio Disparo (não só
+   * disparado e esquecido) porque um disparo agendado (status 'agendado') precisa desses dados
+   * prontos pro cron mandar de verdade quando dataDisparo+horarioDisparo chegar; já enviados
+   * também guardam, pra reenvio/auditoria. */
+  smsCorpo?: string
+  smsFrom?: string
+  smsUseShortener?: boolean
+  smsDestinatarios?: { telefone: string; variables?: Record<string, string> }[]
 }
 
 export interface Esteira {

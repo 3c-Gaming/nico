@@ -19,6 +19,7 @@ const STATUS_CORES: Record<string, string> = {
   rascunho: 'var(--text-muted)',
   pronto: 'var(--info)',
   em_validacao: 'var(--warning)',
+  agendado: 'var(--d1)',
   executado: 'var(--success)',
   cancelado: 'var(--error)',
 }
@@ -27,6 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
   rascunho: 'Rascunho',
   pronto: 'Pronto',
   em_validacao: 'Validando',
+  agendado: 'Agendado',
   executado: 'Executado',
   cancelado: 'Cancelado',
 }
