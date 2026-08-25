@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore, Fragment, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, Eye } from 'lucide-react'
+import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, ChevronRight, Eye, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
@@ -12,7 +12,7 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
-import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
+import { getState, setState, updateFlowTagConfig, deleteFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, chaveTagBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
 import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
@@ -143,6 +143,7 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
   const [casas, setCasas] = useState<string[]>(existing?.casas ?? [])
   const [input, setInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const [desconfigurando, setDesconfigurando] = useState(false)
 
   const casasAposta = Object.values(getState().casasAposta)
 
@@ -171,6 +172,22 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
     updateFlowTagConfig({ flowId: flow.id, botId, funil: funil || null, utm: utm || null, utmsExtras, lpUrl: lpUrl || null, tags, casas, tipo })
     await new Promise((r) => setTimeout(r, 200))
     setSaving(false)
+    onSave()
+  }
+
+  // Comum trocar o bot/número de um funil e deixar a config velha esquecida no fluxo antigo —
+  // ela some da tela (o fluxo original nem aparece mais como linha), mas o funil/UTM/tags dela
+  // continuam contando pra sempre em qualquer cálculo que agrupe por UTM (ex: divisor de
+  // registros/FTDs entre funis que compartilham a mesma UTM em calcularResultadoLinhaNoDia),
+  // sem nenhum jeito de "desligar" isso. Desconfigurar apaga esse registro de vez.
+  async function handleDesconfigurar() {
+    if (!existing) return
+    const rotulo = existing.funil || flow.nome
+    if (!confirm(`Remover a configuração desse fluxo ("${rotulo}" — funil, UTMs e tags)? Ele deixa de contar em qualquer funil/UTM compartilhada.`)) return
+    setDesconfigurando(true)
+    deleteFlowTagConfig(flow.id)
+    await new Promise((r) => setTimeout(r, 200))
+    setDesconfigurando(false)
     onSave()
   }
 
@@ -344,7 +361,16 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
           )}
         </div>
       </div>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleDesconfigurar}
+          disabled={!existing || saving || desconfigurando}
+          title="Remove funil/UTMs/tags desse fluxo — use quando ele foi trocado de bot/número e a config antiga ficou pra trás"
+          className="flex items-center gap-1.5 px-3 h-7 rounded text-xs font-medium text-[var(--error)] hover:bg-[var(--error)]/10 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+        >
+          <Trash2 size={12} />
+          {desconfigurando ? 'Removendo...' : 'Desconfigurar'}
+        </button>
         <button
           onClick={handleSave}
           disabled={!hasChanges || saving}
@@ -750,6 +776,47 @@ function FunisPageInner() {
     return rows
   }, [numeros, fluxosMap, contagens, contagensIntervaloEfetivo, ultimoLeadMap, carregandoFlows, carregandoIntervaloBots, intervaloEhHojeUnico, filtroBot, filtroBusca, filtroCasas, filtroTipo, filtroConta, filtroCanal])
 
+  // Configs de funil (funil/UTM/tags) cujo fluxo não existe mais em nenhum fluxosMap carregado —
+  // acontece muito quando um funil é trocado de bot/número e a config antiga fica esquecida no
+  // fluxo original. Essa config órfã não aparece em nenhuma linha da tabela (não tem como editá-la
+  // pelo fluxo, que já não carrega mais), mas continua contando pra sempre em qualquer cálculo que
+  // agrupe por UTM compartilhada (ver contarFunisPorUtm/calcularResultadoLinhaNoDia) — só some daí
+  // sendo desconfigurada explicitamente aqui.
+  //
+  // Crítico: "flowId não apareceu no fluxosMap" tem duas causas bem diferentes, e só uma delas é
+  // segura pra oferecer remoção direto. Se o BOT respondeu (tem chave em fluxosMap, mesmo que com
+  // lista vazia) e esse flowId específico não veio na resposta, é confirmado — o fluxo sumiu de
+  // verdade do lado da SendPulse. Mas se o bot nem respondeu (erro/timeout — bem comum, ~28 dos ~50
+  // bots retornam 502 nessa conta agora mesmo), fluxosMap não tem chave nenhuma pra ele, e TODAS as
+  // configs daquele bot pareceriam "órfãs" mesmo sendo 100% válidas, só porque a SendPulse estava
+  // instável no momento do carregamento — oferecer "Desconfigurar" nesses do mesmo jeito arriscaria
+  // apagar config de bot que só está temporariamente fora do ar. Por isso os dois casos ficam em
+  // listas separadas: confirmadas (bot respondeu) vs não verificadas (bot não respondeu).
+  const botsRespondidos = useMemo(() => new Set(Object.keys(fluxosMap)), [fluxosMap])
+
+  const configsOrfasConfirmadas = useMemo(() => {
+    if (loading) return []
+    const flowIdsValidos = new Set(Object.values(fluxosMap).flat().map((f) => f.id))
+    return Object.values(getState().flowTagConfigs)
+      .filter((cfg) => botsRespondidos.has(cfg.botId) && !flowIdsValidos.has(cfg.flowId) && (cfg.funil || cfg.tags?.length || cfg.utm))
+      .sort((a, b) => (a.funil ?? '').localeCompare(b.funil ?? ''))
+  }, [loading, fluxosMap, botsRespondidos, saveVersion])
+
+  const configsOrfasNaoVerificadas = useMemo(() => {
+    if (loading) return []
+    return Object.values(getState().flowTagConfigs)
+      .filter((cfg) => !botsRespondidos.has(cfg.botId) && (cfg.funil || cfg.tags?.length || cfg.utm))
+      .sort((a, b) => (a.funil ?? '').localeCompare(b.funil ?? ''))
+  }, [loading, botsRespondidos, saveVersion])
+
+  const [mostrarNaoVerificadas, setMostrarNaoVerificadas] = useState(false)
+
+  function handleDesconfigurarOrfa(flowId: string, funil?: string | null) {
+    if (!confirm(`Remover a configuração órfã "${funil || flowId}"? Ela deixa de contar em qualquer funil/UTM compartilhada.`)) return
+    deleteFlowTagConfig(flowId)
+    setSaveVersion((v) => v + 1)
+  }
+
   const totalComFunil = flowRows.filter((r) => r.funil).length
 
   // Recalculado a cada render a partir do estado atual (não é um snapshot capturado no clique) —
@@ -1081,6 +1148,73 @@ function FunisPageInner() {
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
             <AlertTriangle size={14} />
             {error}
+          </div>
+        )}
+
+        {configsOrfasConfirmadas.length > 0 && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-400">
+              <AlertTriangle size={14} />
+              {configsOrfasConfirmadas.length} config{configsOrfasConfirmadas.length > 1 ? 's' : ''} confirmada{configsOrfasConfirmadas.length > 1 ? 's' : ''} sem fluxo na SendPulse (o bot respondeu, mas esse fluxo específico sumiu — provavelmente foi renomeado/apagado lá) — ainda {configsOrfasConfirmadas.length > 1 ? 'contam' : 'conta'} em cálculos de UTM compartilhada com outros funis até serem desconfiguradas.
+            </div>
+            <div className="space-y-1">
+              {configsOrfasConfirmadas.map((cfg) => (
+                <div key={cfg.flowId} className="flex items-center justify-between gap-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded px-2.5 py-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono font-bold text-[var(--text-primary)] shrink-0">{cfg.funil || '(sem funil)'}</span>
+                    <span className="text-[var(--text-muted)] truncate">
+                      UTM: {cfg.utm || '—'} · {cfg.tags?.length ?? 0} tag(s) · bot {cfg.botId}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDesconfigurarOrfa(cfg.flowId, cfg.funil)}
+                    className="shrink-0 flex items-center gap-1 px-2 h-6 rounded text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
+                  >
+                    <Trash2 size={11} />
+                    Desconfigurar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {configsOrfasNaoVerificadas.length > 0 && (
+          <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 space-y-2">
+            <button
+              type="button"
+              onClick={() => setMostrarNaoVerificadas((v) => !v)}
+              className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              {mostrarNaoVerificadas ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              {configsOrfasNaoVerificadas.length} config{configsOrfasNaoVerificadas.length > 1 ? 's' : ''} de bot que não respondeu agora (não dá pra confirmar se foi desativado ou só está instável — a SendPulse anda com vários bots retornando erro)
+            </button>
+            {mostrarNaoVerificadas && (
+              <>
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  Confira o número/bot antes de desconfigurar — se ele voltar a responder normalmente, a config pode ainda estar em uso.
+                </p>
+                <div className="space-y-1">
+                  {configsOrfasNaoVerificadas.map((cfg) => (
+                    <div key={cfg.flowId} className="flex items-center justify-between gap-2 text-xs bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-2.5 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-[var(--text-primary)] shrink-0">{cfg.funil || '(sem funil)'}</span>
+                        <span className="text-[var(--text-muted)] truncate">
+                          UTM: {cfg.utm || '—'} · {cfg.tags?.length ?? 0} tag(s) · bot {cfg.botId}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDesconfigurarOrfa(cfg.flowId, cfg.funil)}
+                        className="shrink-0 flex items-center gap-1 px-2 h-6 rounded text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors"
+                      >
+                        <Trash2 size={11} />
+                        Desconfigurar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
