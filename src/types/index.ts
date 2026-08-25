@@ -278,6 +278,9 @@ export interface BaseCSV {
 export interface Disparo {
   id: string
   tipo: TipoDisparo
+  /** Canal do disparo — ausente = 'whatsapp' (registros antigos, todos via daxX). 'sms' é
+   * disparado de verdade pelo próprio app via Solvefy/Cephas, não só rastreado. */
+  canal?: 'whatsapp' | 'sms'
   nomenclatura: string
   status: StatusDisparo
   casasAposta: string[]

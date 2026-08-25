@@ -20,7 +20,7 @@ import { StepNumero } from './StepNumero'
 import { PreviewNomenclatura } from './PreviewNomenclatura'
 import { EsteiraPreview } from './EsteiraPreview'
 
-const STEPS = ['Campanha DAXX', 'Configuração']
+const STEPS = ['Canal', 'Campanha DAXX', 'Configuração']
 
 export function FormNovoDisparo() {
   const router = useRouter()
@@ -30,6 +30,7 @@ export function FormNovoDisparo() {
   const { addToast } = useToast()
 
   const [step, setStep] = useState(1)
+  const [canal, setCanal] = useState<'whatsapp' | 'sms' | null>(null)
   const [campanha, setCampanha] = useState<DisparoDaxx | undefined>()
 
   const [tipo, setTipo] = useState<TipoDisparo | null>(null)
@@ -77,14 +78,15 @@ export function FormNovoDisparo() {
 
   const podeAvancar = useMemo(() => {
     switch (step) {
-      case 1: return !!campanha
-      case 2: return !!tipo && !!dataDisparo && !!horarioDisparo
+      case 1: return !!canal
+      case 2: return canal === 'whatsapp' ? !!campanha : false
+      case 3: return !!tipo && !!dataDisparo && !!horarioDisparo
       default: return false
     }
-  }, [step, campanha, tipo, dataDisparo, horarioDisparo])
+  }, [step, canal, campanha, tipo, dataDisparo, horarioDisparo])
 
   function handleAvancar() {
-    if (step < 2) setStep(step + 1)
+    if (step < 3) setStep(step + 1)
   }
 
   function handleVoltar() {
@@ -115,6 +117,7 @@ export function FormNovoDisparo() {
       const disparoData: Disparo = {
         id: crypto.randomUUID(),
         tipo,
+        canal: 'whatsapp',
         nomenclatura: nomenclaturaFinal,
         status: 'rascunho',
         casasAposta: casasSelecionadas,
@@ -208,10 +211,50 @@ export function FormNovoDisparo() {
 
       <div className="min-h-[300px]">
         {step === 1 && (
+          <div>
+            <span className="text-xs text-[var(--text-secondary)] font-medium mb-3 block">
+              Canal do Disparo
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Campanha vinculada a um disparo já feito na DAXX' },
+                { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Envio de SMS direto pelo app' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setCanal(opt.value)}
+                  className={`p-4 rounded-md border text-left transition-all ${
+                    canal === opt.value
+                      ? 'border-[var(--d1)] bg-[var(--d1)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]'
+                  }`}
+                >
+                  <span
+                    className={`text-sm font-semibold ${canal === opt.value ? 'text-[var(--d1)]' : 'text-[var(--text-primary)]'}`}
+                  >
+                    {opt.label}
+                  </span>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && canal === 'whatsapp' && (
           <StepDaxxCampanha campanha={campanha} onChange={setCampanha} />
         )}
 
-        {step === 2 && (
+        {step === 2 && canal === 'sms' && (
+          <div className="flex flex-col items-center justify-center text-center py-16 gap-2">
+            <span className="text-sm font-medium text-[var(--text-primary)]">Disparo por SMS em construção</span>
+            <p className="text-xs text-[var(--text-muted)] max-w-sm">
+              O envio de SMS via Solvefy ainda está sendo implementado. Por enquanto, volte e escolha o canal WhatsApp.
+            </p>
+          </div>
+        )}
+
+        {step === 3 && (
           <div className="space-y-6">
             <div>
               <span className="text-xs text-[var(--text-secondary)] font-medium mb-3 block">
@@ -381,7 +424,7 @@ export function FormNovoDisparo() {
         <Button variant="ghost" onClick={handleVoltar} disabled={step === 1}>
           Voltar
         </Button>
-        {step < 2 ? (
+        {step < 3 ? (
           <Button onClick={handleAvancar} disabled={!podeAvancar}>
             Avançar
           </Button>
