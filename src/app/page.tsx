@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2, Calendar, Copy } from 'lucide-react'
+import { Pin, RefreshCw, AlertTriangle, Activity, Layers, ChevronDown, ChevronRight, Play, ExternalLink, Link2, Calendar, Copy, Eye } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { StatNumber } from '@/components/ui/StatNumber'
@@ -1216,6 +1216,13 @@ export default function HomePage() {
                   DAXX
                 </button>
               )}
+              <button
+                onClick={() => setPainelFunilNome(row.funilNome)}
+                className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                title="Ver detalhes e conversas ao vivo"
+              >
+                <Eye size={13} />
+              </button>
               <button
                 onClick={() => router.push(`/funis?busca=${encodeURIComponent(row.funilNome)}`)}
                 className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] underline transition-colors"
