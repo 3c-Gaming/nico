@@ -2,7 +2,7 @@
 // cálculo de leads/registros/FTDs/conversão por funil por dia, mesma fonte pros dois: tracking
 // 3CGG (registros/FTDs) + SendPulse via sendpulseLeads.ts (leads).
 
-import { contarLeadsIntervalo, type GrupoBotTags } from './sendpulseLeads'
+import { chaveTagBot, contarLeadsIntervalo, type GrupoBotTags } from './sendpulseLeads'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 // Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
@@ -82,7 +82,7 @@ function utmQueCasou(utms: string[], valor: string, exato: boolean): string | un
  * outro(s) funil(is)/config(s). Sem o parâmetro (undefined), divisor sempre 1 — comportamento
  * idêntico ao de antes dessa função existir. */
 export function calcularResultadoLinhaNoDia(
-  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[] },
+  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string },
   dia: ResultadoDia,
   funisPorUtm?: Map<string, number>,
 ): ResultadoLinhaDia {
@@ -106,7 +106,7 @@ export function calcularResultadoLinhaNoDia(
     }
   }
   const tagEntrada = tagDeEntradaDoFluxo(cfg.tags)
-  const leads = tagEntrada ? (dia.leadsPorTag[tagEntrada] ?? 0) : 0
+  const leads = tagEntrada && cfg.botId ? (dia.leadsPorTag[chaveTagBot(cfg.botId, tagEntrada)] ?? 0) : 0
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   return { leads, registros, ftds, convFtd, convReg }

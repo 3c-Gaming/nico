@@ -8,6 +8,16 @@ export interface GrupoBotTags {
   tags: string[]
 }
 
+/** Uma mesma tag (ex: "Lead_Disp_SB_D1") costuma ser reaproveitada em fluxos diferentes —
+ * frequentemente em bots/números diferentes rodando a mesma campanha. Um mapa achatado tag ->
+ * contagem não sobrevive a isso: duas chamadas escopadas a bots diferentes resolvendo a mesma tag
+ * fariam a que responder por último sobrescrever a outra (na prática, zerando o número certo com
+ * a contagem de um bot onde aquela tag não teve lead nenhum hoje). Toda contagem por tag precisa
+ * ser combinada com o botId de origem antes de entrar num mapa compartilhado. */
+export function chaveTagBot(botId: string, tag: string): string {
+  return `${botId}::${tag}`
+}
+
 /** Agrupa tags pelo botId de origem (útil quando se tem uma lista de flowIds/rows, cada um com
  * seu próprio botId e tags configuradas). */
 export function agruparTagsPorBot(itens: { botId?: string | null; tags: string[] }[]): GrupoBotTags[] {
@@ -43,8 +53,13 @@ export async function contarLeadsIntervalo(
       })
       if (!res.ok) { opts?.onGrupoResolvido?.(grupo.botId, {}); return }
       const data = await res.json()
-      Object.assign(leads, data.leads ?? {})
-      opts?.onGrupoResolvido?.(grupo.botId, data.leads ?? {})
+      // Rechaveia tag -> "botId::tag" antes de mesclar no mapa compartilhado, ver chaveTagBot.
+      const comChave: Record<string, number> = {}
+      for (const [tag, valor] of Object.entries(data.leads ?? {})) {
+        comChave[chaveTagBot(grupo.botId, tag)] = valor as number
+      }
+      Object.assign(leads, comChave)
+      opts?.onGrupoResolvido?.(grupo.botId, comChave)
     }),
   )
   return leads

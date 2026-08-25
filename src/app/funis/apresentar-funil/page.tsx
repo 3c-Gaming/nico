@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Save } from 'lucide-react'
-import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
+import { agruparTagsPorBot, chaveTagBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
 import { gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorUtm, type ResultadoDia } from '@/lib/funis'
 import { getState } from '@/lib/store'
 import { FunilConversaoChart } from '@/components/funis/FunilConversaoChart'
@@ -114,7 +114,7 @@ function FunilApresentarUnicoInner() {
       registros = Math.round(registros)
       ftds = Math.round(ftds)
     }
-    const leadsTotal = tagEntrada ? (leadsPorTag[tagEntrada] ?? 0) : 0
+    const leadsTotal = tagEntrada && config ? (leadsPorTag[chaveTagBot(config.botId, tagEntrada)] ?? 0) : 0
     const convReg = leadsTotal > 0 ? (registros / leadsTotal) * 100 : null
     const convFtd = registros > 0 ? (ftds / registros) * 100 : null
     return { leads: leadsTotal, registros, ftds, convReg, convFtd }
@@ -122,7 +122,7 @@ function FunilApresentarUnicoInner() {
 
   const estagios = useMemo(() => {
     if (!config) return []
-    return config.tags.map((tag) => ({ tag, contagem: leadsPorTag[tag] ?? 0 }))
+    return config.tags.map((tag) => ({ tag, contagem: leadsPorTag[chaveTagBot(config.botId, tag)] ?? 0 }))
   }, [config, leadsPorTag])
 
   const casaCor = useMemo(() => {

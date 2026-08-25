@@ -13,7 +13,7 @@ import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
-import { agruparTagsPorBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
+import { agruparTagsPorBot, chaveTagBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
 import { utmsDoFluxo, gerarRangeDatas, buscarResultadosDoDia, calcularResultadoLinhaNoDia, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import type { NumeroSendpulse, FluxoSendpulse, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
@@ -472,8 +472,23 @@ function FunisPageInner() {
             })
             if (res.ok) {
               const data = await res.json()
-              setContagens((prev) => ({ ...prev, ...data.leads }))
-              setUltimoLeadMap((prev) => ({ ...prev, ...data.ultimoLead }))
+              // Rechaveia tag -> "botId::tag" antes de mesclar — a mesma tag pode estar
+              // configurada em fluxos de bots diferentes, e um mapa achatado por tag faria a
+              // resposta de um bot sobrescrever a de outro (ver chaveTagBot).
+              setContagens((prev) => {
+                const next = { ...prev }
+                for (const [tag, valor] of Object.entries(data.leads ?? {})) {
+                  next[chaveTagBot(botId ?? '', tag)] = valor as number
+                }
+                return next
+              })
+              setUltimoLeadMap((prev) => {
+                const next = { ...prev }
+                for (const [tag, valor] of Object.entries(data.ultimoLead ?? {})) {
+                  next[chaveTagBot(botId ?? '', tag)] = valor as string | null
+                }
+                return next
+              })
             }
           } finally {
             setCarregandoFlows((prev) => {
@@ -695,10 +710,10 @@ function FunisPageInner() {
         const tags = configs[flow.id]?.tags ?? []
         const funil = configs[flow.id]?.funil
         const tagEntrada = tagDeEntradaDoFluxo(tags)
-        const leads = tagEntrada ? (contagens[tagEntrada] ?? 0) : 0
-        const total = tagEntrada ? (contagensIntervaloEfetivo[tagEntrada] ?? 0) : 0
+        const leads = tagEntrada ? (contagens[chaveTagBot(num.id, tagEntrada)] ?? 0) : 0
+        const total = tagEntrada ? (contagensIntervaloEfetivo[chaveTagBot(num.id, tagEntrada)] ?? 0) : 0
         const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
-          const ts = ultimoLeadMap[t] ?? null
+          const ts = ultimoLeadMap[chaveTagBot(num.id, t)] ?? null
           if (!ts) return best
           if (!best || ts > best) return ts
           return best
@@ -748,7 +763,7 @@ function FunisPageInner() {
     flowNome: conversasFluxoRow.funil || conversasFluxoRow.flow.nome,
     tags: conversasFluxoRow.tags,
     contagensPorTag: conversasFluxoRow.tags.reduce<Record<string, number>>((acc, t) => {
-      acc[t] = contagensIntervaloEfetivo[t] ?? 0
+      acc[t] = contagensIntervaloEfetivo[chaveTagBot(conversasFluxoRow.botId, t)] ?? 0
       return acc
     }, {}),
     cor: (() => {
