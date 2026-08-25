@@ -16,6 +16,8 @@ import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
+import { chaveTagBot } from '@/lib/sendpulseLeads'
+import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
@@ -327,6 +329,15 @@ interface FunilBotDetail {
   lidas: number
 }
 
+interface FlowDetalhado {
+  flowId: string
+  botId: string
+  tags: string[]
+  utm: string | null
+  utmsExtras: string[]
+  leadsHoje: number
+}
+
 interface FunilRow {
   funilNome: string
   botNomes: string[]
@@ -358,6 +369,7 @@ interface FunilRow {
   utm: string
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
+  flowsDetalhados: FlowDetalhado[]
 }
 
 export default function HomePage() {
@@ -391,6 +403,10 @@ export default function HomePage() {
   // Custo/FTD na tabela "Tráfego", só preenchidas pra funis com campanhas atribuídas (ver
   // "Atribuir campanhas" no painel de Detalhes). A Home não tem range, só um dia — from/to iguais.
   const [campanhasMetaDoPeriodo, setCampanhasMetaDoPeriodo] = useState<CampanhaMeta[] | null>(null)
+  // Nome do funil pinado com o painel de detalhes/conversas aberto — só a chave, não um snapshot
+  // dos números (mesmo padrão de conversasFluxoKey em /funis): assim o painel sempre mostra o dado
+  // mais recente, mesmo se aberto antes de tudo carregar.
+  const [painelFunilNome, setPainelFunilNome] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
@@ -530,6 +546,9 @@ export default function HomePage() {
           const leads: Record<string, number> = {}
           const totais: Record<string, number> = {}
           const ultimoLead: Record<string, string | null> = {}
+          // Rechaveia tag -> "botId::tag" antes de mesclar — a mesma tag é reaproveitada em
+          // fluxos de bots diferentes (mesma campanha em vários números), e um mapa achatado por
+          // tag faria a resposta de um bot sobrescrever a de outro (ver chaveTagBot).
           await Promise.allSettled(
             [...tagsPorBot.entries()].map(async ([botId, tagsSet]) => {
               const res = await fetch('/api/leadhub/contagem-hoje-sendpulse', {
@@ -539,9 +558,9 @@ export default function HomePage() {
               })
               if (res.ok) {
                 const data = await res.json()
-                Object.assign(leads, data.leads)
-                Object.assign(totais, data.totais)
-                Object.assign(ultimoLead, data.ultimoLead)
+                for (const [tag, valor] of Object.entries(data.leads ?? {})) leads[chaveTagBot(botId, tag)] = valor as number
+                for (const [tag, valor] of Object.entries(data.totais ?? {})) totais[chaveTagBot(botId, tag)] = valor as number
+                for (const [tag, valor] of Object.entries(data.ultimoLead ?? {})) ultimoLead[chaveTagBot(botId, tag)] = valor as string | null
               }
             }),
           )
@@ -678,7 +697,7 @@ export default function HomePage() {
       const leadsHoje = liveLeadsLoaded
         ? flows.reduce((acc, [, c]) => {
             const tagEntrada = tagDeEntradaDoFluxo(c.tags)
-            return acc + (tagEntrada ? (contagens[tagEntrada] ?? 0) : 0)
+            return acc + (tagEntrada ? (contagens[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
           }, 0)
         : (cache?.leadsHoje ?? 0)
       // Sem dado ao vivo nem cache pra cair como fallback: mostrar "0" aqui daria a
@@ -687,15 +706,29 @@ export default function HomePage() {
       const leadsTotal = liveLeadsLoaded
         ? flows.reduce((acc, [, c]) => {
             const tagEntrada = tagDeEntradaDoFluxo(c.tags)
-            return acc + (tagEntrada ? (contagensTotal[tagEntrada] ?? 0) : 0)
+            return acc + (tagEntrada ? (contagensTotal[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
           }, 0)
         : (cache?.totalLeads ?? 0)
-      const ultimoLeadAt = tags.reduce<string | null>((best, t) => {
-        const ts = ultimoLeadMap[t] ?? null
-        if (!ts) return best
-        if (!best || ts > best) return ts
+      const ultimoLeadAt = flows.reduce<string | null>((best, [, c]) => {
+        for (const t of c.tags ?? []) {
+          const ts = ultimoLeadMap[chaveTagBot(c.botId, t)] ?? null
+          if (ts && (!best || ts > best)) best = ts
+        }
         return best
       }, null)
+      // Um flow por (botId, flowId) desse grupo de funil — usado pra abrir o painel de detalhes
+      // (Conversas ao vivo) escolhendo o fluxo mais ativo quando o funil roda em mais de um bot.
+      const flowsDetalhados: FlowDetalhado[] = flows.map(([flowId, c]) => {
+        const tagEntradaFluxo = tagDeEntradaDoFluxo(c.tags)
+        return {
+          flowId,
+          botId: c.botId,
+          tags: c.tags ?? [],
+          utm: c.utm ?? null,
+          utmsExtras: c.utmsExtras ?? [],
+          leadsHoje: tagEntradaFluxo ? (contagens[chaveTagBot(c.botId, tagEntradaFluxo)] ?? 0) : 0,
+        }
+      })
 
       // determine tipo from flows
       const flowTipos = flows.map(([_, c]) => c.tipo ?? 'disparo')
@@ -854,13 +887,13 @@ export default function HomePage() {
           leadsHoje: liveLeadsLoaded
             ? data.flowIds.reduce((acc, fid) => {
                 const tagEntrada = tagDeEntradaDoFluxo(configs[fid]?.tags)
-                return acc + (tagEntrada ? (contagens[tagEntrada] ?? 0) : 0)
+                return acc + (tagEntrada ? (contagens[chaveTagBot(botId, tagEntrada)] ?? 0) : 0)
               }, 0)
             : (cache?.leadsHoje ?? 0),
           baseCusto: Math.round(((baseCustoPorBot.get(botId) ?? 0) + Number.EPSILON) * 100) / 100,
           baseLinhas: Math.round(baseLinhasPorBot.get(botId) ?? 0),
           ultimoLeadAt: botTags.reduce<string | null>((best, t) => {
-            const ts = ultimoLeadMap[t] ?? null
+            const ts = ultimoLeadMap[chaveTagBot(botId, t)] ?? null
             if (!ts) return best
             if (!best || ts > best) return ts
             return best
@@ -876,9 +909,37 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo }
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo, flowsDetalhados }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo])
+
+  // Recalculado a cada render a partir do funilRows atual (não um snapshot capturado no clique) —
+  // quando o funil roda em mais de um bot, escolhe o fluxo com mais leads hoje pra abrir o painel.
+  const painelFunilRow = painelFunilNome ? funilRows.find((r) => r.funilNome === painelFunilNome) ?? null : null
+  const painelFlow = painelFunilRow && painelFunilRow.flowsDetalhados.length > 0
+    ? painelFunilRow.flowsDetalhados.reduce((a, b) => (b.leadsHoje > a.leadsHoje ? b : a))
+    : null
+  const painelTagEntrada = painelFlow ? tagDeEntradaDoFluxo(painelFlow.tags) ?? null : null
+  const painelProps = painelFunilRow && painelFlow ? {
+    botId: painelFlow.botId,
+    flowId: painelFlow.flowId,
+    tag: painelTagEntrada,
+    flowNome: painelFunilRow.funilNome,
+    tags: painelFlow.tags,
+    contagensPorTag: painelFlow.tags.reduce<Record<string, number>>((acc, t) => {
+      acc[t] = contagens[chaveTagBot(painelFlow.botId, t)] ?? 0
+      return acc
+    }, {}),
+    cor: painelFunilRow.corBadge,
+    total: painelTagEntrada ? (contagensTotal[chaveTagBot(painelFlow.botId, painelTagEntrada)] ?? 0) : 0,
+    registros: trackingMap[painelFlow.flowId]?.registros ?? 0,
+    ftds: trackingMap[painelFlow.flowId]?.ftds ?? 0,
+    periodoLabel: trackingData,
+    dataReferencia: trackingData,
+    dataInicio: trackingData,
+    utm: painelFlow.utm,
+    utmsExtras: painelFlow.utmsExtras,
+  } : null
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
 
@@ -956,15 +1017,19 @@ export default function HomePage() {
                   })}
                 </div>
               )}
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono"
+              <button
+                type="button"
+                onClick={() => setPainelFunilNome(row.funilNome)}
+                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono hover:opacity-75 transition-opacity"
                 style={{
                   backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
                   border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
                   color: row.corBadge ?? 'var(--d1)',
                 }}
+                title="Ver detalhes e conversas ao vivo"
               >
                 {row.funilNome}
-              </span>
+              </button>
               <button
                 onClick={() => handleToggleFunil(row.funilNome)}
                 className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
@@ -1688,6 +1753,27 @@ export default function HomePage() {
         campanhas={daxxCampanhas}
         onLink={handleLinkDaxx}
         onClose={() => setModalLinkFunil(null)}
+      />
+
+      <PainelConversasFluxo
+        key={painelFunilNome ?? 'fechado'}
+        aberto={painelProps !== null}
+        onClose={() => setPainelFunilNome(null)}
+        botId={painelProps?.botId ?? null}
+        flowId={painelProps?.flowId ?? null}
+        tag={painelProps?.tag ?? null}
+        flowNome={painelProps?.flowNome ?? null}
+        tags={painelProps?.tags ?? []}
+        contagensPorTag={painelProps?.contagensPorTag ?? {}}
+        cor={painelProps?.cor}
+        total={painelProps?.total ?? 0}
+        registros={painelProps?.registros ?? 0}
+        ftds={painelProps?.ftds ?? 0}
+        periodoLabel={painelProps?.periodoLabel ?? trackingData}
+        dataReferencia={painelProps?.dataReferencia ?? trackingData}
+        dataInicio={painelProps?.dataInicio ?? trackingData}
+        utm={painelProps?.utm ?? null}
+        utmsExtras={painelProps?.utmsExtras ?? []}
       />
     </>
   )
