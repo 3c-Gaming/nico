@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Upload, Send, RefreshCw, Link2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Upload, Send, RefreshCw, Link2, Save, BookmarkPlus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -16,6 +16,43 @@ interface ResultadoEnvio {
   ok: boolean
   status?: string
   erro?: string
+}
+
+interface SmsTemplate {
+  id: string
+  nome: string
+  corpo: string
+}
+
+// Divide o corpo em pedaços de texto normal + tokens {{variavel}}, marcando cada token como
+// reconhecido (existe entre as colunas da base carregada) ou não — é a "forma visual de saber
+// que a variável foi aplicada" antes de disparar, sem precisar de um textarea rico.
+function CopyComTags({ texto, variaveisConhecidas }: { texto: string; variaveisConhecidas: string[] }) {
+  const partes = texto.split(/(\{\{[^}]*\}\})/g).filter((p) => p !== '')
+  if (!texto) return <span className="text-[var(--text-muted)] italic">nada escrito ainda...</span>
+  return (
+    <>
+      {partes.map((parte, i) => {
+        const m = parte.match(/^\{\{([^}]*)\}\}$/)
+        if (!m) return <span key={i}>{parte}</span>
+        const nomeVar = m[1].trim()
+        const reconhecida = variaveisConhecidas.includes(nomeVar)
+        return (
+          <span
+            key={i}
+            className={`px-1 rounded font-mono ${reconhecida ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}
+            title={reconhecida ? 'Variável reconhecida — existe como coluna na base carregada' : 'Essa variável não bate com nenhuma coluna da base — vai ser enviada em branco'}
+          >
+            {parte}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+function resolverExemplo(texto: string, variables: Record<string, string>): string {
+  return texto.replace(/\{\{([^}]*)\}\}/g, (match, nome) => variables[nome.trim()] ?? match)
 }
 
 const COLUNAS_TELEFONE = ['telefone', 'phone', 'numero', 'número', 'celular', 'whatsapp', 'to']
@@ -64,6 +101,48 @@ export default function SmsRapidoPage() {
   const [progresso, setProgresso] = useState('')
   const [resultados, setResultados] = useState<ResultadoEnvio[] | null>(null)
   const [atualizandoStatus, setAtualizandoStatus] = useState(false)
+
+  const [templates, setTemplates] = useState<SmsTemplate[]>([])
+  const [templateSelecionadoId, setTemplateSelecionadoId] = useState('')
+  const [mostrarSalvarTemplate, setMostrarSalvarTemplate] = useState(false)
+  const [nomeNovoTemplate, setNomeNovoTemplate] = useState('')
+  const [salvandoTemplate, setSalvandoTemplate] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/sms/templates')
+      .then((r) => r.json())
+      .then((data) => setTemplates(data.templates ?? []))
+      .catch(() => {})
+  }, [])
+
+  function handleCarregarTemplate(id: string) {
+    setTemplateSelecionadoId(id)
+    const template = templates.find((t) => t.id === id)
+    if (template) setCorpo(template.corpo)
+  }
+
+  async function handleSalvarTemplate() {
+    if (!nomeNovoTemplate.trim() || !corpo.trim()) return
+    setSalvandoTemplate(true)
+    try {
+      const res = await fetch('/api/sms/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nomeNovoTemplate.trim(), corpo }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setTemplates((prev) => [data.template, ...prev])
+      setTemplateSelecionadoId(data.template.id)
+      setMostrarSalvarTemplate(false)
+      setNomeNovoTemplate('')
+      addToast('success', 'Template salvo')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setSalvandoTemplate(false)
+    }
+  }
 
   function recalcularLinhas(hdrs: string[], cruas: string[][], colTelefone: string) {
     const idx = hdrs.indexOf(colTelefone)
@@ -199,33 +278,91 @@ export default function SmsRapidoPage() {
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <label className="text-xs font-medium text-[var(--text-muted)]">Mensagem</label>
-            {variaveisDisponiveis.length > 0 && (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-[var(--text-muted)]">inserir:</span>
-                {variaveisDisponiveis.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => inserirVariavel(v)}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--border-strong)]"
-                  >
-                    {`{{${v}}}`}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {templates.length > 0 && (
+                <select
+                  value={templateSelecionadoId}
+                  onChange={(e) => handleCarregarTemplate(e.target.value)}
+                  className="h-7 px-2 text-[10px] bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none"
+                >
+                  <option value="">Carregar template...</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={() => setMostrarSalvarTemplate((v) => !v)}
+                disabled={!corpo.trim()}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] disabled:opacity-40 transition-colors"
+              >
+                <BookmarkPlus size={11} />
+                Salvar como template
+              </button>
+            </div>
           </div>
+
+          {mostrarSalvarTemplate && (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={nomeNovoTemplate}
+                onChange={(e) => setNomeNovoTemplate(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSalvarTemplate()}
+                placeholder="Nome do template..."
+                className="flex-1 h-7 px-2 text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)]"
+              />
+              <Button size="sm" icon={<Save size={12} />} onClick={handleSalvarTemplate} disabled={!nomeNovoTemplate.trim()} loading={salvandoTemplate}>
+                Salvar
+              </Button>
+            </div>
+          )}
+
+          {variaveisDisponiveis.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-[var(--text-muted)]">inserir:</span>
+              {variaveisDisponiveis.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => inserirVariavel(v)}
+                  className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--border-strong)]"
+                >
+                  {`{{${v}}}`}
+                </button>
+              ))}
+            </div>
+          )}
+
           <textarea
             value={corpo}
             onChange={(e) => setCorpo(e.target.value)}
-            placeholder="Oi {{nome}}, seu bônus está liberado! Acesse: https://..."
+            placeholder="Oi {{nome}}, seu bônus está liberado! Acesse: {{link}}"
             rows={4}
             maxLength={1530}
             className="w-full px-3 py-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] resize-none font-mono"
           />
           <p className="text-[10px] text-[var(--text-muted)]">{corpo.length}/1530 caracteres — links completos na copy (com http/https) são encurtados automaticamente se a opção abaixo estiver ligada.</p>
+
+          {corpo && (
+            <div className="space-y-2 pt-1">
+              <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2.5">
+                <p className="text-[10px] font-medium text-[var(--text-muted)] mb-1">
+                  Pré-visualização — <span className="text-emerald-400">verde</span> = variável reconhecida na base, <span className="text-red-400">vermelho</span> = não bate com nenhuma coluna
+                </p>
+                <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">
+                  <CopyComTags texto={corpo} variaveisConhecidas={variaveisDisponiveis} />
+                </p>
+              </div>
+              {linhas.length > 0 && (
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5">
+                  <p className="text-[10px] font-medium text-[var(--text-muted)] mb-1">Exemplo real (1ª linha da base, {linhas[0].telefone})</p>
+                  <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">{resolverExemplo(corpo, linhas[0].variables)}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <label className="flex items-center gap-2 text-xs text-[var(--text-primary)] cursor-pointer w-fit">
