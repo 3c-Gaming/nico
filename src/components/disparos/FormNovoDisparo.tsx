@@ -86,6 +86,11 @@ export function FormNovoDisparo() {
   }, [step, canal, campanha, tipo, dataDisparo, horarioDisparo])
 
   function handleAvancar() {
+    // SMS não tem etapas 2/3 construídas aqui dentro — a tela de verdade é /disparos/sms-rapido.
+    if (step === 1 && canal === 'sms') {
+      router.push('/disparos/sms-rapido')
+      return
+    }
     if (step < 3) setStep(step + 1)
   }
 
@@ -217,8 +222,8 @@ export function FormNovoDisparo() {
             </span>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Campanha vinculada a um disparo já feito na DAXX', disabled: false },
-                { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Esse fluxo ainda não foi construído — use "Disparo SMS" na sidebar', disabled: true },
+                { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Sem envio de WhatsApp disponível no momento', disabled: true },
+                { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Envio de SMS direto pelo app — Avançar leva pra tela de disparo', disabled: false },
               ].map((opt) => (
                 <button
                   key={opt.value}
