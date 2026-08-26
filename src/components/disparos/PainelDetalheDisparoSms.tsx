@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock } from 'lucide-react'
+import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
@@ -10,6 +12,7 @@ import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/Funil
 import type { Disparo } from '@/types'
 
 const LARGURA = 440
+export const SESSION_KEY_REMARKETING_SMS = 'sms_remarketing_base'
 
 export interface ResumoCampanhaSms {
   total: number
@@ -17,6 +20,11 @@ export interface ResumoCampanhaSms {
   entregues: number
   clicados: number
   falhas: number
+}
+
+interface EnvioSms {
+  telefone: string
+  status: string
 }
 
 function Estatistica({ label, valor, cor }: { label: string; valor: string; cor?: string }) {
@@ -29,6 +37,10 @@ function Estatistica({ label, valor, cor }: { label: string; valor: string; cor?
 }
 
 export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { disparo: Disparo | null; resumoSms?: ResumoCampanhaSms; onClose: () => void }) {
+  const router = useRouter()
+  const [gerandoRemarketing, setGerandoRemarketing] = useState<'nao_clicou' | 'clicou' | null>(null)
+  const [erroRemarketing, setErroRemarketing] = useState<string | null>(null)
+
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo?.utm ? 'superbet' : disparo?.betmgmPid ? 'betmgm' : null
   const { resultado, carregando, custo } = useResultadoDisparo({
     utmValor: disparo?.utm || disparo?.betmgmPid,
@@ -37,6 +49,37 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
     entregues: disparo?.base.totalRegistros,
     custoPorUnidade: disparo?.custoPorEnvio,
   })
+
+  async function criarRemarketing(filtro: 'nao_clicou' | 'clicou') {
+    if (!disparo) return
+    setErroRemarketing(null)
+    setGerandoRemarketing(filtro)
+    try {
+      const res = await fetch(`/api/sms/status?campanha=${encodeURIComponent(disparo.nomenclatura)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao buscar envios')
+      const envios = (data.envios ?? []) as EnvioSms[]
+      const telefones = [...new Set(
+        envios
+          .filter((e) => (filtro === 'clicou' ? e.status === 'clicked' : e.status !== 'clicked'))
+          .map((e) => e.telefone),
+      )]
+      if (telefones.length === 0) {
+        setErroRemarketing(filtro === 'clicou' ? 'Ninguém clicou nessa campanha ainda.' : 'Todo mundo já clicou — não sobrou ninguém pra remarketing.')
+        return
+      }
+      sessionStorage.setItem(SESSION_KEY_REMARKETING_SMS, JSON.stringify({
+        origem: disparo.nomenclatura,
+        filtro,
+        telefones,
+      }))
+      router.push('/disparos/sms-rapido')
+    } catch (err) {
+      setErroRemarketing((err as Error).message)
+    } finally {
+      setGerandoRemarketing(null)
+    }
+  }
 
   const estagios: EstagioFunil[] = disparo ? [
     { tag: 'Base', contagem: disparo.base.totalRegistros ?? 0 },
@@ -84,6 +127,30 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
               <section className="space-y-2">
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada da campanha</h3>
                 <FunilConversaoChart estagios={estagios} cor="var(--d1)" orientacao="vertical" />
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Remarketing</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">Cria um disparo novo já com a base filtrada por quem clicou (ou não) nessa campanha.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => criarRemarketing('nao_clicou')}
+                    disabled={gerandoRemarketing !== null}
+                    className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-50"
+                  >
+                    <Users size={13} />
+                    {gerandoRemarketing === 'nao_clicou' ? 'Buscando...' : 'Quem não clicou'}
+                  </button>
+                  <button
+                    onClick={() => criarRemarketing('clicou')}
+                    disabled={gerandoRemarketing !== null}
+                    className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-50"
+                  >
+                    <Users size={13} />
+                    {gerandoRemarketing === 'clicou' ? 'Buscando...' : 'Quem clicou'}
+                  </button>
+                </div>
+                {erroRemarketing && <p className="text-[11px] text-[var(--warning)]">{erroRemarketing}</p>}
               </section>
 
               <section className="space-y-2">

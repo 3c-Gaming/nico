@@ -25,8 +25,12 @@ export async function GET(request: Request) {
     return alvo <= agora
   })
 
-  const url = new URL(request.url)
-  const callbackUrl = `${url.origin}/api/sms/webhook`
+  // request.url NÃO é confiável aqui — invocações de Cron da Vercel não necessariamente batem no
+  // domínio público (confirmado ao vivo: 1000 SMS reais de uma campanha agendada ficaram travados
+  // em "queued" pra sempre porque o Solvefy recebeu um callbackUrl inalcançável). Mesmo padrão já
+  // usado em lib/telegram/keyboards.ts e lib/testes/*.ts pro mesmo problema.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://controlenumeros.vercel.app'
+  const callbackUrl = `${appUrl}/api/sms/webhook`
 
   const resultados = []
   for (const disparo of vencidos) {

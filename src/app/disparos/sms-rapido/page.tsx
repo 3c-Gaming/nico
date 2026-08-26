@@ -11,6 +11,7 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
+import { SESSION_KEY_REMARKETING_SMS } from '@/components/disparos/PainelDetalheDisparoSms'
 import type { Disparo } from '@/types'
 
 const CASA_TRACKING_INFO = {
@@ -169,6 +170,27 @@ export default function SmsRapidoPage() {
       .then((r) => r.json())
       .then((data) => setTemplates(data.templates ?? []))
       .catch(() => {})
+  }, [])
+
+  // Base de remarketing vinda do painel de detalhes de outro disparo (filtro "quem clicou"/"quem
+  // não clicou") — sessionStorage em vez de query string porque a lista de telefones pode ser
+  // grande demais pra caber numa URL.
+  useEffect(() => {
+    const bruto = sessionStorage.getItem(SESSION_KEY_REMARKETING_SMS)
+    if (!bruto) return
+    sessionStorage.removeItem(SESSION_KEY_REMARKETING_SMS)
+    try {
+      const { origem, filtro, telefones } = JSON.parse(bruto) as { origem: string; filtro: 'nao_clicou' | 'clicou'; telefones: string[] }
+      if (!Array.isArray(telefones) || telefones.length === 0) return
+      setHeaders(['telefone'])
+      setLinhasCruas(telefones.map((t) => [t]))
+      setColunaTelefone('telefone')
+      setLinhas(telefones.map((t) => ({ telefone: t, variables: {} })))
+      setNomeArquivo(`remarketing-${origem}-${filtro === 'clicou' ? 'clicou' : 'nao-clicou'}.csv`)
+      setCampanha(`remarketing-${origem}`)
+      addToast('success', `Base de remarketing carregada: ${telefones.length} número(s) que ${filtro === 'clicou' ? 'clicaram' : 'não clicaram'} em "${origem}"`)
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function handleCarregarTemplate(id: string) {
