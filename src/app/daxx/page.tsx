@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Plus, Pin, ExternalLink, CalendarClock } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -10,9 +10,10 @@ import { useDisparos } from '@/hooks/useDisparos'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
+import { PainelDetalheDisparoSms, type ResumoCampanhaSms } from '@/components/disparos/PainelDetalheDisparoSms'
 import type { Disparo } from '@/types'
 
-function CampanhaRow({ disparo, onVerDetalhes }: { disparo: Disparo; onVerDetalhes: (id: string) => void }) {
+function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoCampanhaSms; onVerDetalhes: (disparo: Disparo) => void }) {
   const { toggle: togglePin, isPinned } = usePinnedDisparos()
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   const { resultado, carregando, custo } = useResultadoDisparo({
@@ -24,11 +25,14 @@ function CampanhaRow({ disparo, onVerDetalhes }: { disparo: Disparo; onVerDetalh
   })
 
   return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50 transition-colors">
+    <tr
+      className="border-b border-[var(--border)] hover:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer"
+      onClick={() => onVerDetalhes(disparo)}
+    >
       <td className="py-3 px-3">
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => togglePin(disparo.id)}
+            onClick={(e) => { e.stopPropagation(); togglePin(disparo.id) }}
             className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
             title={isPinned(disparo.id) ? 'Desafixar da Home' : 'Fixar na Home'}
           >
@@ -49,6 +53,9 @@ function CampanhaRow({ disparo, onVerDetalhes }: { disparo: Disparo; onVerDetalh
         {disparo.utm || disparo.betmgmPid || <span className="text-[var(--text-muted)]">—</span>}
       </td>
       <td className="py-3 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(disparo.base.totalRegistros ?? 0)}</td>
+      <td className="py-3 px-3 text-right font-mono text-[var(--text-secondary)]">{resumoSms ? formatNumero(resumoSms.enviados) : '—'}</td>
+      <td className="py-3 px-3 text-right font-mono text-sky-400">{resumoSms ? formatNumero(resumoSms.entregues) : '—'}</td>
+      <td className="py-3 px-3 text-right font-mono text-violet-400">{resumoSms ? formatNumero(resumoSms.clicados) : '—'}</td>
       <td className="py-3 px-3 text-right font-mono text-emerald-400">{custo > 0 ? formatMoeda(custo) : '—'}</td>
       <td className="py-3 px-3 text-right font-mono text-[var(--d1)]">{carregando ? '…' : (resultado ? formatNumero(resultado.registros) : '—')}</td>
       <td className="py-3 px-3 text-right font-mono text-green-500">{carregando ? '…' : (resultado ? formatNumero(resultado.ftds) : '—')}</td>
@@ -59,7 +66,7 @@ function CampanhaRow({ disparo, onVerDetalhes }: { disparo: Disparo; onVerDetalh
       </td>
       <td className="py-3 px-3 text-center">
         <button
-          onClick={() => onVerDetalhes(disparo.id)}
+          onClick={(e) => { e.stopPropagation(); onVerDetalhes(disparo) }}
           className="flex items-center justify-center w-7 h-7 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mx-auto"
           title="Ver detalhes"
         >
@@ -76,6 +83,15 @@ export default function DisparosPage() {
   const [busca, setBusca] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
+  const [resumoSms, setResumoSms] = useState<Record<string, ResumoCampanhaSms>>({})
+  const [disparoSelecionado, setDisparoSelecionado] = useState<Disparo | null>(null)
+
+  useEffect(() => {
+    fetch('/api/sms/resumo')
+      .then((r) => r.ok ? r.json() : { resumo: {} })
+      .then((json) => setResumoSms(json.resumo ?? {}))
+      .catch(() => {})
+  }, [])
 
   const campanhasSms = useMemo(
     () => todosDisparos
@@ -157,6 +173,9 @@ export default function DisparosPage() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM/PID</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Base</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Enviados</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Entregues</th>
+                  <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Clicados</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Custo</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
@@ -167,13 +186,19 @@ export default function DisparosPage() {
               </thead>
               <tbody>
                 {filtradas.map((c) => (
-                  <CampanhaRow key={c.id} disparo={c} onVerDetalhes={(id) => router.push(`/disparos/${id}`)} />
+                  <CampanhaRow key={c.id} disparo={c} resumoSms={resumoSms[c.nomenclatura]} onVerDetalhes={setDisparoSelecionado} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      <PainelDetalheDisparoSms
+        disparo={disparoSelecionado}
+        resumoSms={disparoSelecionado ? resumoSms[disparoSelecionado.nomenclatura] : undefined}
+        onClose={() => setDisparoSelecionado(null)}
+      />
     </>
   )
 }
