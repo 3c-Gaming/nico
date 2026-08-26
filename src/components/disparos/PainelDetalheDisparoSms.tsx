@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock, Users } from 'lucide-react'
+import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock, Users, MousePointerClick } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
@@ -40,6 +40,42 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
   const router = useRouter()
   const [gerandoRemarketing, setGerandoRemarketing] = useState<'nao_clicou' | 'clicou' | null>(null)
   const [erroRemarketing, setErroRemarketing] = useState<string | null>(null)
+
+  const [cliquesSwitchy, setCliquesSwitchy] = useState<{ total: number; linkMaisAntigo: string | null } | null>(null)
+  const [carregandoSwitchy, setCarregandoSwitchy] = useState(false)
+
+  useEffect(() => {
+    setCliquesSwitchy(null)
+    if (!disparo?.smsDestinatarios?.length) return
+
+    // O mesmo link (curto do Switchy) tende a se repetir pra base inteira, mas varre todo mundo
+    // pra cobrir o caso raro de campanha com mais de um link — soma os cliques de cada um.
+    const linksUnicos = [...new Set(
+      disparo.smsDestinatarios.flatMap((d) => Object.values(d.variables ?? {})),
+    )].filter((v) => /^https?:\/\//.test(v))
+
+    if (linksUnicos.length === 0) return
+
+    setCarregandoSwitchy(true)
+    Promise.all(
+      linksUnicos.map((link) =>
+        fetch(`/api/switchy/clicks?url=${encodeURIComponent(link)}`)
+          .then((r) => r.ok ? r.json() : { encontrado: false })
+          .catch(() => ({ encontrado: false })),
+      ),
+    ).then((resultados: { encontrado: boolean; clicks?: number; criadoEm?: string | null }[]) => {
+      const encontrados = resultados.filter((r) => r.encontrado)
+      if (encontrados.length === 0) return
+      const total = encontrados.reduce((soma, r) => soma + (r.clicks ?? 0), 0)
+      // O link MAIS ANTIGO entre os usados é o que importa pro aviso — se ele já existia antes da
+      // campanha, o total inclui cliques de fora dela (reaproveitamento de link).
+      const datas = encontrados.map((r) => r.criadoEm).filter((d): d is string => !!d)
+      const linkMaisAntigo = datas.length ? datas.reduce((a, b) => (a < b ? a : b)) : null
+      setCliquesSwitchy({ total, linkMaisAntigo })
+    }).finally(() => setCarregandoSwitchy(false))
+  }, [disparo])
+
+  const linkSwitchyReaproveitado = !!(cliquesSwitchy?.linkMaisAntigo && disparo?.dataDisparo && cliquesSwitchy.linkMaisAntigo.slice(0, 10) < disparo.dataDisparo)
 
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo?.utm ? 'superbet' : disparo?.betmgmPid ? 'betmgm' : null
   const { resultado, carregando, custo } = useResultadoDisparo({
@@ -127,6 +163,23 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
               <section className="space-y-2">
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada da campanha</h3>
                 <FunilConversaoChart estagios={estagios} cor="var(--d1)" orientacao="vertical" />
+                {(carregandoSwitchy || cliquesSwitchy !== null) && (
+                  <div className={`flex items-start gap-1.5 px-3 py-2 rounded-md border text-[11px] ${
+                    linkSwitchyReaproveitado
+                      ? 'border-[var(--warning)]/30 bg-[var(--warning)]/10 text-[var(--warning)]'
+                      : 'border-[var(--d3)]/30 bg-[var(--d3)]/10 text-[var(--d3)]'
+                  }`}>
+                    <MousePointerClick size={12} className="mt-0.5 shrink-0" />
+                    {carregandoSwitchy ? 'Consultando cliques no Switchy...' : (
+                      <span>
+                        <strong>{formatNumero(cliquesSwitchy?.total ?? 0)}</strong> cliques totais (vitalícios) do link no Switchy — a API deles não separa clique por data, só um contador único desde a criação do link.
+                        {linkSwitchyReaproveitado && (
+                          <> Esse link já existia antes dessa campanha (criado em {cliquesSwitchy?.linkMaisAntigo?.slice(0, 10).split('-').reverse().join('/')}) — o número acima provavelmente mistura cliques de outros usos, não é exclusivo daqui.</>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                )}
               </section>
 
               <section className="space-y-2">
