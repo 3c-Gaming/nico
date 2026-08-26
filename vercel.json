@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/sms-agendados",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/aquecimento",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

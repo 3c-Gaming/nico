@@ -1,13 +1,23 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef, Fragment, useCallback } from 'react'
-import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check, Eye, EyeOff, Send } from 'lucide-react'
+import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink, Pause, FileText, Layers, Pin, Copy, Check, Eye, EyeOff, Send, Flame } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMonitoramento, POLL_INTERVAL } from '@/hooks/useMonitoramento'
 import { getState, togglePinNumero, toggleMonitorarNumero } from '@/lib/store'
-import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse } from '@/types'
+import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse, AquecimentoNumero } from '@/types'
+
+const AQUECIMENTO_STATUS_LABEL: Record<AquecimentoNumero['status'], string> = {
+  aquecendo: 'Aquecendo',
+  aquecido: 'Aquecido',
+  pausado: 'Pausado',
+}
+
+function diaDaRampa(iniciadoEm: string): number {
+  return Math.max(1, Math.floor((Date.now() - new Date(iniciadoEm).getTime()) / 86_400_000) + 1)
+}
 
 interface BotTestApiResult {
   botId: string
@@ -285,7 +295,7 @@ function TelegramBotsSecao() {
     let ativo = true
     fetch('/api/sendpulse/numeros?canal=telegram')
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json) => { if (ativo) setNumeros(json.numeros ?? []) })
+      .then((json) => { if (ativo) setNumeros((json.numeros ?? []).filter((n: NumeroSendpulse) => n.status === 'ativo')) })
       .catch(() => { if (ativo) setErro('Erro ao carregar bots de Telegram') })
     return () => { ativo = false }
   }, [])
@@ -365,11 +375,46 @@ function TelegramBotsSecao() {
 }
 
 export default function NumerosPage() {
+  const router = useRouter()
   const { data, loading, refreshing, error, atualizar, proximaAtualizacao, botTestMap } = useMonitoramento()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [testandoBotId, setTestandoBotId] = useState<string | null>(null)
   const [leadsHojeMap, setLeadsHojeMap] = useState<Record<string, number>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [aquecimentoMap, setAquecimentoMap] = useState<Record<string, AquecimentoNumero>>({})
+  const [aquecendoBotId, setAquecendoBotId] = useState<string | null>(null)
+
+  const buscarAquecimento = useCallback(async () => {
+    try {
+      const res = await fetch('/api/aquecimento/numeros')
+      if (!res.ok) return
+      const { numeros }: { numeros: AquecimentoNumero[] } = await res.json()
+      setAquecimentoMap(Object.fromEntries(numeros.map((n) => [n.botId, n])))
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    buscarAquecimento()
+  }, [buscarAquecimento])
+
+  const handleToggleAquecimento = useCallback(async (numero: NumeroSendpulse) => {
+    if (aquecendoBotId) return
+    setAquecendoBotId(numero.id)
+    try {
+      if (aquecimentoMap[numero.id]) {
+        await fetch(`/api/aquecimento/numeros/${encodeURIComponent(numero.id)}`, { method: 'DELETE' })
+      } else {
+        await fetch('/api/aquecimento/numeros', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botId: numero.id, contaId: numero.contaId ?? '01' }),
+        })
+      }
+      await buscarAquecimento()
+    } finally {
+      setAquecendoBotId(null)
+    }
+  }, [aquecendoBotId, aquecimentoMap, buscarAquecimento])
 
   const buscarLeadsHoje = useCallback(async () => {
     if (!data?.numeros) return
@@ -431,13 +476,8 @@ export default function NumerosPage() {
   const numerosOrdenados = useMemo(() => {
     if (!data?.numeros) return []
     return [...data.numeros]
-      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero)
+      .filter((n): n is NumeroMonitorado & { numero: NumeroSendpulse } => !!n.numero && n.numero.status === 'ativo')
       .sort((a, b) => {
-        // Ativos sempre no topo, independente da conta — só depois disso entra o
-        // critério de atividade recente/nome.
-        const ativoA = a.numero.status === 'ativo' ? 0 : 1
-        const ativoB = b.numero.status === 'ativo' ? 0 : 1
-        if (ativoA !== ativoB) return ativoA - ativoB
         const va = a.ultimoAumentoMs ?? 0
         const vb = b.ultimoAumentoMs ?? 0
         if (va !== vb) return vb - va
@@ -451,14 +491,23 @@ export default function NumerosPage() {
         titulo="Números"
         descricao="Monitoramento de chatbots"
         acoes={
-          <button
-            onClick={atualizar}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Atualizando...' : 'Atualizar'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/numeros/aquecimento')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <Flame size={14} />
+              Aquecimento
+            </button>
+            <button
+              onClick={atualizar}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-[var(--text-secondary)] border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </div>
         }
       />
 
@@ -594,6 +643,20 @@ export default function NumerosPage() {
                             title={getState().pinnedNumeros.includes(item.numero.id) ? 'Desafixar da Home' : 'Fixar na Home'}
                           >
                             <Pin size={13} className={getState().pinnedNumeros.includes(item.numero.id) ? 'text-amber-400' : 'text-[var(--text-muted)]/40'} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleAquecimento(item.numero) }}
+                            disabled={aquecendoBotId === item.numero.id}
+                            className="shrink-0 flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-40"
+                            title={aquecimentoMap[item.numero.id]
+                              ? `Em aquecimento — dia ${diaDaRampa(aquecimentoMap[item.numero.id].iniciadoEm)}, ${aquecimentoMap[item.numero.id].mensagensHoje} msg(s) hoje (${AQUECIMENTO_STATUS_LABEL[aquecimentoMap[item.numero.id].status]}). Clique pra sair.`
+                              : 'Colocar em aquecimento'}
+                          >
+                            {aquecendoBotId === item.numero.id ? (
+                              <Spinner size={12} />
+                            ) : (
+                              <Flame size={13} className={aquecimentoMap[item.numero.id] ? 'text-orange-400' : 'text-[var(--text-muted)]/40'} />
+                            )}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleMonitorarNumero(item.numero.id) }}

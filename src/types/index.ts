@@ -731,3 +731,59 @@ export interface FunilApresentacao {
   criadoEm: string
   atualizadoEm: string
 }
+
+export interface AquecimentoNumero {
+  botId: string
+  contaId: string
+  papel: 'normal' | 'dedicado'
+  status: 'aquecendo' | 'aquecido' | 'pausado'
+  iniciadoEm: string
+  ultimaMensagemEm: string | null
+  mensagensHoje: number
+  mensagensHojeData: string | null
+  notas: string | null
+}
+
+export interface AquecimentoMensagemScript {
+  de: 'A' | 'B'
+  texto: string
+  atrasoSegundos?: number
+}
+
+export interface AquecimentoScript {
+  id: string
+  nome: string
+  tema: string | null
+  mensagens: AquecimentoMensagemScript[]
+  ativo: boolean
+  criadoEm: string
+}
+
+export interface AquecimentoPar {
+  id: string
+  botIdA: string
+  botIdB: string
+  contactIdA: string | null
+  contactIdB: string | null
+  ativo: boolean
+  criadoEm: string
+}
+
+export interface AquecimentoExecucao {
+  id: string
+  parId: string
+  scriptId: string
+  proximoIndice: number
+  status: 'em_andamento' | 'concluida'
+  proximaMensagemEm: string | null
+  iniciadaEm: string
+  atualizadaEm: string
+}
+
+export interface AquecimentoConfig {
+  id: number
+  janelaInicioHora: number
+  janelaFimHora: number
+  cronPaused: boolean
+  rampa: Record<string, number>
+}

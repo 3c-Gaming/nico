@@ -311,10 +311,11 @@ export async function enviarMensagem(params: {
   telefone: string
   templateId?: string
   variaveis?: Record<string, string>
+  apiKey?: string
 }): Promise<{ sucesso: boolean; mensagemId?: string }> {
   const res = await fetch(`${baseUrl('whatsapp')}/send`, {
     method: 'POST',
-    headers: getHeaders(apiKeyParaBot(params.botId)),
+    headers: getHeaders(params.apiKey ?? apiKeyParaBot(params.botId)),
     body: JSON.stringify({
       bot_id: params.botId,
       phone: params.telefone.replace(/\D/g, ''),
@@ -376,10 +377,11 @@ export async function enviarMensagemDireta(params: {
   contactId: string
   botId: string
   texto: string
+  apiKey?: string
 }): Promise<{ ok: boolean; statusCode: number; body: unknown }> {
   const res = await fetch(`${baseUrl('whatsapp')}/contacts/send`, {
     method: 'POST',
-    headers: getHeaders(apiKeyParaBot(params.botId)),
+    headers: getHeaders(params.apiKey ?? apiKeyParaBot(params.botId)),
     body: JSON.stringify({
       contact_id: params.contactId,
       bot_id: params.botId,

@@ -74,6 +74,52 @@ export async function POST() {
         enviado_em TIMESTAMP DEFAULT NOW(),
         atualizado_em TIMESTAMP DEFAULT NOW()
       )`,
+      `CREATE TABLE IF NOT EXISTS aquecimento_numeros (
+        bot_id TEXT PRIMARY KEY,
+        conta_id TEXT NOT NULL,
+        papel TEXT NOT NULL DEFAULT 'normal',
+        status TEXT NOT NULL DEFAULT 'aquecendo',
+        iniciado_em TIMESTAMP DEFAULT NOW(),
+        ultima_mensagem_em TIMESTAMP,
+        mensagens_hoje INTEGER NOT NULL DEFAULT 0,
+        mensagens_hoje_data DATE,
+        notas TEXT
+      )`,
+      `CREATE TABLE IF NOT EXISTS aquecimento_scripts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        nome TEXT NOT NULL,
+        tema TEXT,
+        mensagens JSONB NOT NULL,
+        ativo BOOLEAN DEFAULT true,
+        criado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS aquecimento_pares (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bot_id_a TEXT NOT NULL,
+        bot_id_b TEXT NOT NULL,
+        contact_id_a TEXT,
+        contact_id_b TEXT,
+        ativo BOOLEAN DEFAULT true,
+        criado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS aquecimento_execucoes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        par_id UUID NOT NULL REFERENCES aquecimento_pares(id) ON DELETE CASCADE,
+        script_id UUID NOT NULL REFERENCES aquecimento_scripts(id) ON DELETE CASCADE,
+        proximo_indice INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'em_andamento',
+        proxima_mensagem_em TIMESTAMP,
+        iniciada_em TIMESTAMP DEFAULT NOW(),
+        atualizada_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS aquecimento_config (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        janela_inicio_hora INTEGER NOT NULL DEFAULT 8,
+        janela_fim_hora INTEGER NOT NULL DEFAULT 21,
+        cron_paused BOOLEAN NOT NULL DEFAULT false,
+        rampa JSONB NOT NULL DEFAULT '{"1":2,"2":3,"3":4,"5":6,"7":8,"10":12,"14":15}'::jsonb
+      )`,
+      `INSERT INTO aquecimento_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING`,
       `CREATE TABLE IF NOT EXISTS resultados (
         id TEXT PRIMARY KEY,
         titulo TEXT NOT NULL,
