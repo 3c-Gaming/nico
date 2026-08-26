@@ -15,6 +15,7 @@ import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, 
 import Link from 'next/link'
 import { sincronizarResultados } from '@/lib/casas/sync'
 import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
+import type { ResumoCampanhaSms } from './PainelDetalheDisparoSms'
 import type { Disparo, TipoDisparo } from '@/types'
 import type { CasaAposta } from '@/types'
 
@@ -26,6 +27,7 @@ const TIPOS: TipoDisparo[] = ['D1', 'D3', 'D5', 'D7', 'PONTUAL']
 interface DisparoRowProps {
   d: Disparo
   casas: Record<string, CasaAposta>
+  resumoSms?: ResumoCampanhaSms
   onNavigate: (id: string) => void
   onMarcarExecutado: (id: string) => void
   onClonar: (d: Disparo) => void
@@ -36,7 +38,7 @@ interface DisparoRowProps {
  * vivo via useResultadoDisparo em vez de depender do sync em lote (que só roda uma vez
  * no carregamento da página e não pega disparo cadastrado depois). Só busca disparo já
  * cadastrado com UTM/PID salvo — sem isso não tem o que casar. */
-function DisparoRow({ d, casas, onNavigate, onMarcarExecutado, onClonar, onExcluir }: DisparoRowProps) {
+function DisparoRow({ d, casas, resumoSms, onNavigate, onMarcarExecutado, onClonar, onExcluir }: DisparoRowProps) {
   const casaAtiva: 'superbet' | 'betmgm' | null = d.utm ? 'superbet' : d.betmgmPid ? 'betmgm' : null
   const utmValor = d.utm || d.betmgmPid
   const { resultado } = useResultadoDisparo({ utmValor, casa: casaAtiva, data: d.dataDisparo })
@@ -79,6 +81,15 @@ function DisparoRow({ d, casas, onNavigate, onMarcarExecutado, onClonar, onExclu
               {pct}%
             </span>
           )
+        })()}
+      </td>
+      <td className="px-3 py-3">
+        {(() => {
+          if (d.canal !== 'sms' || !resumoSms || resumoSms.entregues <= 0) {
+            return <span className="text-xs text-[var(--text-muted)]">—</span>
+          }
+          const pct = ((resumoSms.clicados / resumoSms.entregues) * 100).toFixed(1)
+          return <span className="text-xs font-mono font-medium text-[var(--d3)]">{pct}%</span>
         })()}
       </td>
       <td className="px-3 py-3">
@@ -170,6 +181,14 @@ export function ListaDisparos() {
   const [sortField, setSortField] = useState<SortField>('dataDisparo')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [recalculando, setRecalculando] = useState(false)
+  const [resumoSms, setResumoSms] = useState<Record<string, ResumoCampanhaSms>>({})
+
+  useEffect(() => {
+    fetch('/api/sms/resumo')
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => { if (json?.resumo) setResumoSms(json.resumo) })
+      .catch(() => {})
+  }, [])
 
   // Backfill automático ao carregar a página
   useEffect(() => {
@@ -420,6 +439,7 @@ export function ListaDisparos() {
                 Status {sortField === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
               </th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Conversão</th>
+              <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Taxa de Cliques</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">Registros</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">FTDs</th>
               <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2.5">CPAs</th>
@@ -434,6 +454,7 @@ export function ListaDisparos() {
                 key={d.id}
                 d={d}
                 casas={casas}
+                resumoSms={resumoSms[d.nomenclatura]}
                 onNavigate={(id) => router.push(`/disparos/${id}`)}
                 onMarcarExecutado={(id) => {
                   update(id, { status: 'executado' })
