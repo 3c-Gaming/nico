@@ -123,7 +123,7 @@ export default function SmsRapidoPage() {
   const { list: casasList } = useCasasAposta()
 
   const [campanha, setCampanha] = useState(() => `sms-${new Date().toISOString().slice(0, 10)}`)
-  const [from, setFrom] = useState('DISPARO')
+  const [from, setFrom] = useState('solvefy')
   const [corpo, setCorpo] = useState('')
   const [useShortener, setUseShortener] = useState(true)
 
