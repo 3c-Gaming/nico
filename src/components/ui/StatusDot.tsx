@@ -1,7 +1,7 @@
 'use client'
 
 interface StatusDotProps {
-  status: 'rascunho' | 'pronto' | 'em_validacao' | 'agendado' | 'executado' | 'cancelado'
+  status: 'rascunho' | 'pronto' | 'em_validacao' | 'agendado' | 'enviando' | 'executado' | 'cancelado'
   size?: number
 }
 
@@ -10,6 +10,7 @@ const DOT_CORES: Record<string, string> = {
   pronto: 'var(--info)',
   em_validacao: 'var(--warning)',
   agendado: 'var(--d1)',
+  enviando: 'var(--warning)',
   executado: 'var(--success)',
   cancelado: 'var(--error)',
 }

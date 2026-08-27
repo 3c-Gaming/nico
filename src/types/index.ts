@@ -36,6 +36,7 @@ export type StatusDisparo =
   | 'pronto'
   | 'em_validacao'
   | 'agendado'
+  | 'enviando'
   | 'executado'
   | 'cancelado'
 

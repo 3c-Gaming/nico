@@ -20,6 +20,7 @@ const STATUS_CORES: Record<string, string> = {
   pronto: 'var(--info)',
   em_validacao: 'var(--warning)',
   agendado: 'var(--d1)',
+  enviando: 'var(--warning)',
   executado: 'var(--success)',
   cancelado: 'var(--error)',
 }
@@ -29,6 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
   pronto: 'Pronto',
   em_validacao: 'Validando',
   agendado: 'Agendado',
+  enviando: 'Enviando',
   executado: 'Executado',
   cancelado: 'Cancelado',
 }
