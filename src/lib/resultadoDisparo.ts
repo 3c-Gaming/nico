@@ -1,4 +1,4 @@
-import { formatarData } from './datas'
+import { formatarData, gerarRangeDias, parsearDataISO } from './datas'
 
 export const CUSTO_POR_ENTREGUE = 0.13
 
@@ -54,5 +54,31 @@ export async function buscarResultadoUtm(
     registros: json.registros ?? 0,
     ftds: json.ftds ?? 0,
     cpas: dataAindaNaoFechou ? null : (json.cpas ?? 0),
+  }
+}
+
+/**
+ * Mesma coisa que buscarResultadoUtm, mas somado num período (dataInicio..dataFim, inclusive).
+ * As fontes de dados (tracking/campanhas) só respondem por dia — aqui busca dia a dia em
+ * paralelo e soma. Se algum dia do período ainda não fechou (hoje ou futuro), CPA do período
+ * inteiro fica null — mesma regra do dia único, só que agora "período" só pode ter CPA final
+ * quando todo mundo dentro dele já fechou.
+ */
+export async function buscarResultadoUtmPeriodo(
+  utmValor: string,
+  casa: 'superbet' | 'betmgm',
+  dataInicio: string,
+  dataFim: string,
+): Promise<ResultadoUtm | null> {
+  const datas = gerarRangeDias(parsearDataISO(dataInicio), parsearDataISO(dataFim)).map((d) => formatarData(d, 'YYYY-MM-DD'))
+  const resultados = await Promise.all(datas.map((data) => buscarResultadoUtm(utmValor, casa, data)))
+  const validos = resultados.filter((r): r is ResultadoUtm => r != null)
+  if (validos.length === 0) return null
+
+  const algumAindaAberto = validos.some((r) => r.cpas == null)
+  return {
+    registros: validos.reduce((soma, r) => soma + r.registros, 0),
+    ftds: validos.reduce((soma, r) => soma + r.ftds, 0),
+    cpas: algumAindaAberto ? null : validos.reduce((soma, r) => soma + (r.cpas ?? 0), 0),
   }
 }

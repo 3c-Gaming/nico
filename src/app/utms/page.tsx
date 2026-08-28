@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select'
 import { Chip } from '@/components/ui/Chip'
 import { useToast } from '@/components/ui/Toast'
 import { useUtmConfigs } from '@/hooks/useUtmConfigs'
-import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
+import { useResultadoUtmPeriodo } from '@/hooks/useResultadoDisparo'
 import { formatNumero } from '@/lib/resultadoDisparo'
 import { Plus, Trash2, Pencil, X, Check, Copy, Search } from 'lucide-react'
 import type { UtmConfig } from '@/types'
@@ -24,11 +24,12 @@ function getLocalDate(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** REG/FTD/CPA de uma UTM numa data — mesma fonte/lógica do card do calendário (ver
- * useResultadoDisparo). CPA só existe depois que o dia fecha (a fonte de CPA não cobre hoje),
- * então pra data de hoje ele sempre aparece como "—" mesmo com REG/FTD já preenchidos. */
-function UtmStatCells({ valor, casa, data }: { valor: string; casa: Casa; data: string }) {
-  const { resultado, carregando } = useResultadoDisparo({ utmValor: valor, casa, data })
+/** REG/FTD/CPA de uma UTM num período (inicio..fim, inclusive) — soma dia a dia da mesma
+ * fonte/lógica do card do calendário (ver useResultadoUtmPeriodo). CPA só existe depois que TODOS
+ * os dias do período já fecharam (a fonte de CPA não cobre hoje) — se o período inclui hoje, CPA
+ * aparece como "—" mesmo com REG/FTD já preenchidos. */
+function UtmStatCells({ valor, casa, dataInicio, dataFim }: { valor: string; casa: Casa; dataInicio: string; dataFim: string }) {
+  const { resultado, carregando } = useResultadoUtmPeriodo({ utmValor: valor, casa, dataInicio, dataFim })
   const semDado = !resultado && carregando
   return (
     <>
@@ -54,7 +55,8 @@ export default function UtmsPage() {
 
   const [busca, setBusca] = useState('')
   const [filtroCasa, setFiltroCasa] = useState<'all' | Casa>('all')
-  const [dataStats, setDataStats] = useState(getLocalDate())
+  const [dataInicioStats, setDataInicioStats] = useState(getLocalDate())
+  const [dataFimStats, setDataFimStats] = useState(getLocalDate())
 
   const [novoAberto, setNovoAberto] = useState(false)
   const [novoNome, setNovoNome] = useState('')
@@ -168,13 +170,25 @@ export default function UtmsPage() {
               </button>
             ))}
           </div>
-          <input
-            type="date"
-            value={dataStats}
-            onChange={(e) => setDataStats(e.target.value)}
-            title="Data dos números de REG/FTD/CPA"
-            className="h-9 px-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={dataInicioStats}
+              max={dataFimStats}
+              onChange={(e) => setDataInicioStats(e.target.value)}
+              title="Início do período dos números de REG/FTD/CPA"
+              className="h-9 px-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+            <span className="text-xs text-[var(--text-muted)]">até</span>
+            <input
+              type="date"
+              value={dataFimStats}
+              min={dataInicioStats}
+              onChange={(e) => setDataFimStats(e.target.value)}
+              title="Fim do período dos números de REG/FTD/CPA"
+              className="h-9 px-2 text-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
+          </div>
           <Button size="sm" icon={<Plus size={14} />} onClick={handleStartNovo} disabled={novoAberto}>
             Nova
           </Button>
@@ -328,7 +342,7 @@ export default function UtmsPage() {
                 <span className="text-sm text-[var(--text-muted)] font-mono truncate">
                   {item.casa === 'superbet' ? (item.siteId || '—') : '—'}
                 </span>
-                <UtmStatCells valor={item.valor} casa={item.casa} data={dataStats} />
+                <UtmStatCells valor={item.valor} casa={item.casa} dataInicio={dataInicioStats} dataFim={dataFimStats} />
                 <div className="grid grid-cols-3 text-text-primary">
                   <button
                     onClick={() => handleCopy(item)}

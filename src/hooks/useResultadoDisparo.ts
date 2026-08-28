@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { buscarResultadoUtm, CUSTO_POR_ENTREGUE, VALOR_CPA } from '@/lib/resultadoDisparo'
+import { buscarResultadoUtm, buscarResultadoUtmPeriodo, CUSTO_POR_ENTREGUE, VALOR_CPA } from '@/lib/resultadoDisparo'
 import type { ResultadoUtm } from '@/lib/resultadoDisparo'
 
 interface UseResultadoDisparoParams {
@@ -55,4 +55,40 @@ export function useResultadoDisparo({ utmValor, casa, data, entregues, custoPorU
   const roi = resultado?.cpas != null && custo > 0 && valorCPA > 0 ? receita / custo : null
 
   return { resultado, carregando, custo, receita, roi }
+}
+
+interface UseResultadoUtmPeriodoParams {
+  utmValor?: string
+  casa: 'superbet' | 'betmgm' | null
+  dataInicio?: string
+  dataFim?: string
+}
+
+/** Igual a useResultadoDisparo, mas soma o resultado num período (dataInicio..dataFim) em vez de
+ * um único dia — usado na tela de UTMs, onde faz sentido ver o total de uma UTM ao longo de
+ * vários dias sem precisar consultar dia por dia. */
+export function useResultadoUtmPeriodo({ utmValor, casa, dataInicio, dataFim }: UseResultadoUtmPeriodoParams): { resultado: ResultadoUtm | null; carregando: boolean } {
+  const [resultado, setResultado] = useState<ResultadoUtm | null>(null)
+  const [carregando, setCarregando] = useState(false)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), REFETCH_MS)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    if (!utmValor || !casa || !dataInicio || !dataFim) { setResultado(null); return }
+    let cancelado = false
+
+    setCarregando(true)
+    buscarResultadoUtmPeriodo(utmValor, casa, dataInicio, dataFim)
+      .then((r) => { if (!cancelado) setResultado(r) })
+      .catch(() => { if (!cancelado) setResultado(null) })
+      .finally(() => { if (!cancelado) setCarregando(false) })
+
+    return () => { cancelado = true }
+  }, [utmValor, casa, dataInicio, dataFim, tick])
+
+  return { resultado, carregando }
 }
