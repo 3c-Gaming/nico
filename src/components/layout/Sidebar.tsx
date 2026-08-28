@@ -2,31 +2,54 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Clover, MessageSquare, MessagesSquare } from 'lucide-react'
+import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, ChevronDown, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Clover } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 
-const LINKS = [
-  { href: '/', label: 'Geral', icon: Home },
-  { href: '/calendario', label: 'Calendário', icon: Calendar },
-  { href: '/daxx', label: 'Disparos', icon: Send },
-  { href: '/disparos/sms-rapido', label: 'Disparo SMS', icon: MessageSquare },
-  { href: '/disparos/telegram-rapido', label: 'Disparo Telegram', icon: MessagesSquare },
-  //{ href: '/disparos', label: 'Disparos', icon: List },
+interface LinkItem {
+  type: 'link'
+  href: string
+  label: string
+  icon: typeof Home | null
+}
+
+interface GroupItem {
+  type: 'group'
+  label: string
+  icon: typeof Home
+  /** Sidebar recolhida vira um ícone só (sem dropdown) — leva pra cá. */
+  hrefColapsado: string
+  children: { href: string; label: string }[]
+}
+
+const NAV: (LinkItem | GroupItem)[] = [
+  { type: 'link', href: '/', label: 'Geral', icon: Home },
+  { type: 'link', href: '/calendario', label: 'Calendário', icon: Calendar },
+  {
+    type: 'group',
+    label: 'Disparos',
+    icon: Send,
+    hrefColapsado: '/daxx',
+    children: [
+      { href: '/daxx', label: 'Geral' },
+      { href: '/disparos/sms-rapido', label: 'SMS' },
+      { href: '/disparos/telegram-rapido', label: 'Telegram' },
+    ],
+  },
   //{ href: '/esteiras', label: 'Esteiras', icon: GitBranch },
-  { href: '/numeros', label: 'Números', icon: null },
-  { href: '/utms', label: 'UTMs', icon: Hash },
-  { href: '/testes', label: 'Testes', icon: Smartphone },
-  { href: '/funis', label: 'Funis', icon: Layers },
-  { href: '/jogos', label: 'Grade', icon: LandPlot },
-  { href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
-  { href: '/paginas', label: 'Páginas', icon: FileText },
+  { type: 'link', href: '/numeros', label: 'Números', icon: null },
+  { type: 'link', href: '/utms', label: 'UTMs', icon: Hash },
+  { type: 'link', href: '/testes', label: 'Testes', icon: Smartphone },
+  { type: 'link', href: '/funis', label: 'Funis', icon: Layers },
+  { type: 'link', href: '/jogos', label: 'Grade', icon: LandPlot },
+  { type: 'link', href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
+  { type: 'link', href: '/paginas', label: 'Páginas', icon: FileText },
   //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
-  { href: '/casas', label: 'Casas', icon: Dices },
-  { href: '/bases', label: 'Bases', icon: null },
-  { href: '/demandas', label: 'Demandas', icon: ClipboardList },
-  { href: '/configuracoes', label: 'Configurações', icon: Settings },
-  { href: '/resultados', label: 'Resultados', icon: Trophy },
+  { type: 'link', href: '/casas', label: 'Casas', icon: Dices },
+  { type: 'link', href: '/bases', label: 'Bases', icon: null },
+  { type: 'link', href: '/demandas', label: 'Demandas', icon: ClipboardList },
+  { type: 'link', href: '/configuracoes', label: 'Configurações', icon: Settings },
+  { type: 'link', href: '/resultados', label: 'Resultados', icon: Trophy },
 ]
 
 export function Sidebar() {
@@ -34,6 +57,18 @@ export function Sidebar() {
   const { theme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Grupo abre sozinho quando a rota atual é um dos filhos (calculado no render); esse estado só
+  // guarda quem o usuário abriu/fechou manualmente por cima disso.
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set())
+
+  function toggleGrupo(label: string) {
+    setGruposAbertos((prev) => {
+      const novo = new Set(prev)
+      if (novo.has(label)) novo.delete(label)
+      else novo.add(label)
+      return novo
+    })
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
@@ -81,7 +116,66 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 py-3 space-y-0.5 px-2">
-          {LINKS.map((link) => {
+          {NAV.map((item) => {
+            if (item.type === 'group') {
+              const algumFilhoAtivo = item.children.some((c) => pathname.startsWith(c.href))
+              const aberto = algumFilhoAtivo || gruposAbertos.has(item.label)
+              const Icon = item.icon
+
+              if (collapsed) {
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.hrefColapsado}
+                    className={`flex items-center gap-3 h-9 rounded-md text-sm transition-colors lg:justify-center lg:px-0 lg:border-l-0 ${algumFilhoAtivo
+                      ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-l-2 border-[var(--d1)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+                      }`}
+                    title={item.label}
+                  >
+                    <Icon size={18} className="flex-shrink-0" />
+                  </Link>
+                )
+              }
+
+              return (
+                <div key={item.label}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGrupo(item.label)}
+                    className={`w-full flex items-center gap-3 h-9 px-3 rounded-md text-sm transition-colors ${algumFilhoAtivo
+                      ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-l-2 border-[var(--d1)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+                      }`}
+                  >
+                    <Icon size={18} className="flex-shrink-0" />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-150 ${aberto ? 'rotate-180' : ''}`} />
+                  </button>
+                  {aberto && (
+                    <div className="mt-0.5 ml-[34px] space-y-0.5 border-l border-[var(--border)] pl-2.5">
+                      {item.children.map((child) => {
+                        const childAtivo = pathname.startsWith(child.href)
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={`flex items-center h-8 px-2.5 rounded-md text-sm transition-colors ${childAtivo
+                              ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+                              }`}
+                          >
+                            {child.label}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            const link = item
             const Icon = link.icon
             const isActive = pathname.startsWith(link.href)
             return (
