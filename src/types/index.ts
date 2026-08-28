@@ -281,8 +281,10 @@ export interface Disparo {
   id: string
   tipo: TipoDisparo
   /** Canal do disparo — ausente = 'whatsapp' (registros antigos, todos via daxX). 'sms' é
-   * disparado de verdade pelo próprio app via Solvefy/Cephas, não só rastreado. */
-  canal?: 'whatsapp' | 'sms'
+   * disparado de verdade pelo próprio app via Solvefy/Cephas, não só rastreado. 'telegram-csv' é
+   * disparo pra uma base externa (CSV de @usernames) via Bot API do Telegram, resolvendo cada
+   * username pro chat_id através dos contatos já conhecidos pela SendPulse. */
+  canal?: 'whatsapp' | 'sms' | 'telegram-csv'
   nomenclatura: string
   status: StatusDisparo
   casasAposta: string[]
@@ -318,6 +320,11 @@ export interface Disparo {
   smsFrom?: string
   smsUseShortener?: boolean
   smsDestinatarios?: { telefone: string; variables?: Record<string, string> }[]
+  /** Payload de envio do Telegram — só quando canal === 'telegram-csv'. Mesmo raciocínio do SMS:
+   * guardado no próprio Disparo pro cron de agendados ter o que precisa quando a hora chegar. */
+  telegramBotUsername?: string
+  telegramCorpo?: string
+  telegramDestinatarios?: { username?: string; telegramId?: number; variables?: Record<string, string> }[]
 }
 
 export interface Esteira {

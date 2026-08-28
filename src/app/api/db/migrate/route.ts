@@ -58,6 +58,9 @@ export async function POST() {
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS sms_from TEXT`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS sms_use_shortener BOOLEAN`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS sms_destinatarios JSONB`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_bot_username TEXT`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_corpo TEXT`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_destinatarios JSONB`,
       `CREATE TABLE IF NOT EXISTS sms_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         nome TEXT NOT NULL,
@@ -74,6 +77,37 @@ export async function POST() {
         enviado_em TIMESTAMP DEFAULT NOW(),
         atualizado_em TIMESTAMP DEFAULT NOW()
       )`,
+      `CREATE TABLE IF NOT EXISTS telegram_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        nome TEXT NOT NULL,
+        corpo TEXT NOT NULL,
+        criado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS telegram_envios (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campanha TEXT,
+        username TEXT,
+        telegram_id BIGINT,
+        status TEXT NOT NULL DEFAULT 'enviando',
+        erro TEXT,
+        enviado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_telegram_envios_campanha ON telegram_envios(campanha)`,
+      `ALTER TABLE telegram_envios ALTER COLUMN username DROP NOT NULL`,
+      `CREATE OR REPLACE FUNCTION telegram_resumo_por_campanha()
+      RETURNS TABLE(campanha TEXT, total INT, enviados INT, falhas INT)
+      LANGUAGE sql STABLE
+      AS $$
+        SELECT
+          campanha,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status NOT IN ('erro', 'failed'))::int AS enviados,
+          COUNT(*) FILTER (WHERE status IN ('erro', 'failed'))::int AS falhas
+        FROM telegram_envios
+        WHERE campanha IS NOT NULL
+        GROUP BY campanha;
+      $$`,
       `CREATE TABLE IF NOT EXISTS aquecimento_numeros (
         bot_id TEXT PRIMARY KEY,
         conta_id TEXT NOT NULL,

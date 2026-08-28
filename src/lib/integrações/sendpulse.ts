@@ -98,6 +98,88 @@ export async function listarNumerosTodasContas(signal?: AbortSignal, canais: Can
   return todos
 }
 
+/** Acha em qual conta SendPulse configurada mora um bot de Telegram específico, a partir do
+ * identificador salvo no Disparo (o mesmo `numero` — "@username" ou id — que listarNumeros
+ * devolve). Usado pelo disparo de Telegram via CSV pra saber qual apiKey usar na hora de resolver
+ * contatos, sem precisar guardar contaId/apiKey direto no Disparo. */
+export async function resolverContaEBotTelegram(botIdentificador: string): Promise<{ apiKey: string; botId: string } | null> {
+  const contas = listarContasSendpulse()
+  for (const conta of contas) {
+    try {
+      const bots = await listarNumeros(conta.apiKey, 'telegram')
+      const bot = bots.find((b) => b.numero === botIdentificador || b.id === botIdentificador)
+      if (bot) return { apiKey: conta.apiKey, botId: bot.id }
+    } catch {
+      // conta sem telegram configurado ou erro pontual — tenta a próxima
+    }
+  }
+  return null
+}
+
+export interface TagSendpulse {
+  id: string
+  nome: string
+  contagem: number
+}
+
+// A SendPulse limita esse endpoint a 100 resultados por página independente do `limit` pedido, e
+// ignora `offset` (mesma pegadinha do /contacts — confirmado ao vivo) — `skip` é o parâmetro
+// certo, igual usado em getByTag logo abaixo.
+const TAMANHO_PAGINA_TAGS = 100
+
+/** Lista as tags criadas nesse bot, com quantos contatos cada uma tem — usado pra montar um
+ * disparo direto de uma tag da SendPulse, sem precisar de CSV externo. */
+export async function listarTagsSendpulse(botId: string, apiKey: string, canal: Canal = 'whatsapp'): Promise<TagSendpulse[]> {
+  const tags: TagSendpulse[] = []
+  let skip = 0
+  for (;;) {
+    const res = await fetch(`${baseUrl(canal)}/tags?bot_id=${encodeURIComponent(botId)}&skip=${skip}`, { headers: getHeaders(apiKey) })
+    if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+    const json = await res.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pagina = (json.data ?? []) as any[]
+    for (const t of pagina) tags.push({ id: t.id, nome: t.name, contagem: t.count ?? 0 })
+    if (pagina.length < TAMANHO_PAGINA_TAGS) break
+    skip += TAMANHO_PAGINA_TAGS
+  }
+  return tags
+}
+
+export interface ContatoCompletoSendpulse {
+  contactId: string
+  telegramId: number | null
+  username: string | null
+  nome: string
+}
+
+/** Todos os contatos de uma tag (sem filtro de data, diferente de contarPorTagIntervaloSendpulse)
+ * — já vem com telegram_id direto da SendPulse, então dispara pra 100% da tag, não só quem tem
+ * @username público (limitação do fluxo via CSV, que precisa casar por username). */
+export async function buscarContatosCompletosPorTag(botId: string, tag: string, apiKey: string, canal: Canal = 'whatsapp'): Promise<ContatoCompletoSendpulse[]> {
+  const contatos: ContatoCompletoSendpulse[] = []
+  let skip = 0
+  for (;;) {
+    const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
+    const res = await fetch(url, { headers: getHeaders(apiKey) })
+    if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
+    const json = await res.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pagina = (json.data ?? []) as any[]
+    if (pagina.length === 0) break
+    for (const c of pagina) {
+      contatos.push({
+        contactId: c.id,
+        telegramId: c.telegram_id ?? null,
+        username: c.channel_data?.username ?? null,
+        nome: c.channel_data?.name ?? c.channel_data?.first_name ?? '',
+      })
+    }
+    if (pagina.length < TAMANHO_PAGINA_GETBYTAG) break
+    skip += TAMANHO_PAGINA_GETBYTAG
+  }
+  return contatos
+}
+
 export interface StatusPlanoSendpulse {
   contaId: string
   contaNome: string

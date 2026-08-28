@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ListaDisparos } from '@/components/disparos/ListaDisparos'
 import { Button } from '@/components/ui/Button'
-import { Plus, MessageSquare } from 'lucide-react'
+import { Plus, MessageSquare, MessagesSquare } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DisparosPage() {
@@ -17,6 +17,11 @@ export default function DisparosPage() {
             <Link href="/disparos/sms-rapido">
               <Button size="sm" variant="secondary" icon={<MessageSquare size={16} />}>
                 Disparo SMS
+              </Button>
+            </Link>
+            <Link href="/disparos/telegram-rapido">
+              <Button size="sm" variant="secondary" icon={<MessagesSquare size={16} />}>
+                Disparo Telegram
               </Button>
             </Link>
             <Link href="/disparos/novo">

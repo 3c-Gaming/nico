@@ -22,6 +22,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/telegram-agendados",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/aquecimento",
       "schedule": "*/15 * * * *"
     }
