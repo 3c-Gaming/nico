@@ -234,6 +234,39 @@ export async function updatePreferencias(pinnedNumeros: string[], pinnedFunis: s
     })
 }
 
+// --- Páginas monitoradas pelo GTmetrix (editáveis na tela de Configurações) ---
+
+/** Lista de URLs que o cron do GTmetrix testa. `configurado: false` = coluna nunca salva
+ * (ou Supabase indisponível) — quem chama deve cair no seed de `@/lib/gtmetrix/paginas`. */
+export async function getGtmetrixUrls(): Promise<{ urls: string[]; configurado: boolean }> {
+  try {
+    const { data } = await tb('user_preferences').select('gtmetrix_urls').eq('id', 'global').single()
+    const raw = (data as Record<string, unknown> | null)?.gtmetrix_urls
+    if (raw == null) return { urls: [], configurado: false }
+    const urls = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'string'
+        ? (() => { try { return JSON.parse(raw) } catch { return [] } })()
+        : []
+    return { urls: (urls as string[]).filter((u) => typeof u === 'string'), configurado: true }
+  } catch {
+    return { urls: [], configurado: false }
+  }
+}
+
+export async function salvarGtmetrixUrls(urls: string[]): Promise<string[]> {
+  const limpo = Array.from(new Set(urls.map((u) => u.trim()).filter(Boolean)))
+  // Checa o erro explicitamente — o client do Supabase não lança sozinho quando o upsert falha
+  // (ex: coluna gtmetrix_urls ainda não migrada), e sem isso o chamador acha que salvou.
+  const { error } = await tb('user_preferences').upsert({
+    id: 'global',
+    gtmetrix_urls: limpo,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) throw new Error(error.message)
+  return limpo
+}
+
 // --- Disparos ---
 
 export async function listarDisparos(filtros?: {

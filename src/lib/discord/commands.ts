@@ -43,4 +43,20 @@ export const DISCORD_COMMANDS = [
     name: 'testartodos',
     description: 'Testa todos os bots ativos de uma vez',
   },
+  {
+    name: 'gtmetrix',
+    description: 'Roda um teste GTmetrix numa página específica agora',
+    options: [
+      {
+        type: 3,
+        name: 'url',
+        description: 'Link completo da página (com https://)',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'gtmetrix-lista',
+    description: 'Roda o GTmetrix em todas as páginas monitoradas agora',
+  },
 ]

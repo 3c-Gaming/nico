@@ -4,7 +4,7 @@ import { useState, useEffect, Fragment } from 'react'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, X, Check, AlertTriangle, UserPlus, UserX } from 'lucide-react'
+import { RefreshCw, ChevronDown, ChevronRight, Save, Play, Pause, FileText, X, Check, AlertTriangle, UserPlus, UserX, Plus, Trash2, Globe } from 'lucide-react'
 import { getState, updateFlowTagConfig, addUsuarioResponsavel, deletarUsuarioResponsavel } from '@/lib/store'
 import { TagComboBox } from '@/components/ui/TagComboBox'
 import type { NumeroSendpulse, FluxoSendpulse, FlowTagConfig, UsuarioResponsavel } from '@/types'
@@ -310,6 +310,130 @@ function ResponsaveisSection() {
   )
 }
 
+function GtmetrixPaginasSection() {
+  const [urls, setUrls] = useState<string[]>([])
+  const [carregado, setCarregado] = useState<string[]>([])
+  const [novo, setNovo] = useState('')
+  const [carregando, setCarregando] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+  const [salvo, setSalvo] = useState(false)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    fetch('/api/gtmetrix/paginas')
+      .then((r) => r.json())
+      .then((data) => {
+        const lista: string[] = data.urls ?? []
+        setUrls(lista)
+        setCarregado(lista)
+      })
+      .catch(() => setErro('Não foi possível carregar a lista'))
+      .finally(() => setCarregando(false))
+  }, [])
+
+  function adicionar() {
+    let u = novo.trim()
+    if (!u) return
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`
+    if (urls.some((x) => x.replace(/\/$/, '') === u.replace(/\/$/, ''))) {
+      setNovo('')
+      return
+    }
+    setUrls([...urls, u])
+    setNovo('')
+    setSalvo(false)
+  }
+
+  function remover(u: string) {
+    setUrls(urls.filter((x) => x !== u))
+    setSalvo(false)
+  }
+
+  async function salvar() {
+    setSalvando(true)
+    setSalvo(false)
+    setErro('')
+    try {
+      const res = await fetch('/api/gtmetrix/paginas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar')
+      setUrls(data.urls ?? [])
+      setCarregado(data.urls ?? [])
+      setSalvo(true)
+    } catch (err) {
+      setErro((err as Error).message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const hasChanges = carregado.join('|') !== urls.join('|')
+
+  if (carregando) return <Spinner size={16} />
+
+  return (
+    <div className="space-y-3">
+      {erro && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
+          <AlertTriangle size={14} />
+          {erro}
+        </div>
+      )}
+
+      <div className="space-y-1">
+        {urls.length === 0 && (
+          <p className="text-xs text-[var(--text-muted)]">Nenhuma página na lista — o cron não roda enquanto estiver vazia.</p>
+        )}
+        {urls.map((u) => (
+          <div key={u} className="flex items-center gap-2 p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border)]">
+            <Globe size={13} className="text-[var(--text-muted)] shrink-0" />
+            <span className="flex-1 min-w-0 text-xs font-mono text-[var(--text-primary)] truncate">{u}</span>
+            <button
+              onClick={() => remover(u)}
+              className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors shrink-0"
+              title="Remover"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={novo}
+          onChange={(e) => setNovo(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); adicionar() } }}
+          placeholder="https://exemplo.com.br/pagina"
+          className="flex-1 h-8 px-3 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors font-mono"
+        />
+        <Button size="sm" variant="secondary" onClick={adicionar} disabled={!novo.trim()}>
+          <Plus size={12} />
+          Adicionar
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={salvar} loading={salvando} disabled={!hasChanges}>
+          <Save size={12} />
+          Salvar lista
+        </Button>
+        {salvo && (
+          <span className="flex items-center gap-1 text-xs text-green-500">
+            <Check size={12} />
+            Lista salva
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function BotTestConfigSection() {
   const [intervaloMinutos, setIntervaloMinutos] = useState(15)
   const [carregando, setCarregando] = useState(true)
@@ -542,6 +666,16 @@ export default function ConfiguracoesPage() {
         </p>
 
         <BotTestConfigSection />
+      </div>
+
+      <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">GTmetrix — Páginas monitoradas</h2>
+        <p className="text-xs text-[var(--text-muted)] mb-4">
+          Páginas testadas pelo cron do GTmetrix (1x/h) e pelo <code>/gtmetrix-lista</code> no Discord.
+          Cada página gasta 1 crédito GTmetrix por rodada.
+        </p>
+
+        <GtmetrixPaginasSection />
       </div>
 
       <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">

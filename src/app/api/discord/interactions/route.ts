@@ -3,7 +3,9 @@ import { waitUntil } from '@vercel/functions'
 import { verifyInteractionSignature, replyToInteraction, ResponseType } from '@/lib/discord/verify'
 import { dispatchCommand } from '@/lib/discord/handlers'
 
-export const maxDuration = 60
+// GTmetrix (/gtmetrix, /gtmetrix-lista) faz polling que passa de 1 min; o resto
+// dos comandos responde rápido e não é afetado pelo teto maior.
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   const timestamp = request.headers.get('X-Signature-Timestamp') ?? ''

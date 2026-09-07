@@ -222,6 +222,8 @@ export function embedAjuda(): DiscordEmbed {
       { name: '/fluxos `bot`', value: 'Lista os fluxos/funis de um bot específico', inline: false },
       { name: '/testar `bot`', value: 'Executa um teste manual em um bot', inline: false },
       { name: '/testartodos', value: 'Testa todos os bots ativos de uma vez', inline: false },
+      { name: '/gtmetrix `url`', value: 'Roda um teste GTmetrix numa página específica agora', inline: false },
+      { name: '/gtmetrix-lista', value: 'Roda o GTmetrix em todas as páginas monitoradas agora', inline: false },
       { name: '/relatorio', value: 'Gera um relatório completo de todos os bots', inline: false },
       { name: '/fatura', value: 'Mostra quando os planos da SendPulse vão expirar', inline: false },
       { name: '/ajuda', value: 'Lista todos os comandos disponíveis', inline: false },

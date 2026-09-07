@@ -132,6 +132,53 @@ export async function handleTestarTodos(reply: ReplyFn, channelId?: string) {
   }
 }
 
+export async function handleGtmetrix(reply: ReplyFn, options: { name: string; value: string }[] | undefined) {
+  let url = (getOption(options, 'url') || '').trim()
+  if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`
+
+  if (!url || !/^https?:\/\/[^\s.]+\.[^\s]+/i.test(url)) {
+    await reply({ embeds: [embedErro('Informe um link válido. Ex: `/gtmetrix url:https://exemplo.com.br`')] })
+    return
+  }
+
+  try {
+    const { testarUrlAvulsa } = await import('@/lib/gtmetrix/runner')
+    await reply({ content: `🔍 Testando \`${url}\` no GTmetrix… isso leva 1–3 min.` })
+    const { embed } = await testarUrlAvulsa(url)
+    await reply({ content: '', embeds: [embed] })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha no teste GTmetrix: ${(err as Error).message}`)] })
+  }
+}
+
+export async function handleGtmetrixLista(reply: ReplyFn, channelId?: string) {
+  try {
+    const { obterUrlsGtmetrix } = await import('@/lib/gtmetrix/paginas')
+    const { gtmetrixChannelId } = await import('@/lib/gtmetrix/config')
+    const { rodarRodadaGTmetrix } = await import('@/lib/gtmetrix/runner')
+    const { postarRodadaDiscord } = await import('@/lib/gtmetrix/notify')
+
+    const urls = await obterUrlsGtmetrix()
+    if (urls.length === 0) {
+      await reply({ embeds: [embedErro('A lista de páginas monitoradas está vazia. Adicione páginas em Configurações.')] })
+      return
+    }
+
+    const alvo = gtmetrixChannelId() || channelId
+    if (!alvo) {
+      await reply({ embeds: [embedErro('Nenhum canal configurado para o resultado (DISCORD_GTMETRIX_CHANNEL_ID).')] })
+      return
+    }
+
+    await reply({ content: `🔍 Rodando GTmetrix em ${urls.length} página(s)… isso leva alguns minutos.` })
+    const { rodada, creditosRecusados, avisoCreditos } = await rodarRodadaGTmetrix(urls)
+    await postarRodadaDiscord(alvo, rodada, { creditosRecusados, avisoCreditos })
+    await reply({ content: `✅ Rodada concluída: ${rodada.ok.length} ok · ${rodada.comProblema.length} com problema · ${rodada.quebradas.length + rodada.falhasApi.length} fora do ar.` })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao rodar a lista GTmetrix: ${(err as Error).message}`)] })
+  }
+}
+
 export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumerosTodasContas, listarFluxos } = await import('@/lib/integrações/sendpulse')
@@ -190,6 +237,10 @@ export function dispatchCommand(
           return await handleTestar(reply, options)
         case 'testartodos':
           return await handleTestarTodos(reply, channelId)
+        case 'gtmetrix':
+          return await handleGtmetrix(reply, options)
+        case 'gtmetrix-lista':
+          return await handleGtmetrixLista(reply, channelId)
         case 'relatorio':
           return await handleRelatorio(reply)
         case 'ajuda':
