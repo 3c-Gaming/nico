@@ -14,6 +14,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ erro: 'Unauthorized' }, { status: 401 })
   }
 
+  // Vercel agenda em UTC; o cron roda de hora em hora e este guard restringe a
+  // janela de 06h–23h de Brasília (inclusive).
+  const horaBrasilia = Number(
+    new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false }),
+  )
+  if (horaBrasilia < 6 || horaBrasilia > 23) {
+    console.log(`[cron-gtmetrix] Fora do horário (${horaBrasilia}h). Pulando.`)
+    return NextResponse.json({ ok: true, skipped: true, reason: 'outside_hours' })
+  }
+
   const channelId = gtmetrixChannelId()
   if (!channelId) {
     return NextResponse.json(
