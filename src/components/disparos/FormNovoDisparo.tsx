@@ -30,7 +30,7 @@ export function FormNovoDisparo() {
   const { addToast } = useToast()
 
   const [step, setStep] = useState(1)
-  const [canal, setCanal] = useState<'whatsapp' | 'sms' | null>(null)
+  const [canal, setCanal] = useState<'whatsapp' | 'sms' | 'rcs' | 'telegram' | null>(null)
   const [campanha, setCampanha] = useState<DisparoDaxx | undefined>()
 
   const [tipo, setTipo] = useState<TipoDisparo | null>(null)
@@ -86,9 +86,14 @@ export function FormNovoDisparo() {
   }, [step, canal, campanha, tipo, dataDisparo, horarioDisparo])
 
   function handleAvancar() {
-    // SMS não tem etapas 2/3 construídas aqui dentro — a tela de verdade é /disparos/sms-rapido.
-    if (step === 1 && canal === 'sms') {
-      router.push('/disparos/sms-rapido')
+    // SMS/RCS/Telegram não têm etapas 2/3 aqui dentro — cada um tem sua tela dedicada.
+    const telaPorCanal: Record<string, string> = {
+      sms: '/disparos/sms-rapido',
+      rcs: '/disparos/rcs',
+      telegram: '/disparos/telegram-rapido',
+    }
+    if (step === 1 && canal && telaPorCanal[canal]) {
+      router.push(telaPorCanal[canal])
       return
     }
     if (step < 3) setStep(step + 1)
@@ -224,6 +229,8 @@ export function FormNovoDisparo() {
               {[
                 { value: 'whatsapp' as const, label: 'WhatsApp (DAXX)', desc: 'Sem envio de WhatsApp disponível no momento', disabled: true },
                 { value: 'sms' as const, label: 'SMS (Solvefy)', desc: 'Envio de SMS direto pelo app — Avançar leva pra tela de disparo', disabled: false },
+                { value: 'rcs' as const, label: 'RCS (Solvefy)', desc: 'Card com imagem + botões, fallback SMS — Avançar leva pra tela de disparo', disabled: false },
+                { value: 'telegram' as const, label: 'Telegram', desc: 'Envio pra base de @usernames — Avançar leva pra tela de disparo', disabled: false },
               ].map((opt) => (
                 <button
                   key={opt.value}
