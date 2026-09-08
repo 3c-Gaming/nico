@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight } from 'lucide-react'
+import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight, Ban } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/useConfirm'
 import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
+import { useDisparos } from '@/hooks/useDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
 import { renderizarRcsContent } from '@/lib/rcs/template'
@@ -85,6 +88,10 @@ function PreviewRcs({ disparo }: { disparo: Disparo }) {
 }
 
 export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo | null; onClose: () => void }) {
+  const { update: atualizarDisparo } = useDisparos()
+  const { addToast } = useToast()
+  const { confirm, dialog: confirmDialog } = useConfirm()
+  const [cancelando, setCancelando] = useState(false)
   const [resumo, setResumo] = useState<ResumoRcs | null>(null)
   const [falhasRows, setFalhasRows] = useState<EnvioRcs[]>([])
   const [carregou, setCarregou] = useState(false)
@@ -138,6 +145,32 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     const id = setInterval(puxar, 12_000)
     return () => { cancel = true; clearInterval(id) }
   }, [campanha, mostrarNumeros])
+
+  const podeCancelar = disparo?.status === 'agendado' || disparo?.status === 'enviando'
+
+  async function cancelarDisparo() {
+    if (!disparo) return
+    const ok = await confirm({
+      titulo: 'Cancelar disparo',
+      mensagem: disparo.status === 'enviando'
+        ? 'O disparo está em andamento. Cancelar interrompe os lotes que ainda faltam — o que já saiu não volta.'
+        : 'Cancelar o disparo agendado? Ele não vai mais disparar.',
+      confirmLabel: 'Cancelar disparo',
+      cancelLabel: 'Voltar',
+      danger: true,
+    })
+    if (!ok) return
+    setCancelando(true)
+    try {
+      atualizarDisparo(disparo.id, { status: 'cancelado' })
+      addToast('success', 'Disparo cancelado')
+      onClose()
+    } catch (e) {
+      addToast('error', (e as Error).message)
+    } finally {
+      setCancelando(false)
+    }
+  }
 
   async function atualizarStatus() {
     if (!campanha) return
@@ -208,6 +241,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
 
   return (
     <AnimatePresence>
+      {confirmDialog}
       {disparo && (
         <>
           <motion.div
@@ -233,9 +267,20 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   <Badge variant="status" value={disparo.status} />
                 </span>
               </div>
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {podeCancelar && (
+                  <button
+                    onClick={cancelarDisparo}
+                    disabled={cancelando}
+                    className="flex items-center gap-1 text-[11px] px-2 h-7 rounded border border-[var(--error)]/40 text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors disabled:opacity-50"
+                  >
+                    <Ban size={12} /> {cancelando ? 'Cancelando…' : 'Cancelar'}
+                  </button>
+                )}
+                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
