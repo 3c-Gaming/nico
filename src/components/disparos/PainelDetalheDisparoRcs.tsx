@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, RefreshCw, Image as ImageIcon, CalendarClock } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
-import { formatNumero } from '@/lib/resultadoDisparo'
+import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
+import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
 import { renderizarRcsContent } from '@/lib/rcs/template'
 import { CUSTO_RCS_POR_ENVIO } from '@/lib/rcs/tipos'
@@ -27,6 +28,15 @@ function corStatus(status: string): string {
   if (status === 'delivered') return 'text-emerald-400'
   if (FALHA.has(status)) return 'text-[var(--error)]'
   return 'text-[var(--text-secondary)]'
+}
+
+function Estatistica({ label, valor, cor }: { label: string; valor: string; cor?: string }) {
+  return (
+    <div className="flex-1 min-w-[80px] px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--bg-base)]">
+      <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">{label}</div>
+      <div className="text-base font-bold tabular-nums mt-0.5" style={{ color: cor ?? 'var(--text-primary)' }}>{valor}</div>
+    </div>
+  )
 }
 
 function PreviewRcs({ disparo }: { disparo: Disparo }) {
@@ -107,6 +117,17 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   const custoCobrado = entregues * custoUnit
   const custoEstimado = base * custoUnit
 
+  // Resultado na casa (Reg/FTD/CPA) — mesma lógica do SMS: casa vem da UTM (Superbet) ou do
+  // PID (BetMGM) gravado no disparo. Custo por unidade = o cobrado do RCS (só entregue).
+  const casaAtiva: 'superbet' | 'betmgm' | null = disparo?.utm ? 'superbet' : disparo?.betmgmPid ? 'betmgm' : null
+  const { resultado: tracking, carregando: carregandoTracking, custo: custoTracking } = useResultadoDisparo({
+    utmValor: disparo?.utm || disparo?.betmgmPid,
+    casa: casaAtiva,
+    data: disparo?.dataDisparo,
+    entregues,
+    custoPorUnidade: custoUnit,
+  })
+
   const estagios: EstagioFunil[] = disparo ? [
     { tag: 'Base', contagem: base },
     { tag: 'Enviados', contagem: enviados || envios.length },
@@ -171,6 +192,21 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
               </section>
 
               <section className="space-y-2">
+                <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Resultado na casa</h3>
+                <div className="flex flex-wrap gap-2">
+                  <Estatistica label="Registros" valor={carregandoTracking ? '…' : formatNumero(tracking?.registros ?? 0)} cor="var(--d1)" />
+                  <Estatistica label="FTDs" valor={carregandoTracking ? '…' : formatNumero(tracking?.ftds ?? 0)} cor="#22c55e" />
+                  <Estatistica label="CPAs" valor={carregandoTracking ? '…' : String(tracking?.cpas ?? 0)} cor="var(--warning)" />
+                  <Estatistica label="Custo" valor={custoTracking > 0 ? formatMoeda(custoTracking) : '—'} cor="#34d399" />
+                </div>
+                {!casaAtiva && (
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Sem UTM/PID de casa vinculado — sem isso não dá pra calcular Reg/FTD/CPA. Configure na criação do disparo.
+                  </p>
+                )}
+              </section>
+
+              <section className="space-y-2">
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Mensagem enviada</h3>
                 <PreviewRcs disparo={disparo} />
               </section>
@@ -206,6 +242,12 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                     <div className="text-[var(--text-muted)]">Entregues / Lidas</div>
                     <div className="text-[var(--text-primary)]">{entregues} / {lidas}</div>
                   </div>
+                  {casaAtiva && (
+                    <div>
+                      <div className="text-[var(--text-muted)]">UTM/PID ({casaAtiva === 'superbet' ? 'Superbet' : 'BetMGM'})</div>
+                      <div className="font-mono text-[var(--text-primary)] truncate">{disparo.utm || disparo.betmgmPid}</div>
+                    </div>
+                  )}
                 </div>
               </section>
 

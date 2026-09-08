@@ -5,8 +5,10 @@ import { Upload, Send, RefreshCw, Save, Plus, Trash2, Image as ImageIcon, Calend
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { useDisparos } from '@/hooks/useDisparos'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
 import type { Disparo } from '@/types'
 import type {
   RcsContent,
@@ -40,6 +42,12 @@ interface ResultadoEnvio {
 const COLUNAS_TELEFONE = ['telefone', 'phone', 'numero', 'número', 'celular', 'whatsapp', 'to']
 const HEIGHTS: RcsMediaHeight[] = ['SHORT', 'MEDIUM', 'TALL']
 const ORIENTACOES: RcsCardOrientation[] = ['VERTICAL', 'HORIZONTAL']
+
+const CASA_TRACKING_INFO = {
+  superbet: { label: 'Superbet' },
+  betmgm: { label: 'BetMGM' },
+} as const
+type CasaTracking = keyof typeof CASA_TRACKING_INFO
 
 function getLocalDate(): string {
   const d = new Date()
@@ -84,6 +92,7 @@ export default function RcsCompletoPage() {
   const { addToast } = useToast()
   const { create: createDisparo } = useDisparos()
   const { toggle: togglePin } = usePinnedDisparos()
+  const { list: casasList } = useCasasAposta()
 
   // --- templates ---
   const [templates, setTemplates] = useState<RcsTemplate[]>([])
@@ -110,6 +119,10 @@ export default function RcsCompletoPage() {
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null)
   const [colTelefone, setColTelefone] = useState('')
   const fileCsvRef = useRef<HTMLInputElement>(null)
+
+  // --- tracking (opcional) — mesma UTM/casa do SMS, é o que traz Reg/FTD/CPA depois ---
+  const [casaTracking, setCasaTracking] = useState<CasaTracking | ''>('')
+  const [utmValor, setUtmValor] = useState('')
 
   const [agendar, setAgendar] = useState(false)
   const [dataAgendada, setDataAgendada] = useState(getLocalDate())
@@ -281,17 +294,22 @@ export default function RcsCompletoPage() {
 
   async function criarRegistroDisparo(status: 'executado' | 'agendado'): Promise<Disparo | null> {
     const agora = new Date()
+    const casaId = casaTracking
+      ? casasList.find((c) => c.nome.toLowerCase().includes(casaTracking === 'superbet' ? 'super' : 'mgm'))?.id
+      : undefined
     const novo: Disparo = {
       id: crypto.randomUUID(),
       tipo: 'PONTUAL',
       canal: 'rcs',
       nomenclatura: campanha.trim(),
       status,
-      casasAposta: [],
+      casasAposta: casaId ? [casaId] : [],
       dataDisparo: status === 'agendado' ? dataAgendada : getLocalDate(),
       horarioDisparo: status === 'agendado' ? horarioAgendado : getLocalHora(),
       base: { status: 'disponivel', totalRegistros: total, nomeArquivo: nomeArquivo ?? undefined },
       custoPorEnvio: CUSTO_RCS_POR_ENVIO,
+      utm: casaTracking === 'superbet' ? utmValor.trim() || undefined : undefined,
+      betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() || undefined : undefined,
       rcsTemplateId: templateSelId || undefined,
       rcsConteudo: conteudo,
       rcsDestinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
@@ -641,6 +659,33 @@ export default function RcsCompletoPage() {
               />
             </div>
           )}
+
+          {/* tracking / UTM — opcional, é o que traz Reg/FTD/CPA depois */}
+          <div className="space-y-1.5 p-3 rounded-md border border-[var(--border)] bg-[var(--bg-base)]">
+            <p className="text-xs font-medium text-[var(--text-primary)]">Tracking <span className="font-normal text-[var(--text-muted)]">(opcional — traz Reg/FTD/CPA depois)</span></p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded p-0.5">
+                {(['', 'superbet', 'betmgm'] as const).map((opcao) => (
+                  <button
+                    key={opcao || 'nenhuma'}
+                    type="button"
+                    onClick={() => { setCasaTracking(opcao); setUtmValor('') }}
+                    className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${casaTracking === opcao ? 'bg-[var(--d1)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  >
+                    {opcao === '' ? 'Sem tracking' : CASA_TRACKING_INFO[opcao].label}
+                  </button>
+                ))}
+              </div>
+              {casaTracking && (
+                <div className="flex-1 min-w-[180px]">
+                  <UtmComboBox value={utmValor} onChange={setUtmValor} casa={casaTracking} placeholder="UTM/PID dessa campanha..." />
+                </div>
+              )}
+            </div>
+            {casaTracking && !utmValor.trim() && (
+              <p className="text-[10px] text-amber-400">Sem UTM/PID preenchida, o disparo aparece listado mas sem Reg/FTD/CPA calculado.</p>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 text-xs">
             <input type="checkbox" id="agendar" checked={agendar} onChange={(e) => setAgendar(e.target.checked)} />
