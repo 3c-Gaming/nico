@@ -6,6 +6,7 @@ import { Search, Plus, Pin, ExternalLink, CalendarClock } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
+import { useToast } from '@/components/ui/Toast'
 import { useDisparos } from '@/hooks/useDisparos'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
@@ -19,6 +20,8 @@ type ResumoLinha = ResumoCampanhaSms & { fallbackEnviados?: number }
 
 function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoLinha; onVerDetalhes: (disparo: Disparo) => void }) {
   const { toggle: togglePin, isPinned } = usePinnedDisparos()
+  const { addToast } = useToast()
+  const utmPid = disparo.utm || disparo.betmgmPid
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   // RCS é cobrado só pelo entregue (falha = reembolso) — custo sai da contagem real de
   // entregues do resumo, não da base. SMS segue base × custo digitado.
@@ -70,8 +73,24 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
           <Badge variant="status" value={disparo.status} />
         </span>
       </td>
-      <td className="py-3 px-3 text-xs text-[var(--text-secondary)] font-mono">
-        {disparo.utm || disparo.betmgmPid || <span className="text-[var(--text-muted)]">—</span>}
+      <td className="py-3 px-3 text-xs">
+        {utmPid ? (
+          <span
+            onClick={(e) => {
+              e.stopPropagation()
+              navigator.clipboard?.writeText(utmPid).then(
+                () => addToast('success', 'UTM/PID copiada'),
+                () => addToast('error', 'Não deu pra copiar'),
+              )
+            }}
+            title={`${utmPid} — clique pra copiar`}
+            className="block max-w-[130px] truncate font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+          >
+            {utmPid}
+          </span>
+        ) : (
+          <span className="font-mono text-[var(--text-muted)]">—</span>
+        )}
       </td>
       <td className="py-3 px-3 text-right font-mono text-[var(--text-primary)]">{formatNumero(disparo.base.totalRegistros ?? 0)}</td>
       <td className="py-3 px-3 text-right font-mono text-[var(--text-secondary)]">{resumoSms ? formatNumero(resumoSms.enviados) : '—'}</td>
