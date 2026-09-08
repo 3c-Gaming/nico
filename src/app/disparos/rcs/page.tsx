@@ -20,6 +20,7 @@ import type {
 import { CUSTO_RCS_POR_ENVIO, LIMITE_FALLBACK_TEXT } from '@/lib/rcs/tipos'
 import { renderizarRcsContent, extrairVariaveisRcs, validarRcsContent, validarFallback } from '@/lib/rcs/template'
 import { RcsSuggestionChips } from '@/components/disparos/RcsSuggestionChips'
+import { useConfirm } from '@/components/ui/useConfirm'
 
 interface RcsTemplate {
   id: string
@@ -95,6 +96,7 @@ export default function RcsCompletoPage() {
   const { create: createDisparo } = useDisparos()
   const { toggle: togglePin } = usePinnedDisparos()
   const { list: casasList } = useCasasAposta()
+  const { confirm: confirmar, dialog: confirmDialog } = useConfirm()
 
   // --- templates ---
   const [templates, setTemplates] = useState<RcsTemplate[]>([])
@@ -258,7 +260,7 @@ export default function RcsCompletoPage() {
   }
 
   async function excluirTemplate(id: string) {
-    if (!confirm('Excluir esse template?')) return
+    if (!(await confirmar({ titulo: 'Excluir template', mensagem: 'Excluir esse template? Não tem como desfazer.', confirmLabel: 'Excluir', danger: true }))) return
     try {
       await fetch(`/api/rcs/templates/${id}`, { method: 'DELETE' })
       await carregarTemplates()
@@ -356,7 +358,11 @@ export default function RcsCompletoPage() {
     if (agendar) {
       const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
       if (quando <= new Date()) { addToast('error', 'Escolha uma data/hora no futuro'); return }
-      if (!confirm(`Agendar RCS pra ${total} número(s) em ${dataAgendada} às ${horarioAgendado}?`)) return
+      if (!(await confirmar({
+        titulo: 'Agendar RCS',
+        mensagem: `Agendar pra ${total} número(s) em ${dataAgendada} às ${horarioAgendado}? Dispara sozinho nessa hora.`,
+        confirmLabel: 'Agendar',
+      }))) return
       setEnviando(true)
       try {
         const d = await criarRegistroDisparo('agendado')
@@ -367,7 +373,11 @@ export default function RcsCompletoPage() {
       return
     }
 
-    if (!confirm(`Enviar RCS agora pra ${total} número(s)? Custo até R$ ${custoTeto.toFixed(2)} (só entregues são cobrados).`)) return
+    if (!(await confirmar({
+      titulo: 'Enviar RCS agora',
+      mensagem: `${total} número(s) · custo até R$ ${custoTeto.toFixed(2)} (só entregues são cobrados). Essa ação é real.`,
+      confirmLabel: 'Enviar agora',
+    }))) return
     setEnviando(true)
     setResultados(null)
     try {
@@ -430,6 +440,7 @@ export default function RcsCompletoPage() {
 
   return (
     <div className="flex-1 flex flex-col">
+      {confirmDialog}
       <PageHeader titulo="Disparo RCS" descricao="Templates com imagem + botões, envio pra base via Solvefy" />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
