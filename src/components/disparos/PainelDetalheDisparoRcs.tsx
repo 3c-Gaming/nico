@@ -19,6 +19,7 @@ interface EnvioRcs {
   telefone: string
   status: string
   clicado?: boolean
+  erro?: string | null
 }
 
 const FALHA = new Set(['erro', 'failed', 'undelivered'])
@@ -119,6 +120,9 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   // conta tanto a flag `clicado` (webhook novo) quanto status legado 'clicked' (webhook antigo)
   const cliques = envios.filter((e) => e.clicado || e.status === 'clicked').length
   const falhas = envios.filter((e) => FALHA.has(e.status)).length
+  const motivosFalha = Array.from(
+    new Set(envios.filter((e) => FALHA.has(e.status) && e.erro).map((e) => e.erro as string)),
+  )
 
   // RCS é cobrado só pelo entregue — falha é reembolsada. Enquanto ninguém foi confirmado
   // como entregue, mostra o teto (base × custo) como estimativa.
@@ -197,7 +201,12 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   </p>
                 )}
                 {falhas > 0 && (
-                  <p className="text-[11px] text-[var(--error)]">{falhas} envio(s) com falha.</p>
+                  <div className="text-[11px] text-[var(--error)]">
+                    {falhas} envio(s) com falha{motivosFalha.length > 0 && ':'}
+                    {motivosFalha.map((m, i) => (
+                      <div key={i} className="pl-2">• {m}</div>
+                    ))}
+                  </div>
                 )}
               </section>
 
@@ -264,14 +273,19 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
               {envios.length > 0 && (
                 <section className="space-y-2">
                   <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Por número ({envios.length})</h3>
-                  <div className="max-h-56 overflow-auto text-xs font-mono space-y-1">
+                  <div className="max-h-56 overflow-auto text-xs font-mono space-y-1.5">
                     {envios.map((e, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3">
-                        <span className="text-[var(--text-secondary)]">{e.telefone}</span>
-                        <span className="flex items-center gap-1.5">
-                          {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
-                          <span className={corStatus(e.status)}>{e.status}</span>
-                        </span>
+                      <div key={i}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[var(--text-secondary)]">{e.telefone}</span>
+                          <span className="flex items-center gap-1.5">
+                            {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
+                            <span className={corStatus(e.status)}>{e.status}</span>
+                          </span>
+                        </div>
+                        {e.erro && FALHA.has(e.status) && (
+                          <div className="text-[10px] text-[var(--error)]/80 pl-1 font-sans">{e.erro}</div>
+                        )}
                       </div>
                     ))}
                   </div>
