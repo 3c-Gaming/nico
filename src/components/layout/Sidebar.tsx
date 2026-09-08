@@ -59,17 +59,13 @@ export function Sidebar() {
   const { theme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  // Grupo abre sozinho quando a rota atual é um dos filhos (calculado no render); esse estado só
-  // guarda quem o usuário abriu/fechou manualmente por cima disso.
-  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set())
+  // Grupo abre sozinho quando a rota atual é um dos filhos. Esse override guarda a escolha
+  // explícita do usuário (true = abriu, false = fechou) por cima disso; sem entrada = automático.
+  // Assim o chevron sempre fecha o dropdown, mesmo estando numa rota filha.
+  const [gruposOverride, setGruposOverride] = useState<Record<string, boolean>>({})
 
-  function toggleGrupo(label: string) {
-    setGruposAbertos((prev) => {
-      const novo = new Set(prev)
-      if (novo.has(label)) novo.delete(label)
-      else novo.add(label)
-      return novo
-    })
+  function toggleGrupo(label: string, abertoAgora: boolean) {
+    setGruposOverride((prev) => ({ ...prev, [label]: !abertoAgora }))
   }
 
   useEffect(() => {
@@ -121,7 +117,7 @@ export function Sidebar() {
           {NAV.map((item) => {
             if (item.type === 'group') {
               const algumFilhoAtivo = item.children.some((c) => pathname.startsWith(c.href))
-              const aberto = algumFilhoAtivo || gruposAbertos.has(item.label)
+              const aberto = gruposOverride[item.label] ?? algumFilhoAtivo
               const Icon = item.icon
 
               if (collapsed) {
@@ -144,7 +140,7 @@ export function Sidebar() {
                 <div key={item.label}>
                   <button
                     type="button"
-                    onClick={() => toggleGrupo(item.label)}
+                    onClick={() => toggleGrupo(item.label, aberto)}
                     className={`w-full flex items-center gap-3 h-9 px-3 rounded-md text-sm transition-colors ${algumFilhoAtivo
                       ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-l-2 border-[var(--d1)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
