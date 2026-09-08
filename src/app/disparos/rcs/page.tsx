@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Upload, Send, RefreshCw, Save, Plus, Trash2, Image as ImageIcon, CalendarClock, Link2, MessageSquare } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -97,6 +98,7 @@ export default function RcsCompletoPage() {
   const { toggle: togglePin } = usePinnedDisparos()
   const { list: casasList } = useCasasAposta()
   const { confirm: confirmar, dialog: confirmDialog } = useConfirm()
+  const router = useRouter()
 
   // --- templates ---
   const [templates, setTemplates] = useState<RcsTemplate[]>([])
@@ -366,7 +368,12 @@ export default function RcsCompletoPage() {
       setEnviando(true)
       try {
         const d = await criarRegistroDisparo('agendado')
-        addToast(d ? 'success' : 'error', d ? 'Agendado — dispara sozinho e aparece em Disparos' : 'Não deu pra agendar')
+        if (d) {
+          addToast('success', 'Agendado — dispara sozinho e aparece em Disparos')
+          router.push('/daxx')
+        } else {
+          addToast('error', 'Não deu pra agendar')
+        }
       } catch (err) {
         addToast('error', (err as Error).message)
       } finally { setEnviando(false) }
@@ -396,6 +403,7 @@ export default function RcsCompletoPage() {
       setResultados(data.resultados ?? [])
       await criarRegistroDisparo('executado')
       addToast('success', `Enviado: ${data.enviados} ok, ${data.falhas} falha(s)`)
+      router.push('/daxx')
     } catch (err) {
       addToast('error', (err as Error).message)
     } finally {
