@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { gtmetrixChannelId } from '@/lib/gtmetrix/config'
+import {
+  gtmetrixChannelId,
+  GTMETRIX_INTERVALO_HORAS,
+  GTMETRIX_JANELA_INICIO,
+  GTMETRIX_JANELA_FIM,
+} from '@/lib/gtmetrix/config'
 import { obterUrlsGtmetrix } from '@/lib/gtmetrix/paginas'
 import { rodarRodadaGTmetrix } from '@/lib/gtmetrix/runner'
 import { postarRodadaDiscord } from '@/lib/gtmetrix/notify'
@@ -14,14 +19,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ erro: 'Unauthorized' }, { status: 401 })
   }
 
-  // Vercel agenda em UTC; o cron roda de hora em hora e este guard restringe a
-  // janela de 06h–23h de Brasília (inclusive).
+  // Vercel dispara de hora em hora (UTC); a rota só roda de verdade nas horas cheias de
+  // Brasília múltiplas de GTMETRIX_INTERVALO_HORAS, dentro da janela diurna. Ajustar o
+  // intervalo em config.ts pra gastar mais ou menos crédito.
   const horaBrasilia = Number(
     new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false }),
   )
-  if (horaBrasilia < 6 || horaBrasilia > 23) {
-    console.log(`[cron-gtmetrix] Fora do horário (${horaBrasilia}h). Pulando.`)
+  if (horaBrasilia < GTMETRIX_JANELA_INICIO || horaBrasilia > GTMETRIX_JANELA_FIM) {
+    console.log(`[cron-gtmetrix] Fora da janela (${horaBrasilia}h). Pulando.`)
     return NextResponse.json({ ok: true, skipped: true, reason: 'outside_hours' })
+  }
+  if (horaBrasilia % GTMETRIX_INTERVALO_HORAS !== 0) {
+    console.log(`[cron-gtmetrix] ${horaBrasilia}h não é múltiplo de ${GTMETRIX_INTERVALO_HORAS}h. Pulando.`)
+    return NextResponse.json({ ok: true, skipped: true, reason: 'fora_do_intervalo' })
   }
 
   const channelId = gtmetrixChannelId()
