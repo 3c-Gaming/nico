@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, ChevronDown, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Clover } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
+import { NotificacoesButton } from '@/components/layout/NotificacoesButton'
 
 interface LinkItem {
   type: 'link'
@@ -33,6 +34,7 @@ const NAV: (LinkItem | GroupItem)[] = [
     children: [
       { href: '/daxx', label: 'Geral' },
       { href: '/disparos/sms-rapido', label: 'SMS' },
+      { href: '/disparos/rcs', label: 'RCS' },
       { href: '/disparos/telegram-rapido', label: 'Telegram' },
     ],
   },
@@ -222,7 +224,8 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className={`px-2 pb-4 ${collapsed ? 'lg:px-1' : ''}`}>
+        <div className={`px-2 pb-4 space-y-1 ${collapsed ? 'lg:px-1' : ''}`}>
+          <NotificacoesButton collapsed={collapsed} />
           <Link
             href="/disparos/novo"
             className={`flex items-center gap-2 h-9 rounded-md text-sm font-medium text-white transition-colors hover:brightness-110 ${collapsed ? 'lg:justify-center lg:px-0' : 'px-3'

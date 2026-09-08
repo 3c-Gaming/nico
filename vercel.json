@@ -26,6 +26,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/rcs-agendados",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/aquecimento",
       "schedule": "*/15 * * * *"
     },

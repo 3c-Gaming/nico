@@ -62,6 +62,41 @@ export async function POST() {
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_bot_username TEXT`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_corpo TEXT`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_destinatarios JSONB`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_template_id UUID`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_conteudo JSONB`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_destinatarios JSONB`,
+      `CREATE TABLE IF NOT EXISTS rcs_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        nome TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'card',
+        conteudo JSONB NOT NULL DEFAULT '{}'::jsonb,
+        criado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS rcs_envios (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campanha TEXT,
+        telefone TEXT NOT NULL,
+        solvefy_message_id TEXT,
+        status TEXT NOT NULL DEFAULT 'enviando',
+        erro TEXT,
+        enviado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_rcs_envios_campanha ON rcs_envios(campanha)`,
+      `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()
+      RETURNS TABLE(campanha TEXT, total INT, enviados INT, entregues INT, falhas INT)
+      LANGUAGE sql STABLE
+      AS $$
+        SELECT
+          campanha,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status NOT IN ('erro', 'failed', 'undelivered'))::int AS enviados,
+          COUNT(*) FILTER (WHERE status IN ('delivered', 'read'))::int AS entregues,
+          COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered'))::int AS falhas
+        FROM rcs_envios
+        WHERE campanha IS NOT NULL
+        GROUP BY campanha;
+      $$`,
       `CREATE TABLE IF NOT EXISTS sms_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         nome TEXT NOT NULL,

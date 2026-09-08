@@ -284,7 +284,7 @@ export interface Disparo {
    * disparado de verdade pelo próprio app via Solvefy/Cephas, não só rastreado. 'telegram-csv' é
    * disparo pra uma base externa (CSV de @usernames) via Bot API do Telegram, resolvendo cada
    * username pro chat_id através dos contatos já conhecidos pela SendPulse. */
-  canal?: 'whatsapp' | 'sms' | 'telegram-csv'
+  canal?: 'whatsapp' | 'sms' | 'telegram-csv' | 'rcs'
   nomenclatura: string
   status: StatusDisparo
   casasAposta: string[]
@@ -325,6 +325,12 @@ export interface Disparo {
   telegramBotUsername?: string
   telegramCorpo?: string
   telegramDestinatarios?: { username?: string; telegramId?: number; variables?: Record<string, string> }[]
+  /** Payload de envio do RCS — só quando canal === 'rcs'. Mesmo raciocínio do SMS: o disparo
+   * agendado guarda o `content` (com tokens {{var}}) e a base pro cron mandar quando a hora
+   * chegar. O Agent ID (`from`) vem do ambiente (SOLVEFY_RCS_AGENT_ID). */
+  rcsTemplateId?: string
+  rcsConteudo?: import('@/lib/rcs/tipos').RcsContent
+  rcsDestinatarios?: { telefone: string; variables?: Record<string, string> }[]
 }
 
 export interface Esteira {

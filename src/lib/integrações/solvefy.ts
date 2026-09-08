@@ -90,3 +90,64 @@ export async function consultarStatusSms(id: string): Promise<StatusSmsResultado
 
   return { ok: true, status: json?.status }
 }
+
+/* ===================== RCS ===================== */
+// Mesma CPaaS/base/API key do SMS — só muda o endpoint e o corpo (content estruturado).
+// Body de referência: RCS-body-request.md. Endpoint assumido no molde do de SMS; se a Solvefy
+// usar outro caminho, é só setar SOLVEFY_RCS_ENDPOINT.
+
+const RCS_ENDPOINT = process.env.SOLVEFY_RCS_ENDPOINT || '/cpaas/v1/rcs/messages'
+
+/** Agent ID do RCS (campo `from`). Marca única — configurado no ambiente. */
+export const SOLVEFY_RCS_AGENT_ID = process.env.SOLVEFY_RCS_AGENT_ID || ''
+
+export interface EnviarRcsParams {
+  from: string
+  to: string
+  content: Record<string, unknown>
+  reference?: string
+  callbackUrl?: string
+}
+
+export async function enviarRcs(params: EnviarRcsParams): Promise<EnviarSmsResultado> {
+  if (!API_KEY) return { ok: false, error: 'SOLVEFY_API_KEY não configurado' }
+  if (!params.from) return { ok: false, error: 'SOLVEFY_RCS_AGENT_ID não configurado' }
+
+  const res = await fetch(`${BASE_URL}${RCS_ENDPOINT}`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      from: params.from,
+      to: params.to,
+      content: params.content,
+      reference: params.reference,
+      callbackUrl: params.callbackUrl,
+    }),
+  })
+
+  const json = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    const errMsg = json?.message || json?.error || JSON.stringify(json).slice(0, 200)
+    return { ok: false, error: `HTTP ${res.status}: ${errMsg}` }
+  }
+
+  return { ok: true, id: json?.id, status: json?.status }
+}
+
+export async function consultarStatusRcs(id: string): Promise<StatusSmsResultado> {
+  if (!API_KEY) return { ok: false, error: 'SOLVEFY_API_KEY não configurado' }
+
+  const res = await fetch(`${BASE_URL}${RCS_ENDPOINT}/${id}`, {
+    headers: getHeaders(),
+  })
+
+  const json = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    const errMsg = json?.message || json?.error || JSON.stringify(json).slice(0, 200)
+    return { ok: false, error: `HTTP ${res.status}: ${errMsg}` }
+  }
+
+  return { ok: true, status: json?.status }
+}

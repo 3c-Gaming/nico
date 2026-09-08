@@ -11,16 +11,22 @@ import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
 import { PainelDetalheDisparoSms, type ResumoCampanhaSms } from '@/components/disparos/PainelDetalheDisparoSms'
+import { PainelDetalheDisparoRcs } from '@/components/disparos/PainelDetalheDisparoRcs'
 import type { Disparo } from '@/types'
 
 function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoCampanhaSms; onVerDetalhes: (disparo: Disparo) => void }) {
   const { toggle: togglePin, isPinned } = usePinnedDisparos()
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
+  // RCS é cobrado só pelo entregue (falha = reembolso) — custo sai da contagem real de
+  // entregues do resumo, não da base. SMS segue base × custo digitado.
+  const entreguesParaCusto = disparo.canal === 'rcs'
+    ? (resumoSms?.entregues ?? 0)
+    : disparo.base.totalRegistros
   const { resultado, carregando, custo } = useResultadoDisparo({
     utmValor: disparo.utm || disparo.betmgmPid,
     casa: casaAtiva,
     data: disparo.dataDisparo,
-    entregues: disparo.base.totalRegistros,
+    entregues: entreguesParaCusto,
     custoPorUnidade: disparo.custoPorEnvio,
   })
 
@@ -38,8 +44,17 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
           >
             <Pin size={12} className={isPinned(disparo.id) ? 'text-amber-400' : 'text-[var(--text-muted)]'} />
           </button>
-          <span className="font-medium text-[var(--text-primary)] max-w-[220px] truncate" title={disparo.nomenclatura}>
+          <span className="font-medium text-[var(--text-primary)] max-w-[200px] truncate" title={disparo.nomenclatura}>
             {disparo.nomenclatura}
+          </span>
+          <span
+            className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide ${
+              disparo.canal === 'rcs'
+                ? 'bg-violet-500/15 text-violet-400'
+                : 'bg-sky-500/15 text-sky-400'
+            }`}
+          >
+            {disparo.canal === 'rcs' ? 'RCS' : 'SMS'}
           </span>
         </div>
       </td>
@@ -87,43 +102,60 @@ export default function DisparosPage() {
   const [disparoSelecionado, setDisparoSelecionado] = useState<Disparo | null>(null)
 
   useEffect(() => {
-    fetch('/api/sms/resumo')
-      .then((r) => r.ok ? r.json() : { resumo: {} })
-      .then((json) => setResumoSms(json.resumo ?? {}))
-      .catch(() => {})
+    // SMS e RCS têm resumos separados (endpoints diferentes) — junta num mapa só por
+    // nomenclatura. RCS não tem "clicados" (é read/lidas), então cai como 0 na coluna.
+    Promise.all([
+      fetch('/api/sms/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
+      fetch('/api/rcs/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
+    ]).then(([sms, rcs]) => {
+      const merged: Record<string, ResumoCampanhaSms> = { ...(sms.resumo ?? {}) }
+      for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, Omit<ResumoCampanhaSms, 'clicados'>>)) {
+        merged[campanha] = { ...r, clicados: 0 }
+      }
+      setResumoSms(merged)
+    })
   }, [])
 
-  const campanhasSms = useMemo(
+  const campanhas = useMemo(
     () => todosDisparos
-      .filter((d) => d.canal === 'sms')
+      .filter((d) => d.canal === 'sms' || d.canal === 'rcs')
       .sort((a, b) => `${b.dataDisparo}T${b.horarioDisparo}`.localeCompare(`${a.dataDisparo}T${a.horarioDisparo}`)),
     [todosDisparos],
   )
 
   const filtradas = useMemo(() => {
     const termo = busca.toLowerCase().trim()
-    return campanhasSms.filter((c) => {
+    return campanhas.filter((c) => {
       if (termo && !c.nomenclatura.toLowerCase().includes(termo)) return false
       if (dataInicio && c.dataDisparo < dataInicio) return false
       if (dataFim && c.dataDisparo > dataFim) return false
       return true
     })
-  }, [campanhasSms, dataInicio, dataFim, busca])
+  }, [campanhas, dataInicio, dataFim, busca])
 
   return (
     <>
       <PageHeader
         titulo="Disparos"
-        descricao="Campanhas de SMS disparadas e agendadas"
+        descricao="Campanhas de SMS e RCS disparadas e agendadas"
         acoes={
-          <button
-            onClick={() => router.push('/disparos/sms-rapido')}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-colors hover:brightness-110"
-            style={{ backgroundColor: 'var(--d1)' }}
-          >
-            <Plus size={14} />
-            Disparo SMS
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/disparos/sms-rapido')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-colors hover:brightness-110"
+              style={{ backgroundColor: 'var(--d1)' }}
+            >
+              <Plus size={14} />
+              Disparo SMS
+            </button>
+            <button
+              onClick={() => router.push('/disparos/rcs')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium text-white transition-colors hover:brightness-110 bg-violet-600"
+            >
+              <Plus size={14} />
+              Disparo RCS
+            </button>
+          </div>
         }
       />
 
@@ -157,12 +189,12 @@ export default function DisparosPage() {
               className="px-2 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] outline-none"
             />
           </div>
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtradas.length} de {campanhasSms.length} campanha(s)</span>
+          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtradas.length} de {campanhas.length} campanha(s)</span>
         </div>
 
-        {campanhasSms.length === 0 ? (
+        {campanhas.length === 0 ? (
           <div className="text-center py-16 text-sm text-[var(--text-muted)]">
-            Nenhuma campanha de SMS ainda — clique em &quot;Disparo SMS&quot; pra criar a primeira.
+            Nenhuma campanha de SMS ou RCS ainda — use os botões acima pra criar a primeira.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -194,11 +226,18 @@ export default function DisparosPage() {
         )}
       </div>
 
-      <PainelDetalheDisparoSms
-        disparo={disparoSelecionado}
-        resumoSms={disparoSelecionado ? resumoSms[disparoSelecionado.nomenclatura] : undefined}
-        onClose={() => setDisparoSelecionado(null)}
-      />
+      {disparoSelecionado?.canal === 'rcs' ? (
+        <PainelDetalheDisparoRcs
+          disparo={disparoSelecionado}
+          onClose={() => setDisparoSelecionado(null)}
+        />
+      ) : (
+        <PainelDetalheDisparoSms
+          disparo={disparoSelecionado}
+          resumoSms={disparoSelecionado ? resumoSms[disparoSelecionado.nomenclatura] : undefined}
+          onClose={() => setDisparoSelecionado(null)}
+        />
+      )}
     </>
   )
 }

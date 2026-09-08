@@ -1,0 +1,86 @@
+import { NextResponse } from 'next/server'
+import { getSupabase } from '@/lib/db/supabase'
+
+export interface ResumoCampanhaRcs {
+  total: number
+  enviados: number
+  entregues: number
+  falhas: number
+}
+
+const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered'])
+const STATUS_ENTREGUE = new Set(['delivered', 'read'])
+const TAMANHO_PAGINA = 1000
+const CACHE_TTL_MS = 30_000
+
+interface EnvioResumo { campanha: string | null; status: string }
+interface LinhaResumoSql { campanha: string; total: number; enviados: number; entregues: number; falhas: number }
+
+let cache: { resumo: Record<string, ResumoCampanhaRcs>; expiraEm: number } | null = null
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buscarViaRpc(supabase: any): Promise<Record<string, ResumoCampanhaRcs> | null> {
+  const { data, error } = await supabase.rpc('rcs_resumo_por_campanha')
+  if (error) return null
+  const resumo: Record<string, ResumoCampanhaRcs> = {}
+  for (const r of (data ?? []) as LinhaResumoSql[]) {
+    resumo[r.campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, falhas: r.falhas }
+  }
+  return resumo
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoCampanhaRcs>> {
+  const todos: EnvioResumo[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('rcs_envios')
+      .select('campanha, status')
+      .order('enviado_em', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + TAMANHO_PAGINA - 1)
+    if (error) throw new Error(error.message)
+    todos.push(...(data ?? []))
+    if (!data || data.length < TAMANHO_PAGINA) break
+    offset += TAMANHO_PAGINA
+  }
+
+  const resumo: Record<string, ResumoCampanhaRcs> = {}
+  for (const envio of todos) {
+    const campanha = envio.campanha
+    if (!campanha) continue
+    if (!resumo[campanha]) resumo[campanha] = { total: 0, enviados: 0, entregues: 0, falhas: 0 }
+    const r = resumo[campanha]
+    r.total++
+    if (STATUS_FALHA.has(envio.status)) {
+      r.falhas++
+    } else {
+      r.enviados++
+      if (STATUS_ENTREGUE.has(envio.status)) r.entregues++
+    }
+  }
+  return resumo
+}
+
+/** GET /api/rcs/resumo — enviados/entregues/falhas por campanha, pra listagem de Disparos. */
+export async function GET() {
+  if (cache && cache.expiraEm > Date.now()) {
+    return NextResponse.json({ resumo: cache.resumo })
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getSupabase() as any
+  if (!supabase) return NextResponse.json({ resumo: {} })
+
+  let resumo: Record<string, ResumoCampanhaRcs> | null
+  try {
+    resumo = await buscarViaRpc(supabase)
+    if (!resumo) resumo = await buscarViaPaginacao(supabase)
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 })
+  }
+
+  cache = { resumo, expiraEm: Date.now() + CACHE_TTL_MS }
+  return NextResponse.json({ resumo })
+}

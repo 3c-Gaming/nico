@@ -139,17 +139,32 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   const utmValor = disparo.utm || disparo.betmgmPid
   const daxx = daxxCampanhas.find((c) => c.id === (disparo.daxxCampanhaId ?? disparo.templateDaxx?.id))
-  // SMS não tem campanha DAXX pra buscar "entregues" — usa o tamanho da base enviada (já é o
-  // total de destinatários reais, salvo na criação do disparo) e o custo fixo por envio digitado
-  // então, em vez do CUSTO_POR_ENTREGUE fixo (pensado pro WhatsApp).
-  const entregues = disparo.canal === 'sms' ? disparo.base.totalRegistros : daxx?.entregues
+
+  // RCS só é cobrado pelo que é ENTREGUE (falha = reembolso), então o custo tem que sair da
+  // contagem real de entregues (/api/rcs/resumo), não da base. SMS mantém base × custo digitado.
+  const [rcsEntregues, setRcsEntregues] = useState<number | null>(null)
+  useEffect(() => {
+    if (disparo.canal !== 'rcs') return
+    let cancel = false
+    fetch('/api/rcs/resumo')
+      .then((r) => (r.ok ? r.json() : { resumo: {} }))
+      .then((json) => { if (!cancel) setRcsEntregues(json.resumo?.[disparo.nomenclatura]?.entregues ?? 0) })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [disparo.canal, disparo.nomenclatura])
+
+  const canalDireto = disparo.canal === 'sms' || disparo.canal === 'rcs'
+  const entregues =
+    disparo.canal === 'rcs' ? (rcsEntregues ?? 0)
+    : disparo.canal === 'sms' ? disparo.base.totalRegistros
+    : daxx?.entregues
 
   const { resultado, carregando, custo, receita, roi } = useResultadoDisparo({
     utmValor,
     casa: casaAtiva,
     data: disparo.dataDisparo,
     entregues,
-    custoPorUnidade: disparo.canal === 'sms' ? disparo.custoPorEnvio : undefined,
+    custoPorUnidade: canalDireto ? disparo.custoPorEnvio : undefined,
   })
 
   // Leads hoje: mesma tag do fluxo(s) vinculado(s) ao disparo (se houver), via LeadHub —
