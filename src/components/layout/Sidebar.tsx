@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, List, GitBranch, Dices, Settings, Send, Plus, Menu, ChevronLeft, ChevronDown, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot, Clover } from 'lucide-react'
+import { Home, Calendar, Settings, Send, Plus, Menu, ChevronLeft, ChevronDown, Layers, Trophy, Smartphone, FileText, ClipboardList, Hash, LandPlot } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/theme/ThemeProvider'
 import { NotificacoesButton } from '@/components/layout/NotificacoesButton'
@@ -44,11 +44,12 @@ const NAV: (LinkItem | GroupItem)[] = [
   { type: 'link', href: '/testes', label: 'Testes', icon: Smartphone },
   { type: 'link', href: '/funis', label: 'Funis', icon: Layers },
   { type: 'link', href: '/jogos', label: 'Grade', icon: LandPlot },
-  { type: 'link', href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
+  // ocultos da sidebar (rotas seguem funcionando por URL):
+  // { type: 'link', href: '/pilhado-premios', label: 'Pilhado Prêmios', icon: Clover },
   { type: 'link', href: '/paginas', label: 'Páginas', icon: FileText },
   //{ href: '/copa-2026', label: 'Jogos', icon: LandPlot },
-  { type: 'link', href: '/casas', label: 'Casas', icon: Dices },
-  { type: 'link', href: '/bases', label: 'Bases', icon: null },
+  // { type: 'link', href: '/casas', label: 'Casas', icon: Dices },
+  // { type: 'link', href: '/bases', label: 'Bases', icon: null },
   { type: 'link', href: '/demandas', label: 'Demandas', icon: ClipboardList },
   { type: 'link', href: '/configuracoes', label: 'Configurações', icon: Settings },
   { type: 'link', href: '/resultados', label: 'Resultados', icon: Trophy },
