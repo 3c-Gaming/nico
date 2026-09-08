@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, RefreshCw, Image as ImageIcon, CalendarClock } from 'lucide-react'
+import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
@@ -23,7 +23,17 @@ interface EnvioRcs {
 }
 
 const FALHA = new Set(['erro', 'failed', 'undelivered'])
-const ENTREGUE = new Set(['delivered', 'read', 'clicked'])
+
+const LIMITE_NUMEROS = 1000
+
+interface ResumoRcs {
+  total: number
+  enviados: number
+  entregues: number
+  lidas: number
+  clicados: number
+  falhas: number
+}
 
 function corStatus(status: string): string {
   if (status === 'read') return 'text-violet-400'
@@ -73,39 +83,76 @@ function PreviewRcs({ disparo }: { disparo: Disparo }) {
 }
 
 export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo | null; onClose: () => void }) {
-  const [envios, setEnvios] = useState<EnvioRcs[]>([])
-  const [atualizando, setAtualizando] = useState(false)
+  const [resumo, setResumo] = useState<ResumoRcs | null>(null)
+  const [falhasRows, setFalhasRows] = useState<EnvioRcs[]>([])
   const [carregou, setCarregou] = useState(false)
+  const [atualizando, setAtualizando] = useState(false)
+
+  // "Por número" é accordion — em disparo comum a base tem dezenas de milhares de linhas, então
+  // a lista completa só carrega quando o usuário abre, com teto de LIMITE_NUMEROS.
+  const [mostrarNumeros, setMostrarNumeros] = useState(false)
+  const [numeros, setNumeros] = useState<EnvioRcs[]>([])
+  const [numerosTotal, setNumerosTotal] = useState(0)
 
   const campanha = disparo?.nomenclatura
 
-  // Fetch inicial + polling a cada 12s enquanto o painel está aberto. O GET só lê o que os
-  // webhooks da Solvefy já gravaram (não bate na Solvefy), então é barato manter atualizado.
+  // Contadores da jornada + resumo de falhas — leves (agregado no banco + só as linhas que
+  // falharam), então dá pra fazer polling a cada 15s enquanto o painel está aberto.
   useEffect(() => {
     if (!campanha) return
     let cancel = false
+    const q = encodeURIComponent(campanha)
     const puxar = () => {
-      fetch(`/api/rcs/status?campanha=${encodeURIComponent(campanha)}`)
-        .then((r) => (r.ok ? r.json() : { envios: [] }))
-        .then((data) => { if (!cancel) { setEnvios((data.envios ?? []) as EnvioRcs[]); setCarregou(true) } })
-        .catch(() => { if (!cancel) setCarregou(true) })
+      Promise.all([
+        fetch('/api/rcs/resumo').then((r) => (r.ok ? r.json() : { resumo: {} })).catch(() => ({ resumo: {} })),
+        fetch(`/api/rcs/status?campanha=${q}&falhas=1`).then((r) => (r.ok ? r.json() : { envios: [] })).catch(() => ({ envios: [] })),
+      ]).then(([res, fal]) => {
+        if (cancel) return
+        setResumo((res.resumo?.[campanha] as ResumoRcs) ?? null)
+        setFalhasRows((fal.envios ?? []) as EnvioRcs[])
+        setCarregou(true)
+      })
+    }
+    puxar()
+    const id = setInterval(puxar, 15_000)
+    return () => { cancel = true; clearInterval(id) }
+  }, [campanha])
+
+  // Lista completa por número — só enquanto o accordion está aberto.
+  useEffect(() => {
+    if (!campanha || !mostrarNumeros) return
+    let cancel = false
+    const puxar = () => {
+      fetch(`/api/rcs/status?campanha=${encodeURIComponent(campanha)}&limit=${LIMITE_NUMEROS}`)
+        .then((r) => (r.ok ? r.json() : { envios: [], total: 0 }))
+        .then((data) => {
+          if (cancel) return
+          setNumeros((data.envios ?? []) as EnvioRcs[])
+          setNumerosTotal(data.total ?? 0)
+        })
+        .catch(() => {})
     }
     puxar()
     const id = setInterval(puxar, 12_000)
     return () => { cancel = true; clearInterval(id) }
-  }, [campanha])
+  }, [campanha, mostrarNumeros])
 
   async function atualizarStatus() {
     if (!campanha) return
     setAtualizando(true)
     try {
-      const res = await fetch('/api/rcs/status', {
+      await fetch('/api/rcs/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campanha }),
       })
-      const data = await res.json()
-      setEnvios((data.envios ?? []) as EnvioRcs[])
+      const q = encodeURIComponent(campanha)
+      const [res, fal] = await Promise.all([
+        fetch('/api/rcs/resumo').then((r) => r.json()).catch(() => ({ resumo: {} })),
+        fetch(`/api/rcs/status?campanha=${q}&falhas=1`).then((r) => r.json()).catch(() => ({ envios: [] })),
+      ])
+      setResumo((res.resumo?.[campanha] as ResumoRcs) ?? null)
+      setFalhasRows((fal.envios ?? []) as EnvioRcs[])
     } catch {
       /* noop */
     } finally {
@@ -114,14 +161,14 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   }
 
   const base = disparo?.base.totalRegistros ?? disparo?.rcsDestinatarios?.length ?? 0
-  const enviados = envios.filter((e) => !FALHA.has(e.status)).length
-  const entregues = envios.filter((e) => ENTREGUE.has(e.status)).length
-  const lidas = envios.filter((e) => e.status === 'read' || e.status === 'clicked').length
-  // conta tanto a flag `clicado` (webhook novo) quanto status legado 'clicked' (webhook antigo)
-  const cliques = envios.filter((e) => e.clicado || e.status === 'clicked').length
-  const falhas = envios.filter((e) => FALHA.has(e.status)).length
+  const total = resumo?.total ?? 0
+  const enviados = resumo?.enviados ?? 0
+  const entregues = resumo?.entregues ?? 0
+  const lidas = resumo?.lidas ?? 0
+  const cliques = resumo?.clicados ?? 0
+  const falhas = resumo?.falhas ?? 0
   const motivosFalha = Array.from(
-    new Set(envios.filter((e) => FALHA.has(e.status) && e.erro).map((e) => e.erro as string)),
+    new Set(falhasRows.filter((e) => e.erro).map((e) => e.erro as string)),
   )
 
   // RCS é cobrado só pelo entregue — falha é reembolsada. Enquanto ninguém foi confirmado
@@ -143,7 +190,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
 
   const estagios: EstagioFunil[] = disparo ? [
     { tag: 'Base', contagem: base },
-    { tag: 'Enviados', contagem: enviados || envios.length },
+    { tag: 'Enviados', contagem: enviados || total },
     { tag: 'Entregues', contagem: entregues },
     { tag: 'Lidas', contagem: lidas },
     { tag: 'Cliques', contagem: cliques },
@@ -195,7 +242,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   </button>
                 </div>
                 <FunilConversaoChart estagios={estagios} cor="#8b5cf6" orientacao="vertical" />
-                {envios.length === 0 && carregou && (
+                {total === 0 && carregou && (
                   <p className="text-[11px] text-[var(--text-muted)]">
                     Nenhum envio registrado ainda pra essa campanha.
                   </p>
@@ -270,25 +317,43 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                 </div>
               </section>
 
-              {envios.length > 0 && (
+              {total > 0 && (
                 <section className="space-y-2">
-                  <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Por número ({envios.length})</h3>
-                  <div className="max-h-56 overflow-auto text-xs font-mono space-y-1.5">
-                    {envios.map((e, i) => (
-                      <div key={i}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[var(--text-secondary)]">{e.telefone}</span>
-                          <span className="flex items-center gap-1.5">
-                            {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
-                            <span className={corStatus(e.status)}>{e.status}</span>
-                          </span>
-                        </div>
-                        {e.erro && FALHA.has(e.status) && (
-                          <div className="text-[10px] text-[var(--error)]/80 pl-1 font-sans">{e.erro}</div>
+                  <button
+                    onClick={() => setMostrarNumeros((v) => !v)}
+                    className="flex items-center gap-1.5 w-full text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    <ChevronRight size={13} className={`transition-transform ${mostrarNumeros ? 'rotate-90' : ''}`} />
+                    Por número ({total})
+                  </button>
+                  {mostrarNumeros && (
+                    <>
+                      <div className="max-h-72 overflow-auto text-xs font-mono space-y-1.5 border border-[var(--border)] rounded-md p-2">
+                        {numeros.length === 0 && (
+                          <p className="text-[11px] text-[var(--text-muted)] font-sans">Carregando…</p>
                         )}
+                        {numeros.map((e, i) => (
+                          <div key={i}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[var(--text-secondary)]">{e.telefone}</span>
+                              <span className="flex items-center gap-1.5">
+                                {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
+                                <span className={corStatus(e.status)}>{e.status}</span>
+                              </span>
+                            </div>
+                            {e.erro && FALHA.has(e.status) && (
+                              <div className="text-[10px] text-[var(--error)]/80 pl-1 font-sans">{e.erro}</div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                      {numerosTotal > numeros.length && (
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          Mostrando os {numeros.length} mais recentes de {numerosTotal}.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </section>
               )}
             </div>
