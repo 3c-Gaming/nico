@@ -84,6 +84,8 @@ export async function POST() {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_rcs_envios_campanha ON rcs_envios(campanha)`,
       `ALTER TABLE rcs_envios ADD COLUMN IF NOT EXISTS clicado BOOLEAN NOT NULL DEFAULT false`,
+      // DROP antes do CREATE: o Postgres não deixa CREATE OR REPLACE mudar o nº de colunas de retorno.
+      `DROP FUNCTION IF EXISTS rcs_resumo_por_campanha()`,
       `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()
       RETURNS TABLE(campanha TEXT, total INT, enviados INT, entregues INT, lidas INT, clicados INT, falhas INT)
       LANGUAGE sql STABLE
