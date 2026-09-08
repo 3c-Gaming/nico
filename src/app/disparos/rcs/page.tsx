@@ -92,6 +92,88 @@ function corStatus(status?: string): string {
 const inputCls =
   'w-full h-9 px-3 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors'
 
+function utmsDaUrl(url?: string): [string, string][] {
+  if (!url) return []
+  try {
+    const u = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`)
+    return [...u.searchParams.entries()].filter(([k]) => /^utm_/i.test(k) || k.toLowerCase() === 'pid')
+  } catch {
+    return []
+  }
+}
+
+function TemplateCard({
+  t, selecionado, onSelecionar, onExcluir,
+}: {
+  t: RcsTemplate
+  selecionado: boolean
+  onSelecionar: () => void
+  onExcluir: () => void
+}) {
+  const c = renderizarRcsContent(t.conteudo, {})
+  const card = c.type === 'card' ? c.card : null
+  const texto = c.type === 'text' ? c.text : ''
+  const sugestoes = c.type === 'card' ? c.card.suggestions : c.suggestions
+  const links = (sugestoes ?? []).filter((s): s is Extract<RcsSuggestion, { type: 'OPEN_URL' }> => s.type === 'OPEN_URL')
+  const utms = links.flatMap((l) => utmsDaUrl(l.url))
+
+  return (
+    <div
+      onClick={onSelecionar}
+      className={`w-[260px] shrink-0 rounded-lg border overflow-hidden cursor-pointer transition-colors ${
+        selecionado ? 'border-[var(--border-strong)] ring-1 ring-[var(--d1)]/40' : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+      } bg-[var(--bg-base)]`}
+    >
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border)] bg-[var(--bg-surface)]">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 shrink-0">{t.tipo}</span>
+          <span className="text-xs font-semibold text-[var(--text-primary)] truncate" title={t.nome}>{t.nome}</span>
+        </span>
+        <button onClick={(e) => { e.stopPropagation(); onExcluir() }} className="text-[var(--text-muted)] hover:text-[var(--error)] shrink-0">
+          <Trash2 size={12} />
+        </button>
+      </div>
+
+      {card?.media?.url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={card.media.url} alt="" className="w-full h-24 object-cover" />
+      )}
+
+      <div className="p-3 space-y-1">
+        {card?.title && <p className="text-xs font-semibold text-[var(--text-primary)] line-clamp-1">{card.title}</p>}
+        {(card?.description || texto) && (
+          <p className="text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap line-clamp-3">{card?.description || texto}</p>
+        )}
+      </div>
+
+      <RcsSuggestionChips suggestions={sugestoes} />
+
+      {links.length > 0 && (
+        <div className="px-3 pb-2 space-y-0.5">
+          {links.map((l, i) => (
+            <p key={i} className="text-[10px] text-[var(--text-muted)] truncate" title={l.url}>
+              🔗 {l.url}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {(utms.length > 0 || t.fallback?.enabled) && (
+        <div className="px-3 pb-3 flex flex-wrap gap-1">
+          {utms.map(([k, v], i) => (
+            <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/12 text-emerald-400">
+              {k}={v}
+            </span>
+          ))}
+          {t.fallback?.enabled && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">FALLBACK SMS</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RcsCompletoPage() {
   const { addToast } = useToast()
   const { create: createDisparo } = useDisparos()
@@ -461,23 +543,15 @@ export default function RcsCompletoPage() {
           {templates.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)]">Nenhum template salvo ainda.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {templates.map((t) => (
-                <div
+                <TemplateCard
                   key={t.id}
-                  className={`flex items-center gap-2 pl-3 pr-2 py-1.5 rounded border text-xs cursor-pointer transition-colors ${
-                    templateSelId === t.id
-                      ? 'border-[var(--border-strong)] bg-[var(--bg-elevated)]'
-                      : 'border-[var(--border)] hover:bg-[var(--bg-elevated)]/50'
-                  }`}
-                  onClick={() => carregarTemplateNoBuilder(t)}
-                >
-                  <span className="font-medium text-[var(--text-primary)]">{t.nome}</span>
-                  <span className="text-[10px] text-[var(--text-muted)] uppercase">{t.tipo}</span>
-                  <button onClick={(e) => { e.stopPropagation(); excluirTemplate(t.id) }} className="text-[var(--text-muted)] hover:text-[var(--error)]">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+                  t={t}
+                  selecionado={templateSelId === t.id}
+                  onSelecionar={() => carregarTemplateNoBuilder(t)}
+                  onExcluir={() => excluirTemplate(t.id)}
+                />
               ))}
             </div>
           )}
