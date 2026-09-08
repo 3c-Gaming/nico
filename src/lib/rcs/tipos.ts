@@ -57,3 +57,6 @@ export interface ResultadoEnvioRcs {
 
 /** Custo fixo por envio de RCS (R$) — a Solvefy não retorna preço, é contrato fixo. */
 export const CUSTO_RCS_POR_ENVIO = 0.13
+
+/** Custo por SMS de fallback (R$) — cobrado quando o RCS não entrega e a Solvefy manda o SMS. */
+export const CUSTO_FALLBACK_SMS = 0.078

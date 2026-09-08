@@ -8,6 +8,8 @@ export interface ResumoCampanhaRcs {
   lidas: number
   clicados: number
   falhas: number
+  /** Nº de números que caíram pro SMS de fallback (fallback_status preenchido). */
+  fallbackEnviados: number
 }
 
 const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered'])
@@ -18,13 +20,13 @@ const TAMANHO_PAGINA = 1000
 // re-busca em intervalo; não faz sentido segurar o resumo mais que isso.
 const CACHE_TTL_MS = 4_000
 
-interface EnvioResumo { campanha: string | null; status: string; clicado: boolean | null }
-interface LinhaResumoSql { campanha: string; total: number; enviados: number; entregues: number; lidas: number; clicados: number; falhas: number }
+interface EnvioResumo { campanha: string | null; status: string; clicado: boolean | null; fallback_status: string | null }
+interface LinhaResumoSql { campanha: string; total: number; enviados: number; entregues: number; lidas: number; clicados: number; falhas: number; fallback_enviados: number }
 
 let cache: { resumo: Record<string, ResumoCampanhaRcs>; expiraEm: number } | null = null
 
 function vazio(): ResumoCampanhaRcs {
-  return { total: 0, enviados: 0, entregues: 0, lidas: 0, clicados: 0, falhas: 0 }
+  return { total: 0, enviados: 0, entregues: 0, lidas: 0, clicados: 0, falhas: 0, fallbackEnviados: 0 }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +38,7 @@ async function buscarViaRpc(supabase: any): Promise<Record<string, ResumoCampanh
     resumo[r.campanha] = {
       total: r.total, enviados: r.enviados, entregues: r.entregues,
       lidas: r.lidas ?? 0, clicados: r.clicados ?? 0, falhas: r.falhas,
+      fallbackEnviados: r.fallback_enviados ?? 0,
     }
   }
   return resumo
@@ -48,7 +51,7 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
   for (;;) {
     const { data, error } = await supabase
       .from('rcs_envios')
-      .select('campanha, status, clicado')
+      .select('campanha, status, clicado, fallback_status')
       .order('enviado_em', { ascending: true })
       .order('id', { ascending: true })
       .range(offset, offset + TAMANHO_PAGINA - 1)
@@ -73,6 +76,7 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
       if (STATUS_LIDA.has(envio.status)) r.lidas++
     }
     if (envio.clicado || envio.status === 'clicked') r.clicados++
+    if (envio.fallback_status) r.fallbackEnviados++
   }
   return resumo
 }

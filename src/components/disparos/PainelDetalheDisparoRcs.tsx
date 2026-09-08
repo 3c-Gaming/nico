@@ -9,7 +9,7 @@ import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
 import { renderizarRcsContent } from '@/lib/rcs/template'
-import { CUSTO_RCS_POR_ENVIO } from '@/lib/rcs/tipos'
+import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { RcsSuggestionChips } from './RcsSuggestionChips'
 import type { Disparo } from '@/types'
 
@@ -34,6 +34,7 @@ interface ResumoRcs {
   lidas: number
   clicados: number
   falhas: number
+  fallbackEnviados: number
 }
 
 function corStatus(status: string): string {
@@ -176,14 +177,17 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     (e) => e.fallback_status === 'delivered' || e.fallback_status === 'read',
   ).length
 
-  // RCS é cobrado só pelo entregue — falha é reembolsada. Enquanto ninguém foi confirmado
+  // RCS é cobrado só pelo entregue — falha é reembolsada. O SMS de fallback (dos que não
+  // receberam RCS) custa ~R$ 0,078/número e soma no total. Enquanto ninguém foi confirmado
   // como entregue, mostra o teto (base × custo) como estimativa.
   const custoUnit = disparo?.custoPorEnvio ?? CUSTO_RCS_POR_ENVIO
-  const custoCobrado = entregues * custoUnit
+  const custoRcs = entregues * custoUnit
+  const custoFallback = (resumo?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS
+  const custoCobrado = custoRcs + custoFallback
   const custoEstimado = base * custoUnit
 
   // Resultado na casa (Reg/FTD/CPA) — mesma lógica do SMS: casa vem da UTM (Superbet) ou do
-  // PID (BetMGM) gravado no disparo. Custo por unidade = o cobrado do RCS (só entregue).
+  // PID (BetMGM) gravado no disparo. Custo = RCS entregue + SMS de fallback.
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo?.utm ? 'superbet' : disparo?.betmgmPid ? 'betmgm' : null
   const { resultado: tracking, carregando: carregandoTracking, custo: custoTracking } = useResultadoDisparo({
     utmValor: disparo?.utm || disparo?.betmgmPid,
@@ -191,6 +195,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     data: disparo?.dataDisparo,
     entregues,
     custoPorUnidade: custoUnit,
+    custoExtra: custoFallback,
   })
 
   const estagios: EstagioFunil[] = disparo ? [
@@ -296,12 +301,17 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   </div>
                   <div>
                     <div className="text-[var(--text-muted)]">Custo cobrado</div>
-                    <div className="text-[var(--text-primary)]">
-                      R$ {custoCobrado.toFixed(2)}
-                      <span className="text-[var(--text-muted)]"> ({entregues} entregue{entregues === 1 ? '' : 's'} × {custoUnit.toFixed(2)})</span>
+                    <div className="text-[var(--text-primary)]">R$ {custoCobrado.toFixed(2)}</div>
+                    <div className="text-[10px] text-[var(--text-muted)]">
+                      RCS: {entregues} entregue{entregues === 1 ? '' : 's'} × {custoUnit.toFixed(2)} = R$ {custoRcs.toFixed(2)}
                     </div>
+                    {custoFallback > 0 && (
+                      <div className="text-[10px] text-sky-400/90">
+                        Fallback SMS: {resumo?.fallbackEnviados} × {CUSTO_FALLBACK_SMS.toFixed(3)} = R$ {custoFallback.toFixed(2)}
+                      </div>
+                    )}
                     {falhas > 0 && (
-                      <div className="text-[10px] text-[var(--text-muted)]">{falhas} falha(s) — reembolsado, não cobra</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{falhas} falha(s) RCS — reembolsado</div>
                     )}
                     {entregues === 0 && (
                       <div className="text-[10px] text-[var(--text-muted)]">estimado até R$ {custoEstimado.toFixed(2)}</div>

@@ -14,6 +14,7 @@ import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { nomeCurto } from '@/lib/resultadoDisparo'
+import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
@@ -140,24 +141,30 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
   const utmValor = disparo.utm || disparo.betmgmPid
   const daxx = daxxCampanhas.find((c) => c.id === (disparo.daxxCampanhaId ?? disparo.templateDaxx?.id))
 
-  // RCS só é cobrado pelo que é ENTREGUE (falha = reembolso), então o custo tem que sair da
-  // contagem real de entregues (/api/rcs/resumo), não da base. SMS mantém base × custo digitado.
-  const [rcsEntregues, setRcsEntregues] = useState<number | null>(null)
+  // RCS só é cobrado pelo que é ENTREGUE (falha = reembolso) + o SMS de fallback dos que não
+  // receberam RCS (~R$ 0,078/número). Tudo sai do /api/rcs/resumo, não da base. SMS mantém
+  // base × custo digitado.
+  const [rcsResumo, setRcsResumo] = useState<{ entregues: number; fallbackEnviados: number } | null>(null)
   useEffect(() => {
     if (disparo.canal !== 'rcs') return
     let cancel = false
     fetch('/api/rcs/resumo')
       .then((r) => (r.ok ? r.json() : { resumo: {} }))
-      .then((json) => { if (!cancel) setRcsEntregues(json.resumo?.[disparo.nomenclatura]?.entregues ?? 0) })
+      .then((json) => {
+        if (cancel) return
+        const c = json.resumo?.[disparo.nomenclatura]
+        setRcsResumo({ entregues: c?.entregues ?? 0, fallbackEnviados: c?.fallbackEnviados ?? 0 })
+      })
       .catch(() => {})
     return () => { cancel = true }
   }, [disparo.canal, disparo.nomenclatura])
 
   const canalDireto = disparo.canal === 'sms' || disparo.canal === 'rcs'
   const entregues =
-    disparo.canal === 'rcs' ? (rcsEntregues ?? 0)
+    disparo.canal === 'rcs' ? (rcsResumo?.entregues ?? 0)
     : disparo.canal === 'sms' ? disparo.base.totalRegistros
     : daxx?.entregues
+  const custoExtra = disparo.canal === 'rcs' ? (rcsResumo?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS : 0
 
   const { resultado, carregando, custo, receita, roi } = useResultadoDisparo({
     utmValor,
@@ -165,6 +172,7 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
     data: disparo.dataDisparo,
     entregues,
     custoPorUnidade: canalDireto ? disparo.custoPorEnvio : undefined,
+    custoExtra,
   })
 
   // Leads hoje: mesma tag do fluxo(s) vinculado(s) ao disparo (se houver), via LeadHub —

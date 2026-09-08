@@ -12,9 +12,12 @@ import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
 import { PainelDetalheDisparoSms, type ResumoCampanhaSms } from '@/components/disparos/PainelDetalheDisparoSms'
 import { PainelDetalheDisparoRcs } from '@/components/disparos/PainelDetalheDisparoRcs'
+import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import type { Disparo } from '@/types'
 
-function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoCampanhaSms; onVerDetalhes: (disparo: Disparo) => void }) {
+type ResumoLinha = ResumoCampanhaSms & { fallbackEnviados?: number }
+
+function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoLinha; onVerDetalhes: (disparo: Disparo) => void }) {
   const { toggle: togglePin, isPinned } = usePinnedDisparos()
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
   // RCS é cobrado só pelo entregue (falha = reembolso) — custo sai da contagem real de
@@ -22,12 +25,15 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
   const entreguesParaCusto = disparo.canal === 'rcs'
     ? (resumoSms?.entregues ?? 0)
     : disparo.base.totalRegistros
+  // RCS que caiu pro SMS de fallback custa ~R$ 0,078 por número — soma no total.
+  const custoFallback = disparo.canal === 'rcs' ? (resumoSms?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS : 0
   const { resultado, carregando, custo } = useResultadoDisparo({
     utmValor: disparo.utm || disparo.betmgmPid,
     casa: casaAtiva,
     data: disparo.dataDisparo,
     entregues: entreguesParaCusto,
     custoPorUnidade: disparo.custoPorEnvio,
+    custoExtra: custoFallback,
   })
 
   return (
@@ -98,7 +104,7 @@ export default function DisparosPage() {
   const [busca, setBusca] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
-  const [resumoSms, setResumoSms] = useState<Record<string, ResumoCampanhaSms>>({})
+  const [resumoSms, setResumoSms] = useState<Record<string, ResumoLinha>>({})
   const [disparoSelecionado, setDisparoSelecionado] = useState<Disparo | null>(null)
 
   useEffect(() => {
@@ -111,9 +117,9 @@ export default function DisparosPage() {
         fetch('/api/rcs/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
       ]).then(([sms, rcs]) => {
         if (cancel) return
-        const merged: Record<string, ResumoCampanhaSms> = { ...(sms.resumo ?? {}) }
-        for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, { total: number; enviados: number; entregues: number; clicados?: number; falhas: number }>)) {
-          merged[campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, clicados: r.clicados ?? 0, falhas: r.falhas }
+        const merged: Record<string, ResumoLinha> = { ...(sms.resumo ?? {}) }
+        for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, { total: number; enviados: number; entregues: number; clicados?: number; falhas: number; fallbackEnviados?: number }>)) {
+          merged[campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, clicados: r.clicados ?? 0, falhas: r.falhas, fallbackEnviados: r.fallbackEnviados ?? 0 }
         }
         setResumoSms(merged)
       })

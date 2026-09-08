@@ -18,7 +18,7 @@ import type {
   RcsMediaHeight,
   RcsCardOrientation,
 } from '@/lib/rcs/tipos'
-import { CUSTO_RCS_POR_ENVIO, LIMITE_FALLBACK_TEXT } from '@/lib/rcs/tipos'
+import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS, LIMITE_FALLBACK_TEXT } from '@/lib/rcs/tipos'
 import { renderizarRcsContent, extrairVariaveisRcs, validarRcsContent, validarFallback } from '@/lib/rcs/template'
 import { RcsSuggestionChips } from '@/components/disparos/RcsSuggestionChips'
 import { useConfirm } from '@/components/ui/useConfirm'
@@ -775,6 +775,7 @@ export default function RcsCompletoPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--text-muted)]">
               {total} envio(s) · R$ {CUSTO_RCS_POR_ENVIO.toFixed(2)} por entregue · teto <strong className="text-[var(--text-primary)]">R$ {custoTeto.toFixed(2)}</strong> <span className="text-[var(--text-muted)]">(falha não é cobrada)</span>
+              {fallbackOn && <span className="text-[var(--text-muted)]"> · + R$ {CUSTO_FALLBACK_SMS.toFixed(3)} por SMS de fallback</span>}
             </span>
             <Button onClick={handleEnviar} loading={enviando} disabled={!podeEnviar}>
               {agendar ? <CalendarClock size={16} /> : <Send size={16} />}
