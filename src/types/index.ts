@@ -330,6 +330,7 @@ export interface Disparo {
    * chegar. O Agent ID (`from`) vem do ambiente (SOLVEFY_RCS_AGENT_ID). */
   rcsTemplateId?: string
   rcsConteudo?: import('@/lib/rcs/tipos').RcsContent
+  rcsFallback?: import('@/lib/rcs/tipos').RcsSmsFallback
   rcsDestinatarios?: { telefone: string; variables?: Record<string, string> }[]
 }
 

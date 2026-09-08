@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/db/supabase'
 import { enviarCampanhaRcs } from '@/lib/rcs/campanha'
-import { validarRcsContent } from '@/lib/rcs/template'
-import type { RcsContent, DestinatarioRcs } from '@/lib/rcs/tipos'
+import { validarRcsContent, validarFallback } from '@/lib/rcs/template'
+import type { RcsContent, RcsSmsFallback, DestinatarioRcs } from '@/lib/rcs/tipos'
 
 interface EnviarBody {
   campanha: string
   /** Um dos dois: o content inline, ou o id de um template salvo. */
   conteudo?: RcsContent
   templateId?: string
+  fallback?: RcsSmsFallback | null
   destinatarios: DestinatarioRcs[]
 }
 
-async function resolverConteudo(body: EnviarBody): Promise<RcsContent | null> {
-  if (body.conteudo) return body.conteudo
-  if (!body.templateId) return null
+async function resolver(body: EnviarBody): Promise<{ conteudo: RcsContent | null; fallback: RcsSmsFallback | null }> {
+  if (body.conteudo) return { conteudo: body.conteudo, fallback: body.fallback ?? null }
+  if (!body.templateId) return { conteudo: null, fallback: body.fallback ?? null }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getSupabase() as any
-  if (!supabase) return null
-  const { data } = await supabase.from('rcs_templates').select('conteudo').eq('id', body.templateId).single()
-  return (data?.conteudo as RcsContent) ?? null
+  if (!supabase) return { conteudo: null, fallback: null }
+  const { data } = await supabase.from('rcs_templates').select('conteudo, fallback').eq('id', body.templateId).single()
+  return {
+    conteudo: (data?.conteudo as RcsContent) ?? null,
+    fallback: (body.fallback ?? (data?.fallback as RcsSmsFallback) ?? null),
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -29,8 +33,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'campanha e destinatarios são obrigatórios' }, { status: 400 })
     }
 
-    const conteudo = await resolverConteudo(body)
-    const erros = validarRcsContent(conteudo)
+    const { conteudo, fallback } = await resolver(body)
+    const erros = [...validarRcsContent(conteudo), ...validarFallback(fallback)]
     if (erros.length) return NextResponse.json({ error: erros.join('; ') }, { status: 400 })
 
     const callbackUrl = `${request.nextUrl.origin}/api/rcs/webhook`
@@ -38,6 +42,7 @@ export async function POST(request: NextRequest) {
     const resultado = await enviarCampanhaRcs({
       campanha: body.campanha,
       conteudo: conteudo!,
+      fallback: fallback ?? undefined,
       destinatarios: body.destinatarios,
       callbackUrl,
     })

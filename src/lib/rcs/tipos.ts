@@ -23,11 +23,23 @@ export type RcsContent =
   | { type: 'text'; text: string; suggestions?: RcsSuggestion[] }
   | { type: 'card'; card: RcsCard }
 
+/** Fallback SMS nativo da Solvefy — disparado pelo cpaas quando o RCS não é entregue.
+ * `text` aceita {{variavel}} e {{link}} (o link é a URL do 1º botão OPEN_URL do card). */
+export interface RcsSmsFallback {
+  enabled: boolean
+  from: string
+  text: string
+}
+
+/** Limite do `fallback.text` na Solvefy. */
+export const LIMITE_FALLBACK_TEXT = 1377
+
 export interface RcsTemplate {
   id: string
   nome: string
   tipo: 'text' | 'card'
   conteudo: RcsContent
+  fallback?: RcsSmsFallback
   criadoEm?: string
 }
 

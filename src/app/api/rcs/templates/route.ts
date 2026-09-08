@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/db/supabase'
-import { validarRcsContent } from '@/lib/rcs/template'
-import type { RcsContent } from '@/lib/rcs/tipos'
+import { validarRcsContent, validarFallback } from '@/lib/rcs/template'
+import type { RcsContent, RcsSmsFallback } from '@/lib/rcs/tipos'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRow(r: any) {
-  return { id: r.id, nome: r.nome, tipo: r.tipo, conteudo: r.conteudo, criadoEm: r.criado_em }
+  return { id: r.id, nome: r.nome, tipo: r.tipo, conteudo: r.conteudo, fallback: r.fallback ?? null, criadoEm: r.criado_em }
+}
+
+function normalizarFallback(f: unknown): RcsSmsFallback | null {
+  if (!f || typeof f !== 'object') return null
+  const o = f as Record<string, unknown>
+  if (!o.enabled) return null
+  return { enabled: true, from: String(o.from ?? '').trim(), text: String(o.text ?? '') }
 }
 
 export async function GET() {
@@ -26,9 +33,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const nome = String(body.nome ?? '').trim()
   const conteudo = body.conteudo as RcsContent | undefined
+  const fallback = normalizarFallback(body.fallback)
 
   if (!nome) return NextResponse.json({ error: 'nome é obrigatório' }, { status: 400 })
-  const erros = validarRcsContent(conteudo)
+  const erros = [...validarRcsContent(conteudo), ...validarFallback(fallback)]
   if (erros.length) return NextResponse.json({ error: erros.join('; ') }, { status: 400 })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('rcs_templates')
-    .insert({ nome, tipo: conteudo!.type, conteudo })
+    .insert({ nome, tipo: conteudo!.type, conteudo, fallback })
     .select()
     .single()
 

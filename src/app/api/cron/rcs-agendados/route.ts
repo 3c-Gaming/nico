@@ -117,6 +117,7 @@ export async function GET(request: Request) {
       const resultado = await enviarCampanhaRcs({
         campanha: disparo.nomenclatura,
         conteudo: disparo.rcsConteudo,
+        fallback: disparo.rcsFallback,
         destinatarios: lote,
         callbackUrl,
       })

@@ -20,6 +20,7 @@ interface EnvioRcs {
   status: string
   clicado?: boolean
   erro?: string | null
+  fallback_status?: string | null
 }
 
 const FALHA = new Set(['erro', 'failed', 'undelivered'])
@@ -170,6 +171,10 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   const motivosFalha = Array.from(
     new Set(falhasRows.filter((e) => e.erro).map((e) => e.erro as string)),
   )
+  const fallbackTentado = falhasRows.filter((e) => e.fallback_status).length
+  const fallbackEntregue = falhasRows.filter(
+    (e) => e.fallback_status === 'delivered' || e.fallback_status === 'read',
+  ).length
 
   // RCS é cobrado só pelo entregue — falha é reembolsada. Enquanto ninguém foi confirmado
   // como entregue, mostra o teto (base × custo) como estimativa.
@@ -254,6 +259,11 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                       <div key={i} className="pl-2">• {m}</div>
                     ))}
                   </div>
+                )}
+                {fallbackTentado > 0 && (
+                  <p className="text-[11px] text-sky-400">
+                    Fallback SMS: {fallbackEntregue}/{fallbackTentado} entregue(s)
+                  </p>
                 )}
               </section>
 
@@ -343,6 +353,9 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                             </div>
                             {e.erro && FALHA.has(e.status) && (
                               <div className="text-[10px] text-[var(--error)]/80 pl-1 font-sans">{e.erro}</div>
+                            )}
+                            {e.fallback_status && (
+                              <div className="text-[10px] text-sky-400/90 pl-1 font-sans">→ SMS: {e.fallback_status}</div>
                             )}
                           </div>
                         ))}

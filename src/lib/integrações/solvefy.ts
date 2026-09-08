@@ -107,11 +107,20 @@ export interface EnviarRcsParams {
   content: Record<string, unknown>
   reference?: string
   callbackUrl?: string
+  /** Fallback SMS nativo da Solvefy — disparado por eles quando o RCS não entrega. */
+  fallback?: { enabled: boolean; channel: 'sms'; from: string; text: string }
+  /** Objeto livre que a Solvefy devolve inalterado em TODOS os webhooks — usamos pra correlação. */
+  metadata?: Record<string, unknown>
 }
 
 export async function enviarRcs(params: EnviarRcsParams): Promise<EnviarSmsResultado> {
   if (!API_KEY) return { ok: false, error: 'SOLVEFY_API_KEY não configurado' }
   if (!params.from) return { ok: false, error: 'SOLVEFY_RCS_AGENT_ID não configurado' }
+
+  const fallback =
+    params.fallback?.enabled && params.fallback.text && params.fallback.from
+      ? { enabled: true, channel: 'sms', from: params.fallback.from, text: params.fallback.text }
+      : undefined
 
   const res = await fetch(`${BASE_URL}${RCS_ENDPOINT}`, {
     method: 'POST',
@@ -122,6 +131,8 @@ export async function enviarRcs(params: EnviarRcsParams): Promise<EnviarSmsResul
       content: params.content,
       reference: params.reference,
       callbackUrl: params.callbackUrl,
+      fallback,
+      metadata: params.metadata,
     }),
   })
 

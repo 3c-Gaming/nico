@@ -1,16 +1,24 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/db/supabase'
-import { validarRcsContent } from '@/lib/rcs/template'
-import type { RcsContent } from '@/lib/rcs/tipos'
+import { validarRcsContent, validarFallback } from '@/lib/rcs/template'
+import type { RcsContent, RcsSmsFallback } from '@/lib/rcs/tipos'
+
+function normalizarFallback(f: unknown): RcsSmsFallback | null {
+  if (!f || typeof f !== 'object') return null
+  const o = f as Record<string, unknown>
+  if (!o.enabled) return null
+  return { enabled: true, from: String(o.from ?? '').trim(), text: String(o.text ?? '') }
+}
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   const nome = String(body.nome ?? '').trim()
   const conteudo = body.conteudo as RcsContent | undefined
+  const fallback = normalizarFallback(body.fallback)
 
   if (!nome) return NextResponse.json({ error: 'nome é obrigatório' }, { status: 400 })
-  const erros = validarRcsContent(conteudo)
+  const erros = [...validarRcsContent(conteudo), ...validarFallback(fallback)]
   if (erros.length) return NextResponse.json({ error: erros.join('; ') }, { status: 400 })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,14 +27,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   const { data, error } = await supabase
     .from('rcs_templates')
-    .update({ nome, tipo: conteudo!.type, conteudo })
+    .update({ nome, tipo: conteudo!.type, conteudo, fallback })
     .eq('id', id)
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 502 })
   return NextResponse.json({
-    template: { id: data.id, nome: data.nome, tipo: data.tipo, conteudo: data.conteudo, criadoEm: data.criado_em },
+    template: { id: data.id, nome: data.nome, tipo: data.tipo, conteudo: data.conteudo, fallback: data.fallback ?? null, criadoEm: data.criado_em },
   })
 }
 

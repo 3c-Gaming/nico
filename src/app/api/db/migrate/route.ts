@@ -64,6 +64,7 @@ export async function POST() {
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS telegram_destinatarios JSONB`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_template_id UUID`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_conteudo JSONB`,
+      `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_fallback JSONB`,
       `ALTER TABLE disparos ADD COLUMN IF NOT EXISTS rcs_destinatarios JSONB`,
       `CREATE TABLE IF NOT EXISTS rcs_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,6 +73,7 @@ export async function POST() {
         conteudo JSONB NOT NULL DEFAULT '{}'::jsonb,
         criado_em TIMESTAMP DEFAULT NOW()
       )`,
+      `ALTER TABLE rcs_templates ADD COLUMN IF NOT EXISTS fallback JSONB`,
       `CREATE TABLE IF NOT EXISTS rcs_envios (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         campanha TEXT,
@@ -84,6 +86,8 @@ export async function POST() {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_rcs_envios_campanha ON rcs_envios(campanha)`,
       `ALTER TABLE rcs_envios ADD COLUMN IF NOT EXISTS clicado BOOLEAN NOT NULL DEFAULT false`,
+      // status do SMS de fallback (nativo da Solvefy) quando o RCS não entrega — separado do `status` da jornada RCS.
+      `ALTER TABLE rcs_envios ADD COLUMN IF NOT EXISTS fallback_status TEXT`,
       // DROP antes do CREATE: o Postgres não deixa CREATE OR REPLACE mudar o nº de colunas de retorno.
       `DROP FUNCTION IF EXISTS rcs_resumo_por_campanha()`,
       `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()

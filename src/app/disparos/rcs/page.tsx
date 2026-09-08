@@ -13,11 +13,12 @@ import type { Disparo } from '@/types'
 import type {
   RcsContent,
   RcsSuggestion,
+  RcsSmsFallback,
   RcsMediaHeight,
   RcsCardOrientation,
 } from '@/lib/rcs/tipos'
-import { CUSTO_RCS_POR_ENVIO } from '@/lib/rcs/tipos'
-import { renderizarRcsContent, extrairVariaveisRcs, validarRcsContent } from '@/lib/rcs/template'
+import { CUSTO_RCS_POR_ENVIO, LIMITE_FALLBACK_TEXT } from '@/lib/rcs/tipos'
+import { renderizarRcsContent, extrairVariaveisRcs, validarRcsContent, validarFallback } from '@/lib/rcs/template'
 import { RcsSuggestionChips } from '@/components/disparos/RcsSuggestionChips'
 
 interface RcsTemplate {
@@ -25,6 +26,7 @@ interface RcsTemplate {
   nome: string
   tipo: 'text' | 'card'
   conteudo: RcsContent
+  fallback?: RcsSmsFallback | null
 }
 
 interface LinhaBase {
@@ -112,6 +114,11 @@ export default function RcsCompletoPage() {
   const [subindoImg, setSubindoImg] = useState(false)
   const fileImgRef = useRef<HTMLInputElement>(null)
 
+  // --- fallback SMS (nativo da Solvefy) ---
+  const [fallbackOn, setFallbackOn] = useState(false)
+  const [fallbackFrom, setFallbackFrom] = useState('solvefy')
+  const [fallbackText, setFallbackText] = useState('')
+
   // --- base / disparo ---
   const [campanha, setCampanha] = useState('')
   const [linhas, setLinhas] = useState<LinhaBase[]>([])
@@ -158,7 +165,12 @@ export default function RcsCompletoPage() {
     }
   }, [tipo, texto, cardTitle, cardDesc, mediaUrl, mediaHeight, orientation, suggestions])
 
+  const fallback: RcsSmsFallback | null = fallbackOn
+    ? { enabled: true, from: fallbackFrom.trim(), text: fallbackText }
+    : null
+
   const errosConteudo = useMemo(() => validarRcsContent(conteudo), [conteudo])
+  const errosFallback = validarFallback(fallback)
   const variaveisTemplate = useMemo(() => extrairVariaveisRcs(conteudo), [conteudo])
   const colunasBase = headers.filter((h) => h && h !== colTelefone)
   const previewContent = useMemo(
@@ -183,6 +195,9 @@ export default function RcsCompletoPage() {
       setOrientation(c.orientation ?? 'VERTICAL')
       setSuggestions(c.suggestions ?? [])
     }
+    setFallbackOn(!!t.fallback?.enabled)
+    setFallbackFrom(t.fallback?.from || 'solvefy')
+    setFallbackText(t.fallback?.text || '')
   }
 
   function novoTemplate() {
@@ -196,6 +211,9 @@ export default function RcsCompletoPage() {
     setMediaHeight('MEDIUM')
     setOrientation('VERTICAL')
     setSuggestions([])
+    setFallbackOn(false)
+    setFallbackFrom('solvefy')
+    setFallbackText('')
   }
 
   async function uploadImagem(file: File) {
@@ -218,13 +236,14 @@ export default function RcsCompletoPage() {
   async function salvarTemplate() {
     if (!nome.trim()) { addToast('error', 'Dê um nome ao template'); return }
     if (errosConteudo.length) { addToast('error', errosConteudo[0]); return }
+    if (errosFallback.length) { addToast('error', errosFallback[0]); return }
     setSalvandoTemplate(true)
     try {
       const url = templateSelId ? `/api/rcs/templates/${templateSelId}` : '/api/rcs/templates'
       const res = await fetch(url, {
         method: templateSelId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), conteudo }),
+        body: JSON.stringify({ nome: nome.trim(), conteudo, fallback }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar')
@@ -290,7 +309,8 @@ export default function RcsCompletoPage() {
   // Teto: só é cobrado o que for entregue (falha = reembolso). O custo real aparece no
   // painel de detalhe depois, conforme os webhooks de entrega chegam.
   const custoTeto = total * CUSTO_RCS_POR_ENVIO
-  const podeEnviar = campanha.trim().length > 1 && total > 0 && errosConteudo.length === 0 && !enviando
+  const podeEnviar =
+    campanha.trim().length > 1 && total > 0 && errosConteudo.length === 0 && errosFallback.length === 0 && !enviando
 
   async function criarRegistroDisparo(status: 'executado' | 'agendado'): Promise<Disparo | null> {
     const agora = new Date()
@@ -312,6 +332,7 @@ export default function RcsCompletoPage() {
       betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() || undefined : undefined,
       rcsTemplateId: templateSelId || undefined,
       rcsConteudo: conteudo,
+      rcsFallback: fallback ?? undefined,
       rcsDestinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
       criadoEm: agora.toISOString(),
       atualizadoEm: agora.toISOString(),
@@ -356,6 +377,7 @@ export default function RcsCompletoPage() {
         body: JSON.stringify({
           campanha: campanha.trim(),
           conteudo,
+          fallback,
           destinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
         }),
       })
@@ -577,11 +599,44 @@ export default function RcsCompletoPage() {
               ))}
             </div>
 
-            {errosConteudo.length > 0 && (
-              <p className="text-xs text-[var(--error)]">⚠ {errosConteudo.join(' · ')}</p>
+            {/* fallback SMS */}
+            <div className="space-y-2 border-t border-[var(--border)] pt-4">
+              <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] cursor-pointer w-fit">
+                <input type="checkbox" checked={fallbackOn} onChange={(e) => setFallbackOn(e.target.checked)} />
+                Fallback SMS quando não suportar RCS
+              </label>
+              {fallbackOn && (
+                <div className="space-y-2 pl-1">
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    A Solvefy manda esse SMS automaticamente se o RCS não for entregue. Aceita <code>{'{{variavel}}'}</code> e <code>{'{{link}}'}</code> (o <code>{'{{link}}'}</code> puxa a URL do 1º botão de link do card).
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[var(--text-muted)] shrink-0">Remetente</span>
+                    <input
+                      className={`${inputCls} h-8`}
+                      value={fallbackFrom}
+                      onChange={(e) => setFallbackFrom(e.target.value)}
+                      placeholder="solvefy"
+                    />
+                  </div>
+                  <textarea
+                    className={`${inputCls} h-24 py-2 resize-y`}
+                    value={fallbackText}
+                    onChange={(e) => setFallbackText(e.target.value)}
+                    placeholder="Oi {{nome}}! Não deu pra te mandar o card, mas a oferta continua: {{link}}"
+                  />
+                  <p className={`text-[10px] ${fallbackText.length > LIMITE_FALLBACK_TEXT ? 'text-[var(--error)]' : 'text-[var(--text-muted)]'}`}>
+                    {fallbackText.length}/{LIMITE_FALLBACK_TEXT}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {(errosConteudo.length > 0 || errosFallback.length > 0) && (
+              <p className="text-xs text-[var(--error)]">⚠ {[...errosConteudo, ...errosFallback].join(' · ')}</p>
             )}
 
-            <Button size="sm" onClick={salvarTemplate} loading={salvandoTemplate} disabled={errosConteudo.length > 0 || !nome.trim()}>
+            <Button size="sm" onClick={salvarTemplate} loading={salvandoTemplate} disabled={errosConteudo.length > 0 || errosFallback.length > 0 || !nome.trim()}>
               <Save size={14} /> {templateSelId ? 'Salvar alterações' : 'Salvar template'}
             </Button>
           </section>

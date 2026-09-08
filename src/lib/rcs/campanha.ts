@@ -4,8 +4,8 @@
 
 import { enviarRcs, SOLVEFY_RCS_AGENT_ID, normalizarTelefone } from '@/lib/integrações/solvefy'
 import { getSupabase } from '@/lib/db/supabase'
-import { renderizarRcsContent } from './template'
-import type { RcsContent, DestinatarioRcs, ResultadoEnvioRcs } from './tipos'
+import { renderizarRcsContent, renderizarFallbackText } from './template'
+import type { RcsContent, RcsSmsFallback, DestinatarioRcs, ResultadoEnvioRcs } from './tipos'
 
 export interface EnviarCampanhaRcsParams {
   campanha: string
@@ -13,6 +13,8 @@ export interface EnviarCampanhaRcsParams {
   from?: string
   /** Template com tokens {{variavel}} — resolvido por destinatário. */
   conteudo: RcsContent
+  /** Fallback SMS nativo da Solvefy — a copy é renderizada por destinatário ({{var}} + {{link}}). */
+  fallback?: RcsSmsFallback
   destinatarios: DestinatarioRcs[]
   callbackUrl: string
 }
@@ -50,12 +52,24 @@ export async function enviarCampanhaRcs(params: EnviarCampanhaRcsParams): Promis
         const telefone = normalizarTelefone(dest.telefone)
         const content = renderizarRcsContent(params.conteudo, dest.variables)
 
+        const fb =
+          params.fallback?.enabled && params.fallback.text && params.fallback.from
+            ? {
+                enabled: true as const,
+                channel: 'sms' as const,
+                from: params.fallback.from,
+                text: renderizarFallbackText(params.fallback, params.conteudo, dest.variables),
+              }
+            : undefined
+
         const resultado = await enviarRcs({
           from,
           to: telefone,
           content: content as unknown as Record<string, unknown>,
           reference: sanitizarReference(`${params.campanha}-${telefone}`),
           callbackUrl: params.callbackUrl,
+          fallback: fb,
+          metadata: { campanha: params.campanha, telefone },
         })
 
         if (supabase) {

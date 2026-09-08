@@ -1,4 +1,5 @@
-import type { RcsContent, RcsSuggestion, RcsCard } from './tipos'
+import type { RcsContent, RcsSuggestion, RcsCard, RcsSmsFallback } from './tipos'
+import { LIMITE_FALLBACK_TEXT } from './tipos'
 
 const TOKEN_RE = /\{\{([^}]+)\}\}/g
 
@@ -48,6 +49,35 @@ export function renderizarRcsContent(
   if (!card.media?.url) delete card.media
   if (!card.suggestions) delete card.suggestions
   return { type: 'card', card }
+}
+
+/** A URL do 1º botão OPEN_URL do content (pra resolver {{link}} na copy do fallback). */
+export function primeiroLinkRcs(conteudo: RcsContent): string | undefined {
+  const sug = conteudo.type === 'card' ? conteudo.card.suggestions : conteudo.suggestions
+  return sug?.find((s): s is Extract<RcsSuggestion, { type: 'OPEN_URL' }> => s.type === 'OPEN_URL')?.url
+}
+
+/** Renderiza o `fallback.text` por destinatário: resolve {{variavel}} e {{link}} (link = 1º
+ * botão OPEN_URL do card, também com as variáveis aplicadas). */
+export function renderizarFallbackText(
+  fallback: RcsSmsFallback,
+  conteudo: RcsContent,
+  variables?: Record<string, string>,
+): string {
+  const link = aplicar(primeiroLinkRcs(conteudo), variables) ?? ''
+  const comLink = fallback.text.replace(/\{\{\s*link\s*\}\}/gi, link)
+  return aplicar(comLink, variables) ?? ''
+}
+
+/** Valida a config do fallback SMS. Retorna lista de erros (vazia = ok / desligado). */
+export function validarFallback(fallback: RcsSmsFallback | null | undefined): string[] {
+  if (!fallback?.enabled) return []
+  const erros: string[] = []
+  if (!fallback.from?.trim()) erros.push('fallback: remetente do SMS é obrigatório')
+  if (!fallback.text?.trim()) erros.push('fallback: a copy do SMS é obrigatória')
+  if ((fallback.text?.length ?? 0) > LIMITE_FALLBACK_TEXT)
+    erros.push(`fallback: a copy passa de ${LIMITE_FALLBACK_TEXT} caracteres`)
+  return erros
 }
 
 /** Lista os nomes de variável referenciados no template (pra casar com as colunas da base). */
