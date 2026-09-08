@@ -5,18 +5,27 @@ export interface ResumoCampanhaRcs {
   total: number
   enviados: number
   entregues: number
+  lidas: number
+  clicados: number
   falhas: number
 }
 
 const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered'])
-const STATUS_ENTREGUE = new Set(['delivered', 'read'])
+const STATUS_ENTREGUE = new Set(['delivered', 'read', 'clicked'])
+const STATUS_LIDA = new Set(['read', 'clicked'])
 const TAMANHO_PAGINA = 1000
-const CACHE_TTL_MS = 30_000
+// Curto — os webhooks da Solvefy atualizam os envios a todo momento e a listagem de Disparos
+// re-busca em intervalo; não faz sentido segurar o resumo mais que isso.
+const CACHE_TTL_MS = 4_000
 
-interface EnvioResumo { campanha: string | null; status: string }
-interface LinhaResumoSql { campanha: string; total: number; enviados: number; entregues: number; falhas: number }
+interface EnvioResumo { campanha: string | null; status: string; clicado: boolean | null }
+interface LinhaResumoSql { campanha: string; total: number; enviados: number; entregues: number; lidas: number; clicados: number; falhas: number }
 
 let cache: { resumo: Record<string, ResumoCampanhaRcs>; expiraEm: number } | null = null
+
+function vazio(): ResumoCampanhaRcs {
+  return { total: 0, enviados: 0, entregues: 0, lidas: 0, clicados: 0, falhas: 0 }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buscarViaRpc(supabase: any): Promise<Record<string, ResumoCampanhaRcs> | null> {
@@ -24,7 +33,10 @@ async function buscarViaRpc(supabase: any): Promise<Record<string, ResumoCampanh
   if (error) return null
   const resumo: Record<string, ResumoCampanhaRcs> = {}
   for (const r of (data ?? []) as LinhaResumoSql[]) {
-    resumo[r.campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, falhas: r.falhas }
+    resumo[r.campanha] = {
+      total: r.total, enviados: r.enviados, entregues: r.entregues,
+      lidas: r.lidas ?? 0, clicados: r.clicados ?? 0, falhas: r.falhas,
+    }
   }
   return resumo
 }
@@ -36,7 +48,7 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
   for (;;) {
     const { data, error } = await supabase
       .from('rcs_envios')
-      .select('campanha, status')
+      .select('campanha, status, clicado')
       .order('enviado_em', { ascending: true })
       .order('id', { ascending: true })
       .range(offset, offset + TAMANHO_PAGINA - 1)
@@ -50,7 +62,7 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
   for (const envio of todos) {
     const campanha = envio.campanha
     if (!campanha) continue
-    if (!resumo[campanha]) resumo[campanha] = { total: 0, enviados: 0, entregues: 0, falhas: 0 }
+    if (!resumo[campanha]) resumo[campanha] = vazio()
     const r = resumo[campanha]
     r.total++
     if (STATUS_FALHA.has(envio.status)) {
@@ -58,12 +70,14 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
     } else {
       r.enviados++
       if (STATUS_ENTREGUE.has(envio.status)) r.entregues++
+      if (STATUS_LIDA.has(envio.status)) r.lidas++
     }
+    if (envio.clicado || envio.status === 'clicked') r.clicados++
   }
   return resumo
 }
 
-/** GET /api/rcs/resumo — enviados/entregues/falhas por campanha, pra listagem de Disparos. */
+/** GET /api/rcs/resumo — enviados/entregues/lidas/cliques/falhas por campanha, pra listagem de Disparos. */
 export async function GET() {
   if (cache && cache.expiraEm > Date.now()) {
     return NextResponse.json({ resumo: cache.resumo })

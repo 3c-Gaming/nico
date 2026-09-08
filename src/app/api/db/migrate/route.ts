@@ -83,15 +83,18 @@ export async function POST() {
         atualizado_em TIMESTAMP DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_rcs_envios_campanha ON rcs_envios(campanha)`,
+      `ALTER TABLE rcs_envios ADD COLUMN IF NOT EXISTS clicado BOOLEAN NOT NULL DEFAULT false`,
       `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()
-      RETURNS TABLE(campanha TEXT, total INT, enviados INT, entregues INT, falhas INT)
+      RETURNS TABLE(campanha TEXT, total INT, enviados INT, entregues INT, lidas INT, clicados INT, falhas INT)
       LANGUAGE sql STABLE
       AS $$
         SELECT
           campanha,
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status NOT IN ('erro', 'failed', 'undelivered'))::int AS enviados,
-          COUNT(*) FILTER (WHERE status IN ('delivered', 'read'))::int AS entregues,
+          COUNT(*) FILTER (WHERE status IN ('delivered', 'read', 'clicked'))::int AS entregues,
+          COUNT(*) FILTER (WHERE status IN ('read', 'clicked'))::int AS lidas,
+          COUNT(*) FILTER (WHERE clicado OR status = 'clicked')::int AS clicados,
           COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered'))::int AS falhas
         FROM rcs_envios
         WHERE campanha IS NOT NULL

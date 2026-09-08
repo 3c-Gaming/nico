@@ -103,17 +103,24 @@ export default function DisparosPage() {
 
   useEffect(() => {
     // SMS e RCS têm resumos separados (endpoints diferentes) — junta num mapa só por
-    // nomenclatura. RCS não tem "clicados" (é read/lidas), então cai como 0 na coluna.
-    Promise.all([
-      fetch('/api/sms/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
-      fetch('/api/rcs/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
-    ]).then(([sms, rcs]) => {
-      const merged: Record<string, ResumoCampanhaSms> = { ...(sms.resumo ?? {}) }
-      for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, Omit<ResumoCampanhaSms, 'clicados'>>)) {
-        merged[campanha] = { ...r, clicados: 0 }
-      }
-      setResumoSms(merged)
-    })
+    // nomenclatura. Re-busca em intervalo pra refletir os webhooks da Solvefy chegando.
+    let cancel = false
+    const puxar = () => {
+      Promise.all([
+        fetch('/api/sms/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
+        fetch('/api/rcs/resumo').then((r) => r.ok ? r.json() : { resumo: {} }).catch(() => ({ resumo: {} })),
+      ]).then(([sms, rcs]) => {
+        if (cancel) return
+        const merged: Record<string, ResumoCampanhaSms> = { ...(sms.resumo ?? {}) }
+        for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, { total: number; enviados: number; entregues: number; clicados?: number; falhas: number }>)) {
+          merged[campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, clicados: r.clicados ?? 0, falhas: r.falhas }
+        }
+        setResumoSms(merged)
+      })
+    }
+    puxar()
+    const id = setInterval(puxar, 20_000)
+    return () => { cancel = true; clearInterval(id) }
   }, [])
 
   const campanhas = useMemo(

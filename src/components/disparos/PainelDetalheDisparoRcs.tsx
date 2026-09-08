@@ -18,10 +18,11 @@ const LARGURA = 440
 interface EnvioRcs {
   telefone: string
   status: string
+  clicado?: boolean
 }
 
 const FALHA = new Set(['erro', 'failed', 'undelivered'])
-const ENTREGUE = new Set(['delivered', 'read'])
+const ENTREGUE = new Set(['delivered', 'read', 'clicked'])
 
 function corStatus(status: string): string {
   if (status === 'read') return 'text-violet-400'
@@ -77,14 +78,20 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
 
   const campanha = disparo?.nomenclatura
 
+  // Fetch inicial + polling a cada 12s enquanto o painel está aberto. O GET só lê o que os
+  // webhooks da Solvefy já gravaram (não bate na Solvefy), então é barato manter atualizado.
   useEffect(() => {
     if (!campanha) return
     let cancel = false
-    fetch(`/api/rcs/status?campanha=${encodeURIComponent(campanha)}`)
-      .then((r) => (r.ok ? r.json() : { envios: [] }))
-      .then((data) => { if (!cancel) { setEnvios((data.envios ?? []) as EnvioRcs[]); setCarregou(true) } })
-      .catch(() => { if (!cancel) setCarregou(true) })
-    return () => { cancel = true }
+    const puxar = () => {
+      fetch(`/api/rcs/status?campanha=${encodeURIComponent(campanha)}`)
+        .then((r) => (r.ok ? r.json() : { envios: [] }))
+        .then((data) => { if (!cancel) { setEnvios((data.envios ?? []) as EnvioRcs[]); setCarregou(true) } })
+        .catch(() => { if (!cancel) setCarregou(true) })
+    }
+    puxar()
+    const id = setInterval(puxar, 12_000)
+    return () => { cancel = true; clearInterval(id) }
   }, [campanha])
 
   async function atualizarStatus() {
@@ -108,7 +115,9 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   const base = disparo?.base.totalRegistros ?? disparo?.rcsDestinatarios?.length ?? 0
   const enviados = envios.filter((e) => !FALHA.has(e.status)).length
   const entregues = envios.filter((e) => ENTREGUE.has(e.status)).length
-  const lidas = envios.filter((e) => e.status === 'read').length
+  const lidas = envios.filter((e) => e.status === 'read' || e.status === 'clicked').length
+  // conta tanto a flag `clicado` (webhook novo) quanto status legado 'clicked' (webhook antigo)
+  const cliques = envios.filter((e) => e.clicado || e.status === 'clicked').length
   const falhas = envios.filter((e) => FALHA.has(e.status)).length
 
   // RCS é cobrado só pelo entregue — falha é reembolsada. Enquanto ninguém foi confirmado
@@ -133,6 +142,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     { tag: 'Enviados', contagem: enviados || envios.length },
     { tag: 'Entregues', contagem: entregues },
     { tag: 'Lidas', contagem: lidas },
+    { tag: 'Cliques', contagem: cliques },
   ] : []
 
   return (
@@ -239,8 +249,8 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                     <div className="text-[var(--text-primary)]">{disparo.dataDisparo} {disparo.horarioDisparo}</div>
                   </div>
                   <div>
-                    <div className="text-[var(--text-muted)]">Entregues / Lidas</div>
-                    <div className="text-[var(--text-primary)]">{entregues} / {lidas}</div>
+                    <div className="text-[var(--text-muted)]">Entregues / Lidas / Cliques</div>
+                    <div className="text-[var(--text-primary)]">{entregues} / {lidas} / {cliques}</div>
                   </div>
                   {casaAtiva && (
                     <div>
@@ -258,7 +268,10 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                     {envios.map((e, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <span className="text-[var(--text-secondary)]">{e.telefone}</span>
-                        <span className={corStatus(e.status)}>{e.status}</span>
+                        <span className="flex items-center gap-1.5">
+                          {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
+                          <span className={corStatus(e.status)}>{e.status}</span>
+                        </span>
                       </div>
                     ))}
                   </div>
