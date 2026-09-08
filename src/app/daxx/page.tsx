@@ -50,9 +50,6 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
           >
             <Pin size={12} className={isPinned(disparo.id) ? 'text-amber-400' : 'text-[var(--text-muted)]'} />
           </button>
-          <span className="font-medium text-[var(--text-primary)] max-w-[200px] truncate" title={disparo.nomenclatura}>
-            {disparo.nomenclatura}
-          </span>
           <span
             className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide ${
               disparo.canal === 'rcs'
@@ -61,6 +58,9 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
             }`}
           >
             {disparo.canal === 'rcs' ? 'RCS' : 'SMS'}
+          </span>
+          <span className="font-medium text-[var(--text-primary)] max-w-[200px] truncate" title={disparo.nomenclatura}>
+            {disparo.nomenclatura}
           </span>
         </div>
       </td>
