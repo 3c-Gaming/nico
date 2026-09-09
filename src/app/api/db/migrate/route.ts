@@ -91,7 +91,10 @@ export async function POST() {
       // DROP antes do CREATE: o Postgres não deixa CREATE OR REPLACE mudar o nº de colunas de retorno.
       `DROP FUNCTION IF EXISTS rcs_resumo_por_campanha()`,
       `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()
-      RETURNS TABLE(campanha TEXT, total INT, enviados INT, entregues INT, lidas INT, clicados INT, falhas INT, fallback_enviados INT)
+      RETURNS TABLE(
+        campanha TEXT, total INT, enviados INT, entregues INT, lidas INT, clicados INT, falhas INT,
+        fallback_enviados INT, recebeu_rcs INT, recebeu_sms INT, nao_recebeu INT, processando INT
+      )
       LANGUAGE sql STABLE
       AS $$
         SELECT
@@ -103,7 +106,17 @@ export async function POST() {
           COUNT(*) FILTER (WHERE status IN ('read', 'clicked'))::int AS lidas,
           COUNT(*) FILTER (WHERE clicado OR status = 'clicked')::int AS clicados,
           COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered', 'dropped'))::int AS falhas,
-          COUNT(*) FILTER (WHERE fallback_status IS NOT NULL)::int AS fallback_enviados
+          COUNT(*) FILTER (WHERE fallback_status IS NOT NULL)::int AS fallback_enviados,
+          -- buckets mutuamente exclusivos: cada número cai em exatamente 1
+          COUNT(*) FILTER (WHERE status IN ('delivered', 'read', 'clicked'))::int AS recebeu_rcs,
+          COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'read', 'clicked')
+                             AND fallback_status IN ('delivered', 'read'))::int AS recebeu_sms,
+          COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered', 'dropped')
+                             AND (fallback_status IS NULL OR fallback_status IN ('failed', 'undelivered', 'erro')))::int AS nao_recebeu,
+          COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'read', 'clicked')
+                             AND (fallback_status IS NULL OR fallback_status NOT IN ('delivered', 'read'))
+                             AND NOT (status IN ('erro', 'failed', 'undelivered', 'dropped')
+                                      AND (fallback_status IS NULL OR fallback_status IN ('failed', 'undelivered', 'erro'))))::int AS processando
         FROM rcs_envios
         WHERE campanha IS NOT NULL
         GROUP BY campanha;

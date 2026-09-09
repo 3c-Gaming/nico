@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { consultarStatusRcs } from '@/lib/integrações/solvefy'
 import { getSupabase } from '@/lib/db/supabase'
 
-const FALHA = ['erro', 'failed', 'undelivered']
+const FALHA = ['erro', 'failed', 'undelivered', 'dropped']
 // Estados que não mudam mais — para de reconsultar a Solvefy.
-const STATUS_FINAIS = ['read', 'clicked', 'failed', 'undelivered', 'erro']
+const STATUS_FINAIS = ['read', 'clicked', 'failed', 'undelivered', 'erro', 'dropped']
 // Teto de reconsultas por clique no botão — bases grandes têm milhares de pendentes e o
 // webhook é o caminho principal; isso aqui é só um empurrão.
 const MAX_REPOLL = 300

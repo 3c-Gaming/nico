@@ -38,6 +38,10 @@ interface ResumoRcs {
   clicados: number
   falhas: number
   fallbackEnviados: number
+  recebeuRcs: number
+  recebeuSms: number
+  naoRecebeu: number
+  processando: number
 }
 
 function corStatus(status: string): string {
@@ -45,6 +49,21 @@ function corStatus(status: string): string {
   if (status === 'delivered') return 'text-emerald-400'
   if (FALHA.has(status)) return 'text-[var(--error)]'
   return 'text-[var(--text-secondary)]'
+}
+
+function BucketLinha({ cor, label, hint, n, pct }: { cor: string; label: string; hint: string; n: number; pct: number }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cor }} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-[var(--text-primary)] font-medium">{label}</span>
+          <span className="text-xs font-mono text-[var(--text-secondary)] shrink-0">{formatNumero(n)} · {pct}%</span>
+        </div>
+        <p className="text-[10px] text-[var(--text-muted)] leading-tight">{hint}</p>
+      </div>
+    </div>
+  )
 }
 
 function Estatistica({ label, valor, cor }: { label: string; valor: string; cor?: string }) {
@@ -210,6 +229,13 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     (e) => e.fallback_status === 'delivered' || e.fallback_status === 'read',
   ).length
 
+  // "O que chegou no lead" — buckets mutuamente exclusivos (somam `total`).
+  const recebeuRcs = resumo?.recebeuRcs ?? entregues
+  const recebeuSms = resumo?.recebeuSms ?? 0
+  const naoRecebeu = resumo?.naoRecebeu ?? 0
+  const processando = resumo?.processando ?? 0
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
+
   // A Solvefy cobra por RCS SUBMETIDO (não só entregue), + o SMS de fallback (~R$ 0,078/nº).
   // `custoEntregue` é a alternativa (se os "dropped" forem reembolsados — a confirmar com a Solvefy).
   const custoUnit = disparo?.custoPorEnvio ?? CUSTO_RCS_POR_ENVIO
@@ -315,6 +341,24 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   </p>
                 )}
               </section>
+
+              {total > 0 && (
+                <section className="space-y-2.5">
+                  <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                    O que chegou no lead <span className="font-normal normal-case">(de {formatNumero(total)})</span>
+                  </h3>
+                  <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
+                    <BucketLinha cor="#22c55e" label="Recebeu RCS" n={recebeuRcs} pct={pct(recebeuRcs)}
+                      hint="o card completo (imagem + botões) renderizou no aparelho" />
+                    <BucketLinha cor="#38bdf8" label="Recebeu SMS (fallback)" n={recebeuSms} pct={pct(recebeuSms)}
+                      hint="aparelho não suporta RCS — caiu pro SMS e o SMS foi entregue" />
+                    <BucketLinha cor="var(--error)" label="Não recebeu nada" n={naoRecebeu} pct={pct(naoRecebeu)}
+                      hint="RCS falhou e o SMS de fallback também falhou (ou não tinha fallback)" />
+                    <BucketLinha cor="var(--text-muted)" label="Processando" n={processando} pct={pct(processando)}
+                      hint="ainda sem confirmação de entrega da Solvefy" />
+                  </div>
+                </section>
+              )}
 
               <section className="space-y-2">
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Resultado na casa</h3>
