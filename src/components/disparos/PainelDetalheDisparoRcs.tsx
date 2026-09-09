@@ -11,7 +11,8 @@ import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
-import { renderizarRcsContent } from '@/lib/rcs/template'
+import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs } from '@/lib/rcs/template'
+import type { RcsContent } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { RcsSuggestionChips } from './RcsSuggestionChips'
 import type { Disparo } from '@/types'
@@ -379,6 +380,29 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Mensagem enviada</h3>
                 <PreviewRcs disparo={disparo} />
               </section>
+
+              {disparo.rcsFallback?.enabled && (() => {
+                const conteudo = (disparo.rcsConteudo ?? { type: 'text', text: '' }) as RcsContent
+                const vars = disparo.rcsDestinatarios?.[0]?.variables
+                const link = primeiroLinkRcs(conteudo)
+                const exemplo = renderizarFallbackText(disparo.rcsFallback, conteudo, vars)
+                return (
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">SMS de fallback</h3>
+                    <div className="rounded-lg border border-sky-500/30 bg-sky-500/[0.04] p-3 space-y-2">
+                      <div className="text-[11px] text-[var(--text-muted)]">De: <span className="font-mono text-[var(--text-secondary)]">{disparo.rcsFallback.from}</span></div>
+                      <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words">{exemplo || <span className="text-[var(--text-muted)] italic">copy vazia</span>}</p>
+                      {link && (
+                        <div className="text-[10px] text-sky-400 break-all">🔗 {link}</div>
+                      )}
+                      <div className="text-[10px] text-[var(--text-muted)] pt-1 border-t border-[var(--border)]">
+                        Exemplo com as variáveis do 1º número. Template salvo:
+                        <div className="font-mono text-[var(--text-secondary)] whitespace-pre-wrap break-words mt-0.5">{disparo.rcsFallback.text}</div>
+                      </div>
+                    </div>
+                  </section>
+                )
+              })()}
 
               <section className="space-y-2">
                 <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Detalhes</h3>
