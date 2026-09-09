@@ -97,11 +97,12 @@ export async function POST() {
         SELECT
           campanha,
           COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status NOT IN ('erro', 'failed', 'undelivered'))::int AS enviados,
+          -- enviados = submetidos à Solvefy (tudo que saiu de 'queued'); é o que a Solvefy cobra
+          COUNT(*) FILTER (WHERE status <> 'queued')::int AS enviados,
           COUNT(*) FILTER (WHERE status IN ('delivered', 'read', 'clicked'))::int AS entregues,
           COUNT(*) FILTER (WHERE status IN ('read', 'clicked'))::int AS lidas,
           COUNT(*) FILTER (WHERE clicado OR status = 'clicked')::int AS clicados,
-          COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered'))::int AS falhas,
+          COUNT(*) FILTER (WHERE status IN ('erro', 'failed', 'undelivered', 'dropped'))::int AS falhas,
           COUNT(*) FILTER (WHERE fallback_status IS NOT NULL)::int AS fallback_enviados
         FROM rcs_envios
         WHERE campanha IS NOT NULL

@@ -12,7 +12,7 @@ export interface ResumoCampanhaRcs {
   fallbackEnviados: number
 }
 
-const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered'])
+const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered', 'dropped'])
 const STATUS_ENTREGUE = new Set(['delivered', 'read', 'clicked'])
 const STATUS_LIDA = new Set(['read', 'clicked'])
 const TAMANHO_PAGINA = 1000
@@ -68,13 +68,11 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
     if (!resumo[campanha]) resumo[campanha] = vazio()
     const r = resumo[campanha]
     r.total++
-    if (STATUS_FALHA.has(envio.status)) {
-      r.falhas++
-    } else {
-      r.enviados++
-      if (STATUS_ENTREGUE.has(envio.status)) r.entregues++
-      if (STATUS_LIDA.has(envio.status)) r.lidas++
-    }
+    // enviados = submetido à Solvefy (tudo que saiu de 'queued'); é o que a Solvefy cobra
+    if (envio.status !== 'queued') r.enviados++
+    if (STATUS_FALHA.has(envio.status)) r.falhas++
+    if (STATUS_ENTREGUE.has(envio.status)) r.entregues++
+    if (STATUS_LIDA.has(envio.status)) r.lidas++
     if (envio.clicado || envio.status === 'clicked') r.clicados++
     if (envio.fallback_status) r.fallbackEnviados++
   }

@@ -23,10 +23,10 @@ function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; 
   const { addToast } = useToast()
   const utmPid = disparo.utm || disparo.betmgmPid
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
-  // RCS é cobrado só pelo entregue (falha = reembolso) — custo sai da contagem real de
-  // entregues do resumo, não da base. SMS segue base × custo digitado.
+  // RCS: a Solvefy cobra por mensagem SUBMETIDA (não só entregue), então o custo sai da
+  // contagem de "enviados" do resumo. SMS segue base × custo digitado.
   const entreguesParaCusto = disparo.canal === 'rcs'
-    ? (resumoSms?.entregues ?? 0)
+    ? (resumoSms?.enviados ?? 0)
     : disparo.base.totalRegistros
   // RCS que caiu pro SMS de fallback custa ~R$ 0,078 por número — soma no total.
   const custoFallback = disparo.canal === 'rcs' ? (resumoSms?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS : 0

@@ -144,7 +144,7 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
   // RCS só é cobrado pelo que é ENTREGUE (falha = reembolso) + o SMS de fallback dos que não
   // receberam RCS (~R$ 0,078/número). Tudo sai do /api/rcs/resumo, não da base. SMS mantém
   // base × custo digitado.
-  const [rcsResumo, setRcsResumo] = useState<{ entregues: number; fallbackEnviados: number } | null>(null)
+  const [rcsResumo, setRcsResumo] = useState<{ enviados: number; fallbackEnviados: number } | null>(null)
   useEffect(() => {
     if (disparo.canal !== 'rcs') return
     let cancel = false
@@ -153,15 +153,16 @@ function DisparoPinadoRow({ disparo, daxxCampanhas, onUnpin, onVerDetalhes, onRe
       .then((json) => {
         if (cancel) return
         const c = json.resumo?.[disparo.nomenclatura]
-        setRcsResumo({ entregues: c?.entregues ?? 0, fallbackEnviados: c?.fallbackEnviados ?? 0 })
+        setRcsResumo({ enviados: c?.enviados ?? 0, fallbackEnviados: c?.fallbackEnviados ?? 0 })
       })
       .catch(() => {})
     return () => { cancel = true }
   }, [disparo.canal, disparo.nomenclatura])
 
   const canalDireto = disparo.canal === 'sms' || disparo.canal === 'rcs'
+  // RCS: a Solvefy cobra por mensagem submetida — usa "enviados", não "entregues".
   const entregues =
-    disparo.canal === 'rcs' ? (rcsResumo?.entregues ?? 0)
+    disparo.canal === 'rcs' ? (rcsResumo?.enviados ?? 0)
     : disparo.canal === 'sms' ? disparo.base.totalRegistros
     : daxx?.entregues
   const custoExtra = disparo.canal === 'rcs' ? (rcsResumo?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS : 0
