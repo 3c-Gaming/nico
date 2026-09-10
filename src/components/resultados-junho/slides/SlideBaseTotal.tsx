@@ -1,9 +1,46 @@
 'use client'
 
+import { useState } from 'react'
 import type { ResultadosJunho2026 } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { StatTile } from '../StatTile'
 import { formatarMoeda, slugMes } from '../formato'
+
+type DisparoTop = ResultadosJunho2026['topDisparos'][number]
+
+// Card de disparo pontual. Quando não existe arte (imagem 404), some com o <img> e o card
+// encolhe pra altura do conteúdo — sem isso o alt-text quebrava dentro de uma caixa de 44px
+// e esticava o card pra ~200px de altura vazia.
+function TopCard({ disparo, posicao, pasta }: { disparo: DisparoTop; posicao: number; pasta: string }) {
+  const [semArte, setSemArte] = useState(false)
+
+  return (
+    <div className="flex items-center justify-start rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] px-3 py-2 text-left">
+      {!semArte && (
+        <img
+          src={`/top-disparos/${pasta}/top-${posicao}.png`}
+          alt={disparo.nome}
+          width={44}
+          height={44}
+          onError={() => setSemArte(true)}
+          className="mr-3 h-11 w-11 object-cover shadow-xl border border-white/50 rounded shrink-0"
+        />
+      )}
+      <div className="flex justify-between gap-3 min-w-0">
+        <div className="text-lg font-bold text-[var(--pontual)] w-6 shrink-0">{posicao}º</div>
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-[var(--text-primary)] truncate">{disparo.nome}</div>
+          <div className="text-xs text-[var(--text-muted)]">
+            {disparo.data} · {disparo.casa}
+          </div>
+          <div className="text-sm font-bold" style={{ color: disparo.lucro < 0 ? 'var(--error)' : 'var(--success)' }}>
+            Lucro: {formatarMoeda(disparo.lucro)} · ROI {disparo.custo > 0 ? `${disparo.roas.toFixed(2)}x` : '—'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; titulo: string }) {
   const total = dados.porCiclo.TOTAL
@@ -29,36 +66,14 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
         <StatTile label="Investido / Custo" value={total.custo} prefix="R$ " cor="var(--text-primary)" delay={0.1} />
         <StatTile label="Faturamento Total" value={total.faturamento} prefix="R$ " cor="var(--text-primary)" delay={0.2} />
         <StatTile label="Lucro TOTAL" value={total.lucro} prefix="R$ " cor="var(--success)" delay={0.3} />
-        <StatTile label="ROI TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" delay={0.3} />
+        <StatTile label="ROI TOTAL" value={total.roas} suffix="x" decimals={2} cor="var(--success)" delay={0.3} limiteVermelho={1} />
       </SlideItem>
 
       <SlideItem className="w-full flex flex-col gap-1.5">
         <div className="text-sm font-semibold text-[var(--text-secondary)] text-left">Top 3 disparos do mês</div>
         <div className="grid grid-cols-1 gap-2">
-
           {top3.map((d, i) => (
-            <div
-              key={`${d.data}-${d.nome}`}
-              className="flex items-center justify-start rounded-lg glass bg-[var(--glass-bg)] border border-[var(--glass-border)] px-3 py-2 text-left"
-            >
-              <img
-                src={`/top-disparos/${pastaImagens}/top-${i + 1}.png`} alt={d.nome} width={44} height={44}
-                onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
-                className='mr-3 shadow-xl border border-white/50 rounded shrink-0'
-              />
-              <div className="flex justify-between gap-3 min-w-0">
-                <div className="text-lg font-bold text-[var(--pontual)] w-6 shrink-0">{i + 1}º</div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-[var(--text-primary)] truncate">{d.nome}</div>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    {d.data} · {d.casa}
-                  </div>
-                  <div className="text-sm font-bold text-[var(--success)]">
-                    Lucro: {formatarMoeda(d.lucro)} · ROI {d.custo > 0 ? `${d.roas.toFixed(2)}x` : '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TopCard key={`${d.data}-${d.nome}`} disparo={d} posicao={i + 1} pasta={pastaImagens} />
           ))}
         </div>
       </SlideItem>

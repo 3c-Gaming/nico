@@ -672,6 +672,36 @@ export interface ItemSegundaCasa {
   faturamento: number
 }
 
+// Funis de WhatsApp (tráfego): registros/FTDs por funil, importados por CSV manual
+// (DATA, FUNIL, CASA, SITEID, REGISTROS, FTDS). O período de agosto/2026 troca de site id no meio
+// do mês, e os funis rodam em casas diferentes (SuperBet, BetMGM) — cada funil guarda a quebra
+// por (casa, site id) pra dar pra ver total x por casa x por site.
+export interface FunilWhatsappCelula {
+  casa: string
+  siteId: string
+  registros: number
+  ftds: number
+  cpas: number
+}
+
+export interface FunilWhatsappItem {
+  funil: string
+  registros: number
+  ftds: number
+  cpas: number
+  celulas: FunilWhatsappCelula[]
+}
+
+export interface FunisWhatsappDados {
+  itens: FunilWhatsappItem[]
+  /** casas distintas encontradas no CSV, em ordem de aparição (vazio se o CSV não tem coluna CASA). */
+  casas: string[]
+  /** site ids distintos encontrados no CSV, em ordem de primeira aparição. */
+  siteIds: string[]
+  /** menor/maior DATA (DD/MM) vista por site id — pra rotular o toggle. */
+  periodoPorSite: Record<string, { inicio: string; fim: string }>
+}
+
 export interface ResultadosJunho2026 {
   periodo: { inicio: string; fim: string }
   totais: AgregadoJunho & {
@@ -688,6 +718,7 @@ export interface ResultadosJunho2026 {
   bottomDisparos: DisparoJunho[]
   disparos: DisparoJunho[]
   segundaCasa?: ItemSegundaCasa[]
+  funisWhatsapp?: FunisWhatsappDados | null
 }
 
 // --- Resultados (listagem de apresentações mensais, ex: /resultados) ---
@@ -705,6 +736,9 @@ export interface TopicosResultado {
   logos?: string[]
   logoAltura?: number
   capaTituloCor?: string
+  /** chaves de elementos de slide (KPIs/cards/gráficos) que o usuário escolheu ocultar —
+   *  ver ELEMENTOS_OCULTAVEIS em components/resultados-junho/elementosOcultaveis.ts */
+  slidesOcultos?: string[]
 }
 
 export interface Resultado {

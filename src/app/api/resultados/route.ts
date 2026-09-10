@@ -15,13 +15,21 @@ export async function POST(request: Request) {
     const titulo = formData.get('titulo') as string | null
     const periodoInicio = formData.get('periodoInicio') as string | null
     const periodoFim = formData.get('periodoFim') as string | null
+    const valorPorFtdRaw = formData.get('valorPorFtd') as string | null
 
     if (!file || !titulo || !periodoInicio || !periodoFim) {
       return NextResponse.json({ error: 'file, titulo, periodoInicio e periodoFim são obrigatórios' }, { status: 400 })
     }
 
+    // Opcional: quando o CSV não traz coluna CPA (receita), o faturamento/lucro/ROAS são
+    // derivados de FTD × esse valor. Aceita "680", "R$ 680,00" etc.
+    const valorPorFtd = valorPorFtdRaw?.trim()
+      ? parseFloat(valorPorFtdRaw.replace(/[R$\s]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'))
+      : undefined
+    const opts = Number.isFinite(valorPorFtd) && (valorPorFtd as number) > 0 ? { valorPorFtd } : {}
+
     const csvTexto = await file.text()
-    const dados = processarCsvResultados(csvTexto, { inicio: periodoInicio, fim: periodoFim })
+    const dados = processarCsvResultados(csvTexto, { inicio: periodoInicio, fim: periodoFim }, opts)
 
     const agora = new Date().toISOString()
     const resultado: Resultado = {

@@ -13,6 +13,7 @@ import { SlideErrosAcertos } from './slides/SlideErrosAcertos'
 import { SlideProximosPassos } from './slides/SlideProximosPassos'
 import { SlideFechamento } from './slides/SlideFechamento'
 import { SlideSegundaCasa } from './slides/SlideSegundaCasa'
+import { SlideFunisWhatsapp } from './slides/SlideFunisWhatsapp'
 import { getFontePreset } from './fontes'
 import { aplicarSegundaCasa } from '@/lib/resultados/segundaCasa'
 
@@ -47,11 +48,14 @@ export function ApresentacaoResultado({ titulo, dados, topicos = TOPICOS_VAZIOS 
 
   const slides = [
     { id: 'capa', render: () => <SlideCapa titulo={titulo} dados={dados} topicos={topicos} /> },
-    { id: 'totais', render: () => <SlideTotais dados={dadosComSegundaCasa} /> },
+    { id: 'totais', render: () => <SlideTotais dados={dadosComSegundaCasa} topicos={topicos} /> },
     { id: 'ciclo', render: () => <SlideCiclo dados={dados} /> },
     { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo={titulo} /> },
-    { id: 'por-casa', render: () => <SlidePorCasa dados={dadosComSegundaCasa} /> },
+    { id: 'por-casa', render: () => <SlidePorCasa dados={dadosComSegundaCasa} topicos={topicos} /> },
     ...(dados.segundaCasa?.length ? [{ id: 'segunda-casa', render: () => <SlideSegundaCasa itens={dados.segundaCasa!} /> }] : []),
+    ...(dados.funisWhatsapp?.itens?.length
+      ? [{ id: 'funis-whatsapp', render: () => <SlideFunisWhatsapp dados={dados.funisWhatsapp!} topicos={topicos} /> }]
+      : []),
     { id: 'ranking', render: () => <SlideRanking dados={dados} /> },
     { id: 'erros-acertos', render: () => <SlideErrosAcertos dados={dados} topicos={topicos} /> },
     { id: 'proximos-passos', render: () => <SlideProximosPassos dados={dados} topicos={topicos} /> },

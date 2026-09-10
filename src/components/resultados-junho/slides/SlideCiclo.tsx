@@ -35,7 +35,7 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
         <StatTile label="Investimento" value={totalCiclo.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" />
         <StatTile label="Faturamento" value={totalCiclo.faturamento} prefix="R$ " decimals={0} cor="var(--success)" delay={0.1} />
         <StatTile label="Lucro" value={totalCiclo.lucro} prefix="R$ " decimals={0} cor="var(--success)" delay={0.2} />
-        <StatTile label="ROI TOTAL" value={roasCiclo} suffix="x" decimals={2} cor="var(--success)" delay={0.3} />
+        <StatTile label="ROI TOTAL" value={roasCiclo} suffix="x" decimals={2} cor="var(--success)" delay={0.3} limiteVermelho={1} />
       </SlideItem>
 
       <SlideItem className="w-full">

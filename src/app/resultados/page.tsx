@@ -9,13 +9,36 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { ModalNovoResultado } from '@/components/resultados-junho/ModalNovoResultado'
 import { formatarMoeda } from '@/components/resultados-junho/formato'
 import { aplicarSegundaCasa } from '@/lib/resultados/segundaCasa'
-import { Trophy, Plus, Presentation, Globe, Pencil } from 'lucide-react'
+import { useConfirm } from '@/components/ui/useConfirm'
+import { Trophy, Plus, Presentation, Globe, Pencil, Trash2 } from 'lucide-react'
 import type { Resultado } from '@/types'
 
 export default function ResultadosPage() {
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [loading, setLoading] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
+  const [excluindo, setExcluindo] = useState<string | null>(null)
+  const { confirm, dialog } = useConfirm()
+
+  async function excluir(r: Resultado) {
+    const ok = await confirm({
+      titulo: 'Excluir resultado',
+      mensagem: `Excluir a apresentação "${r.titulo}" (${r.periodoInicio} a ${r.periodoFim})? Essa ação não pode ser desfeita.`,
+      confirmLabel: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
+    setExcluindo(r.id)
+    try {
+      const res = await fetch(`/api/resultados/${r.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Falha ao excluir')
+      setResultados((prev) => prev.filter((x) => x.id !== r.id))
+    } catch (err) {
+      await confirm({ titulo: 'Erro', mensagem: (err as Error).message, confirmLabel: 'Ok' })
+    } finally {
+      setExcluindo(null)
+    }
+  }
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -137,6 +160,16 @@ export default function ResultadosPage() {
                           <Presentation size={14} />
                         </Button>
                       </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 cursor-pointer text-[var(--text-muted)] hover:text-[var(--error)]"
+                        loading={excluindo === r.id}
+                        onClick={() => excluir(r)}
+                        aria-label="Excluir resultado"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -151,6 +184,7 @@ export default function ResultadosPage() {
         onClose={() => setModalAberto(false)}
         onCriado={(r) => setResultados((prev) => [r, ...prev])}
       />
+      {dialog}
     </div>
   )
 }

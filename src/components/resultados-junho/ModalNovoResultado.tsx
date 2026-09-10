@@ -16,6 +16,7 @@ export function ModalNovoResultado({ open, onClose, onCriado }: ModalNovoResulta
   const [titulo, setTitulo] = useState('')
   const [periodoInicio, setPeriodoInicio] = useState('')
   const [periodoFim, setPeriodoFim] = useState('')
+  const [valorPorFtd, setValorPorFtd] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -24,6 +25,7 @@ export function ModalNovoResultado({ open, onClose, onCriado }: ModalNovoResulta
     setTitulo('')
     setPeriodoInicio('')
     setPeriodoFim('')
+    setValorPorFtd('')
     setFile(null)
     setErro(null)
   }
@@ -43,6 +45,7 @@ export function ModalNovoResultado({ open, onClose, onCriado }: ModalNovoResulta
       formData.append('titulo', titulo.trim())
       formData.append('periodoInicio', periodoInicio.trim())
       formData.append('periodoFim', periodoFim.trim())
+      if (valorPorFtd.trim()) formData.append('valorPorFtd', valorPorFtd.trim())
       formData.append('file', file)
 
       const res = await fetch('/api/resultados', { method: 'POST', body: formData })
@@ -94,6 +97,20 @@ export function ModalNovoResultado({ open, onClose, onCriado }: ModalNovoResulta
               className="w-full h-8 px-3 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-[var(--text-muted)] mb-1">Valor por FTD (R$) — opcional</label>
+          <input
+            type="text"
+            value={valorPorFtd}
+            onChange={(e) => setValorPorFtd(e.target.value)}
+            placeholder="680"
+            className="w-full h-8 px-3 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+          />
+          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+            Use quando o CSV não tiver coluna CPA: faturamento, lucro e ROI saem de FTD × esse valor.
+          </p>
         </div>
 
         <div>

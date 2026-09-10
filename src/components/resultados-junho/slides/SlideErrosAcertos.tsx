@@ -13,13 +13,12 @@ interface SlideErrosAcertosProps {
 export function SlideErrosAcertos({ dados, topicos }: SlideErrosAcertosProps) {
   const { totais, porCiclo, porCasa, disparos } = dados
   const casas = Object.entries(porCasa).sort((a, b) => b[1].lucro - a[1].lucro)
-  const [melhorCasa, melhorCasaAgg] = casas[0]
+  const casaLider = casas[0]
   // casa com volume de disparos mais parecido com a lider (nao necessariamente a de menor lucro —
-  // comparar lucro entre casas com volumes muito diferentes nao é uma comparação justa)
-  const [casaComparavel, casaComparavelAgg] = [...casas]
-    .slice(1)
-    .sort((a, b) => b[1].disparos - a[1].disparos)[0]
-  const pctBaseTotal = ((porCiclo.TOTAL.lucro / totais.lucro) * 100).toFixed(0)
+  // comparar lucro entre casas com volumes muito diferentes nao é uma comparação justa).
+  // Pode não existir quando só uma casa aparece no período.
+  const casaComparavelEntry = casas.slice(1).sort((a, b) => b[1].disparos - a[1].disparos)[0]
+  const pctBaseTotal = totais.lucro !== 0 ? ((porCiclo.TOTAL.lucro / totais.lucro) * 100).toFixed(0) : '0'
   const diasPrejuizo = dados.porDia.filter((d) => d.lucro < 0)
   const piorDisparo = [...disparos].sort((a, b) => a.lucro - b.lucro)[0]
   const razaoCiclo = porCiclo.D5.roas > 0 ? (porCiclo.D1.roas / porCiclo.D5.roas).toFixed(1) : '—'
@@ -27,16 +26,17 @@ export function SlideErrosAcertos({ dados, topicos }: SlideErrosAcertosProps) {
   const acertosSugeridos = [
     `Disparos de base total foram ${pctBaseTotal}% do lucro do mês vindo de só ${porCiclo.TOTAL.disparos} disparos.`,
     `D1 converteu com ROI de ${porCiclo.D1.roas.toFixed(1)}x — a base "quente" logo após o registro responde muito bem.`,
-    `${melhorCasa} liderou o mês com ${formatarMoeda(melhorCasaAgg.lucro)} de lucro em ${melhorCasaAgg.disparos} disparos.`,
-  ]
+    casaLider && `${casaLider[0]} liderou o mês com ${formatarMoeda(casaLider[1].lucro)} de lucro em ${casaLider[1].disparos} disparos.`,
+  ].filter(Boolean) as string[]
 
   const pontosDeAtencaoSugeridos = [
     `D5/D7 converteram bem menos que D1/D3 — ROI caiu ${razaoCiclo}x do D1 pro D5. Vale revisar oferta ou intensidade nesse estágio.`,
     `${diasPrejuizo.length} dias do mês fecharam no vermelho, com destaque pro disparo "${piorDisparo?.nome}" (${formatarMoeda(
       piorDisparo?.lucro ?? 0,
     )}).`,
-    `${casaComparavel} ficou bem abaixo de ${melhorCasa} mesmo com volume parecido de disparos (${casaComparavelAgg.disparos} vs ${melhorCasaAgg.disparos}) — vale revisar segmentação/oferta.`,
-  ]
+    casaComparavelEntry && casaLider &&
+      `${casaComparavelEntry[0]} ficou bem abaixo de ${casaLider[0]} mesmo com volume parecido de disparos (${casaComparavelEntry[1].disparos} vs ${casaLider[1].disparos}) — vale revisar segmentação/oferta.`,
+  ].filter(Boolean) as string[]
 
   const acertos = topicos?.acertos?.length ? topicos.acertos : acertosSugeridos
   const pontosDeAtencao = topicos?.pontosAtencao?.length ? topicos.pontosAtencao : pontosDeAtencaoSugeridos

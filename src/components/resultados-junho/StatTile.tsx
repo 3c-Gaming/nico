@@ -13,10 +13,15 @@ interface StatTileProps {
   cor?: string
   tamanho?: 'sm' | 'lg'
   delay?: number
+  /** Abaixo desse valor o número vira vermelho (só quando `cor` é o verde de sucesso).
+   *  Default 0 (lucro/faturamento). Pra ROI passe 1 — abaixo de 1x é prejuízo. */
+  limiteVermelho?: number
 }
 
-export function StatTile({ label, value, prefix, suffix, decimals, cor, tamanho = 'sm', delay = 0 }: StatTileProps) {
+export function StatTile({ label, value, prefix, suffix, decimals, cor, tamanho = 'sm', delay = 0, limiteVermelho = 0 }: StatTileProps) {
   const tamanhoTexto = tamanho === 'lg' ? 'text-3xl md:text-5xl' : 'text-xl md:text-2xl'
+  // valor de resultado ruim (lucro negativo, ROI < 1x etc) não deve aparecer em verde
+  const corFinal = cor === 'var(--success)' && value < limiteVermelho ? 'var(--error)' : cor
   return (
     <motion.div
       variants={itemVariants}
@@ -29,7 +34,7 @@ export function StatTile({ label, value, prefix, suffix, decimals, cor, tamanho 
         decimals={decimals}
         delay={delay}
         className={`${tamanhoTexto} font-bold`}
-        style={cor ? { color: cor } : undefined}
+        style={corFinal ? { color: corFinal } : undefined}
       />
       <div className="text-xs md:text-sm text-[var(--text-muted)] uppercase tracking-wide">{label}</div>
     </motion.div>

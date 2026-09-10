@@ -9,6 +9,7 @@ import { ApresentacaoResultado } from '@/components/resultados-junho/Apresentaca
 import { Plus, X, Presentation, Globe, Copy, Save, ChevronDown, Image as ImageIcon } from 'lucide-react'
 import type { Resultado, TopicosResultado } from '@/types'
 import { FONTES_PRESET } from '@/components/resultados-junho/fontes'
+import { ELEMENTOS_OCULTAVEIS } from '@/components/resultados-junho/elementosOcultaveis'
 
 function ListaEditavel({
   label,
@@ -83,7 +84,7 @@ function SecaoAccordion({
   )
 }
 
-type Secao = 'capa' | 'estilo' | 'segunda-casa' | 'acertos' | 'atencao' | 'passos'
+type Secao = 'capa' | 'estilo' | 'segunda-casa' | 'funis-whatsapp' | 'ocultar' | 'acertos' | 'atencao' | 'passos'
 
 export default function EditarResultadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -97,6 +98,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
   const [enviandoFundo, setEnviandoFundo] = useState(false)
   const [enviandoLogo, setEnviandoLogo] = useState(false)
   const [enviandoSegundaCasa, setEnviandoSegundaCasa] = useState(false)
+  const [enviandoFunisWa, setEnviandoFunisWa] = useState(false)
 
   const [topicos, setTopicos] = useState<TopicosResultado>({ acertos: [], pontosAtencao: [], proximosPassos: [] })
 
@@ -120,6 +122,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
           logos: data.resultado.topicos?.logos ?? [],
           logoAltura: data.resultado.topicos?.logoAltura ?? 48,
           capaTituloCor: data.resultado.topicos?.capaTituloCor ?? '',
+          slidesOcultos: data.resultado.topicos?.slidesOcultos ?? [],
         })
       }
     } finally {
@@ -223,6 +226,39 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
       addToast('error', (err as Error).message)
     } finally {
       setEnviandoSegundaCasa(false)
+    }
+  }
+
+  async function onEnviarFunisWa(file: File | undefined) {
+    if (!file) return
+    setEnviandoFunisWa(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch(`/api/resultados/${id}/funis-whatsapp`, { method: 'POST', body })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao processar CSV')
+      setResultado(data.resultado)
+      addToast('success', 'Funis de WhatsApp atualizados')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviandoFunisWa(false)
+    }
+  }
+
+  async function onLimparFunisWa() {
+    setEnviandoFunisWa(true)
+    try {
+      const res = await fetch(`/api/resultados/${id}/funis-whatsapp`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao limpar')
+      setResultado(data.resultado)
+      addToast('success', 'Funis de WhatsApp removidos')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviandoFunisWa(false)
     }
   }
 
@@ -489,6 +525,86 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
                   onChange={(e) => { onEnviarSegundaCasa(e.target.files?.[0]); e.target.value = '' }}
                 />
               </label>
+            </div>
+          </SecaoAccordion>
+
+          <SecaoAccordion titulo="Funis de WhatsApp" aberta={secaoAberta === 'funis-whatsapp'} onToggle={() => setSecaoAberta('funis-whatsapp')}>
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--text-muted)]">
+                CSV dos funis de tráfego de WhatsApp. Colunas: <code>DATA, FUNIL, CASA, SITEID, REGISTROS, FTDS, CPAS</code>{' '}
+                (DATA, CASA e CPAS opcionais). Gera um slide com ranking por FTDs e toggle por casa (SuperBet / BetMGM) e por site id.
+              </p>
+
+              {resultado.dados.funisWhatsapp?.itens?.length ? (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] text-[var(--text-muted)]">
+                    {resultado.dados.funisWhatsapp.itens.length} funis
+                    {resultado.dados.funisWhatsapp.casas.length > 0 && <> · casas: {resultado.dados.funisWhatsapp.casas.join(', ')}</>}
+                    {' '}· sites: {resultado.dados.funisWhatsapp.siteIds.join(', ')}
+                  </div>
+                  {resultado.dados.funisWhatsapp.itens.slice(0, 8).map((it) => (
+                    <div key={it.funil} className="flex items-center justify-between p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border)] text-xs">
+                      <span className="font-medium text-[var(--text-primary)]">{it.funil}</span>
+                      <span className="text-[var(--text-muted)]">{it.registros} reg · {it.ftds} ftd · {it.cpas} cpa</span>
+                    </div>
+                  ))}
+                  {resultado.dados.funisWhatsapp.itens.length > 8 && (
+                    <div className="text-[11px] text-[var(--text-muted)]">+{resultado.dados.funisWhatsapp.itens.length - 8} funis…</div>
+                  )}
+                  <button
+                    onClick={onLimparFunisWa}
+                    disabled={enviandoFunisWa}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--error)] underline transition-colors"
+                  >
+                    Remover funis de WhatsApp
+                  </button>
+                </div>
+              ) : null}
+
+              <label className="flex items-center justify-center gap-2 h-8 px-3 text-xs rounded border border-dashed border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors cursor-pointer">
+                <Plus size={12} />
+                {enviandoFunisWa ? 'Enviando...' : 'Enviar CSV de funis de WhatsApp'}
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  disabled={enviandoFunisWa}
+                  onChange={(e) => { onEnviarFunisWa(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
+            </div>
+          </SecaoAccordion>
+
+          <SecaoAccordion titulo="Ocultar elementos" aberta={secaoAberta === 'ocultar'} onToggle={() => setSecaoAberta('ocultar')}>
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--text-muted)]">
+                Marque os KPIs / cards / gráficos que não devem aparecer nos slides. Vale pra todas as apresentações.
+              </p>
+              {Array.from(new Set(ELEMENTOS_OCULTAVEIS.map((e) => e.grupo))).map((grupo) => (
+                <div key={grupo} className="space-y-1">
+                  <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{grupo}</div>
+                  {ELEMENTOS_OCULTAVEIS.filter((e) => e.grupo === grupo).map((el) => {
+                    const oculto = (topicos.slidesOcultos ?? []).includes(el.chave)
+                    return (
+                      <label key={el.chave} className="flex items-center gap-2 text-xs text-[var(--text-primary)] cursor-pointer py-0.5">
+                        <input
+                          type="checkbox"
+                          checked={oculto}
+                          onChange={(e) => {
+                            const atual = new Set(topicos.slidesOcultos ?? [])
+                            if (e.target.checked) atual.add(el.chave)
+                            else atual.delete(el.chave)
+                            setTopicos({ ...topicos, slidesOcultos: [...atual] })
+                          }}
+                          className="accent-[var(--d1)]"
+                        />
+                        <span className={oculto ? 'line-through text-[var(--text-muted)]' : ''}>{el.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ))}
+              <p className="text-[11px] text-[var(--text-muted)]">Clique em “Salvar tópicos” pra aplicar.</p>
             </div>
           </SecaoAccordion>
 

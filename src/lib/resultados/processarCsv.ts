@@ -74,20 +74,23 @@ interface ColunasIdx {
   DATA: number
   CASA: number
   PROMO: number
-  UTM: number
-  LUCRO: number
-  ROAS: number
+  UTM?: number
+  LUCRO?: number
+  ROAS?: number
   ENTREGUES: number
-  LIDAS: number
+  LIDAS?: number
   CLIQUES?: number
   CUSTO: number
   REGISTROS: number
   FTD: number
-  CPAS: number
-  CPA_VAL: number
+  CPAS?: number
+  CPA_VAL?: number
 }
 
-function mapearColunas(header: string[]): ColunasIdx {
+// modoFtd: o CSV não traz coluna CPA (receita) — faturamento/lucro/ROAS são derivados de
+// FTD × valorPorFtd. Nesse modo só o essencial é obrigatório; UTM/LIDAS/CPAS/CLIQUES entram
+// com default quando ausentes (planilhas de fechamento manual raramente têm todas).
+function mapearColunas(header: string[], modoFtd: boolean): ColunasIdx {
   const idx: Partial<Record<string, number>> = {}
   const cols = header.map(norm)
   for (const [chave, nomes] of Object.entries(ALIASES)) {
@@ -99,7 +102,9 @@ function mapearColunas(header: string[]): ColunasIdx {
       }
     }
   }
-  const obrigatorias = ['DATA', 'CASA', 'PROMO', 'UTM', 'LUCRO', 'ROAS', 'ENTREGUES', 'LIDAS', 'CUSTO', 'REGISTROS', 'FTD', 'CPAS', 'CPA_VAL']
+  const obrigatorias = modoFtd
+    ? ['DATA', 'CASA', 'PROMO', 'ENTREGUES', 'CUSTO', 'REGISTROS', 'FTD']
+    : ['DATA', 'CASA', 'PROMO', 'UTM', 'LUCRO', 'ROAS', 'ENTREGUES', 'LIDAS', 'CUSTO', 'REGISTROS', 'FTD', 'CPAS', 'CPA_VAL']
   const faltando = obrigatorias.filter((k) => idx[k] === undefined)
   if (faltando.length) throw new Error('Colunas não encontradas no CSV: ' + faltando.join(', '))
   return idx as unknown as ColunasIdx
@@ -133,12 +138,13 @@ function round2(n: number): number {
 // Só o parsing do CSV pra uma lista de disparos — sem agregar. Reutilizável quando precisamos
 // combinar disparos de mais de um CSV/mês antes de fechar os totais (ex: recorte por período
 // que atravessa dois meses).
-export function parseCsvDisparos(csvTexto: string): DisparoJunho[] {
+export function parseCsvDisparos(csvTexto: string, opts: { valorPorFtd?: number } = {}): DisparoJunho[] {
+  const modoFtd = typeof opts.valorPorFtd === 'number' && opts.valorPorFtd > 0
   const textoLimpo = csvTexto.replace(/^﻿/, '')
   const linhas = textoLimpo.split(/\r?\n/).filter((l) => l.trim().length > 0)
   if (!linhas.length) throw new Error('CSV vazio')
 
-  const idx = mapearColunas(parseCsvLine(linhas[0]))
+  const idx = mapearColunas(parseCsvLine(linhas[0]), modoFtd)
 
   // A última linha costuma ser um agregado "TOTAIS" (data/casa vazios, só números) — descarta.
   const ultimaLinha = parseCsvLine(linhas[linhas.length - 1])
@@ -150,23 +156,32 @@ export function parseCsvDisparos(csvTexto: string): DisparoJunho[] {
       const c = parseCsvLine(linha)
       const casaBruta = (c[idx.CASA] ?? '').trim()
       const nome = (c[idx.PROMO] ?? '').trim()
-      const utm = (c[idx.UTM] ?? '').trim()
+      const utm = idx.UTM !== undefined ? (c[idx.UTM] ?? '').trim() : ''
+      const custo = round2(numeroBR(c[idx.CUSTO]))
+      const ftd = numeroBR(c[idx.FTD])
+      // modoFtd: sem coluna CPA — receita = FTD × valor fixo por FTD; lucro e ROAS saem disso.
+      const cpaReceita = modoFtd
+        ? round2(ftd * (opts.valorPorFtd as number))
+        : round2(numeroBR(c[idx.CPA_VAL!]))
+      const lucro = modoFtd ? round2(cpaReceita - custo) : round2(numeroBR(c[idx.LUCRO!]))
+      const roas = modoFtd ? (custo > 0 ? cpaReceita / custo : 0) : numeroBR(c[idx.ROAS!])
       return {
         data: (c[idx.DATA] ?? '').trim(),
         casa: normalizarCasa(casaBruta),
         utm,
         nome,
         ciclo: classificarCiclo(nome),
-        lucro: round2(numeroBR(c[idx.LUCRO])),
-        roas: numeroBR(c[idx.ROAS]),
+        lucro,
+        roas,
         entregues: numeroBR(c[idx.ENTREGUES]),
-        lidas: numeroBR(c[idx.LIDAS]),
+        lidas: idx.LIDAS !== undefined ? numeroBR(c[idx.LIDAS]) : 0,
         cliques: idx.CLIQUES !== undefined ? numeroBR(c[idx.CLIQUES]) : 0,
-        custo: round2(numeroBR(c[idx.CUSTO])),
+        custo,
         registros: numeroBR(c[idx.REGISTROS]),
-        ftd: numeroBR(c[idx.FTD]),
-        cpas: numeroBR(c[idx.CPAS]),
-        cpaReceita: round2(numeroBR(c[idx.CPA_VAL])),
+        ftd,
+        // sem coluna CPAS o valor fica zerado — no modo FTD o mês é medido só por FTD.
+        cpas: idx.CPAS !== undefined ? numeroBR(c[idx.CPAS]) : 0,
+        cpaReceita,
       }
     })
     // descarta só linhas sem data — sem casa reconhecida (ex: placeholder "Selecione" de dropdown
@@ -238,6 +253,10 @@ export function construirResultado(disparos: DisparoJunho[], periodo: { inicio: 
   }
 }
 
-export function processarCsvResultados(csvTexto: string, periodo: { inicio: string; fim: string }): ResultadosJunho2026 {
-  return construirResultado(parseCsvDisparos(csvTexto), periodo)
+export function processarCsvResultados(
+  csvTexto: string,
+  periodo: { inicio: string; fim: string },
+  opts: { valorPorFtd?: number } = {},
+): ResultadosJunho2026 {
+  return construirResultado(parseCsvDisparos(csvTexto, opts), periodo)
 }
