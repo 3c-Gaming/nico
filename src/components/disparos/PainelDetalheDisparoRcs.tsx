@@ -43,6 +43,8 @@ interface ResumoRcs {
   recebeuSms: number
   naoRecebeu: number
   processando: number
+  cobravel: number
+  rejeitados: number
 }
 
 function corStatus(status: string): string {
@@ -237,11 +239,13 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   const processando = resumo?.processando ?? 0
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
 
-  // A Solvefy cobra por RCS SUBMETIDO (não só entregue), + o SMS de fallback (~R$ 0,078/nº).
-  // `custoEntregue` é a alternativa (se os "dropped" forem reembolsados — a confirmar com a Solvefy).
+  // A Solvefy cobra por RCS SUBMETIDO (não só entregue), MENOS as rejeições por saldo
+  // (insufficient_balance = R$ 0). `cobravel` já desconta essas. + SMS de fallback (~R$ 0,078/nº).
   const custoUnit = disparo?.custoPorEnvio ?? CUSTO_RCS_POR_ENVIO
+  const cobravel = resumo?.cobravel ?? enviados
+  const rejeitados = resumo?.rejeitados ?? 0
   const custoFallback = (resumo?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS
-  const custoSubmetido = enviados * custoUnit + custoFallback
+  const custoSubmetido = cobravel * custoUnit + custoFallback
   const custoEntregue = entregues * custoUnit + custoFallback
   const custoEstimado = base * custoUnit
 
@@ -252,7 +256,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     utmValor: disparo?.utm || disparo?.betmgmPid,
     casa: casaAtiva,
     data: disparo?.dataDisparo,
-    entregues: enviados,
+    entregues: cobravel,
     custoPorUnidade: custoUnit,
     custoExtra: custoFallback,
   })
@@ -415,19 +419,19 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                     <div className="text-[var(--text-muted)]">Custo estimado</div>
                     <div className="text-[var(--text-primary)]">R$ {custoSubmetido.toFixed(2)}</div>
                     <div className="text-[10px] text-[var(--text-muted)]">
-                      RCS: {enviados} submetido{enviados === 1 ? '' : 's'} × {custoUnit.toFixed(2)} = R$ {(enviados * custoUnit).toFixed(2)}
+                      RCS: {formatNumero(cobravel)} cobrável{cobravel === 1 ? '' : 's'} × {custoUnit.toFixed(2)} = R$ {(cobravel * custoUnit).toFixed(2)}
                     </div>
                     {custoFallback > 0 && (
                       <div className="text-[10px] text-sky-400/90">
                         Fallback SMS: {resumo?.fallbackEnviados} × {CUSTO_FALLBACK_SMS.toFixed(3)} = R$ {custoFallback.toFixed(2)}
                       </div>
                     )}
-                    {falhas > 0 && (
+                    {rejeitados > 0 && (
                       <div className="text-[10px] text-[var(--text-muted)]">
-                        se os {falhas} dropped forem reembolsados: R$ {custoEntregue.toFixed(2)}
+                        {formatNumero(rejeitados)} rejeitado(s) por saldo — R$ 0 (não cobrado)
                       </div>
                     )}
-                    {enviados === 0 && (
+                    {cobravel === 0 && rejeitados === 0 && (
                       <div className="text-[10px] text-[var(--text-muted)]">estimado até R$ {custoEstimado.toFixed(2)}</div>
                     )}
                   </div>

@@ -15,6 +15,10 @@ export interface ResumoCampanhaRcs {
   recebeuSms: number
   naoRecebeu: number
   processando: number
+  /** cobravel = submetido de verdade (exclui rejeição por saldo / pré-envio) — é a base do custo. */
+  cobravel: number
+  /** rejeitados = insufficient_balance e afins — a Solvefy nem tentou, R$ 0. */
+  rejeitados: number
 }
 
 const STATUS_FALHA = new Set(['erro', 'failed', 'undelivered', 'dropped'])
@@ -27,11 +31,12 @@ const TAMANHO_PAGINA = 1000
 // re-busca em intervalo; não faz sentido segurar o resumo mais que isso.
 const CACHE_TTL_MS = 4_000
 
-interface EnvioResumo { campanha: string | null; status: string; clicado: boolean | null; fallback_status: string | null }
+interface EnvioResumo { campanha: string | null; status: string; clicado: boolean | null; fallback_status: string | null; erro: string | null }
 interface LinhaResumoSql {
   campanha: string; total: number; enviados: number; entregues: number; lidas: number; clicados: number
   falhas: number; fallback_enviados: number
   recebeu_rcs?: number; recebeu_sms?: number; nao_recebeu?: number; processando?: number
+  cobravel?: number; rejeitados?: number
 }
 
 let cache: { resumo: Record<string, ResumoCampanhaRcs>; expiraEm: number } | null = null
@@ -39,7 +44,7 @@ let cache: { resumo: Record<string, ResumoCampanhaRcs>; expiraEm: number } | nul
 function vazio(): ResumoCampanhaRcs {
   return {
     total: 0, enviados: 0, entregues: 0, lidas: 0, clicados: 0, falhas: 0, fallbackEnviados: 0,
-    recebeuRcs: 0, recebeuSms: 0, naoRecebeu: 0, processando: 0,
+    recebeuRcs: 0, recebeuSms: 0, naoRecebeu: 0, processando: 0, cobravel: 0, rejeitados: 0,
   }
 }
 
@@ -57,6 +62,8 @@ async function buscarViaRpc(supabase: any): Promise<Record<string, ResumoCampanh
       recebeuSms: r.recebeu_sms ?? 0,
       naoRecebeu: r.nao_recebeu ?? 0,
       processando: r.processando ?? 0,
+      cobravel: r.cobravel ?? r.enviados ?? 0,
+      rejeitados: r.rejeitados ?? 0,
     }
   }
   return resumo
@@ -69,7 +76,7 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
   for (;;) {
     const { data, error } = await supabase
       .from('rcs_envios')
-      .select('campanha, status, clicado, fallback_status')
+      .select('campanha, status, clicado, fallback_status, erro')
       .order('enviado_em', { ascending: true })
       .order('id', { ascending: true })
       .range(offset, offset + TAMANHO_PAGINA - 1)
@@ -86,8 +93,12 @@ async function buscarViaPaginacao(supabase: any): Promise<Record<string, ResumoC
     if (!resumo[campanha]) resumo[campanha] = vazio()
     const r = resumo[campanha]
     r.total++
-    // enviados = submetido à Solvefy (tudo que saiu de 'queued'); é o que a Solvefy cobra
+    const rejeitado = /balance/i.test(envio.erro ?? '')
+    // enviados = submetido à Solvefy (tudo que saiu de 'queued')
     if (envio.status !== 'queued') r.enviados++
+    // cobravel = submetido de verdade (rejeição por saldo/pré-envio não é cobrada)
+    if (envio.status !== 'queued' && !rejeitado) r.cobravel++
+    if (rejeitado) r.rejeitados++
     if (STATUS_FALHA.has(envio.status)) r.falhas++
     if (STATUS_ENTREGUE.has(envio.status)) r.entregues++
     if (STATUS_LIDA.has(envio.status)) r.lidas++

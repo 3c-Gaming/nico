@@ -16,17 +16,17 @@ import { PainelDetalheDisparoRcs } from '@/components/disparos/PainelDetalheDisp
 import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import type { Disparo } from '@/types'
 
-type ResumoLinha = ResumoCampanhaSms & { fallbackEnviados?: number }
+type ResumoLinha = ResumoCampanhaSms & { fallbackEnviados?: number; cobravel?: number }
 
 function CampanhaRow({ disparo, resumoSms, onVerDetalhes }: { disparo: Disparo; resumoSms?: ResumoLinha; onVerDetalhes: (disparo: Disparo) => void }) {
   const { toggle: togglePin, isPinned } = usePinnedDisparos()
   const { addToast } = useToast()
   const utmPid = disparo.utm || disparo.betmgmPid
   const casaAtiva: 'superbet' | 'betmgm' | null = disparo.utm ? 'superbet' : disparo.betmgmPid ? 'betmgm' : null
-  // RCS: a Solvefy cobra por mensagem SUBMETIDA (não só entregue), então o custo sai da
-  // contagem de "enviados" do resumo. SMS segue base × custo digitado.
+  // RCS: a Solvefy cobra por mensagem submetida — mas rejeição por saldo (insufficient_balance)
+  // NÃO é cobrada, então usa `cobravel` (submetido menos rejeições). SMS segue base × custo digitado.
   const entreguesParaCusto = disparo.canal === 'rcs'
-    ? (resumoSms?.enviados ?? 0)
+    ? (resumoSms?.cobravel ?? resumoSms?.enviados ?? 0)
     : disparo.base.totalRegistros
   // RCS que caiu pro SMS de fallback custa ~R$ 0,078 por número — soma no total.
   const custoFallback = disparo.canal === 'rcs' ? (resumoSms?.fallbackEnviados ?? 0) * CUSTO_FALLBACK_SMS : 0
@@ -137,8 +137,8 @@ export default function DisparosPage() {
       ]).then(([sms, rcs]) => {
         if (cancel) return
         const merged: Record<string, ResumoLinha> = { ...(sms.resumo ?? {}) }
-        for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, { total: number; enviados: number; entregues: number; clicados?: number; falhas: number; fallbackEnviados?: number }>)) {
-          merged[campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, clicados: r.clicados ?? 0, falhas: r.falhas, fallbackEnviados: r.fallbackEnviados ?? 0 }
+        for (const [campanha, r] of Object.entries((rcs.resumo ?? {}) as Record<string, { total: number; enviados: number; entregues: number; clicados?: number; falhas: number; fallbackEnviados?: number; cobravel?: number }>)) {
+          merged[campanha] = { total: r.total, enviados: r.enviados, entregues: r.entregues, clicados: r.clicados ?? 0, falhas: r.falhas, fallbackEnviados: r.fallbackEnviados ?? 0, cobravel: r.cobravel ?? r.enviados }
         }
         setResumoSms(merged)
       })

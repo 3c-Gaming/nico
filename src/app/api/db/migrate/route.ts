@@ -93,14 +93,15 @@ export async function POST() {
       `CREATE OR REPLACE FUNCTION rcs_resumo_por_campanha()
       RETURNS TABLE(
         campanha TEXT, total INT, enviados INT, entregues INT, lidas INT, clicados INT, falhas INT,
-        fallback_enviados INT, recebeu_rcs INT, recebeu_sms INT, nao_recebeu INT, processando INT
+        fallback_enviados INT, recebeu_rcs INT, recebeu_sms INT, nao_recebeu INT, processando INT,
+        cobravel INT, rejeitados INT
       )
       LANGUAGE sql STABLE
       AS $$
         SELECT
           campanha,
           COUNT(*)::int AS total,
-          -- enviados = submetidos à Solvefy (tudo que saiu de 'queued'); é o que a Solvefy cobra
+          -- enviados = submetidos à Solvefy (tudo que saiu de 'queued')
           COUNT(*) FILTER (WHERE status <> 'queued')::int AS enviados,
           COUNT(*) FILTER (WHERE status IN ('delivered', 'read', 'clicked'))::int AS entregues,
           COUNT(*) FILTER (WHERE status IN ('read', 'clicked'))::int AS lidas,
@@ -116,7 +117,10 @@ export async function POST() {
           COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'read', 'clicked')
                              AND (fallback_status IS NULL OR fallback_status NOT IN ('delivered', 'read'))
                              AND NOT (status IN ('erro', 'failed', 'undelivered', 'dropped')
-                                      AND (fallback_status IS NULL OR fallback_status IN ('failed', 'undelivered', 'erro'))))::int AS processando
+                                      AND (fallback_status IS NULL OR fallback_status IN ('failed', 'undelivered', 'erro'))))::int AS processando,
+          -- cobravel = submetido de verdade (não conta rejeição por saldo / pré-envio); rejeitados = sem saldo etc.
+          COUNT(*) FILTER (WHERE status <> 'queued' AND (erro IS NULL OR erro NOT ILIKE '%balance%'))::int AS cobravel,
+          COUNT(*) FILTER (WHERE erro ILIKE '%balance%')::int AS rejeitados
         FROM rcs_envios
         WHERE campanha IS NOT NULL
         GROUP BY campanha;
