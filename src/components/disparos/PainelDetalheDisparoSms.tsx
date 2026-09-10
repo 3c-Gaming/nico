@@ -9,6 +9,9 @@ import { StatusDot } from '@/components/ui/StatusDot'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
+import { useToast } from '@/components/ui/Toast'
+import { useDisparos } from '@/hooks/useDisparos'
+import { EditarAgendamento } from './EditarAgendamento'
 import type { Disparo } from '@/types'
 
 const LARGURA = 440
@@ -38,6 +41,8 @@ function Estatistica({ label, valor, cor }: { label: string; valor: string; cor?
 
 export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { disparo: Disparo | null; resumoSms?: ResumoCampanhaSms; onClose: () => void }) {
   const router = useRouter()
+  const { addToast } = useToast()
+  const { update: atualizarDisparo } = useDisparos()
   const [gerandoRemarketing, setGerandoRemarketing] = useState<'nao_clicou' | 'clicou' | null>(null)
   const [erroRemarketing, setErroRemarketing] = useState<string | null>(null)
 
@@ -255,7 +260,18 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
                       {disparo.status === 'agendado' && <CalendarClock size={10} />}
                       Data/Hora
                     </div>
-                    <div className="text-[var(--text-primary)]">{disparo.dataDisparo} {disparo.horarioDisparo}</div>
+                    {disparo.status === 'agendado' ? (
+                      <EditarAgendamento
+                        dataDisparo={disparo.dataDisparo}
+                        horarioDisparo={disparo.horarioDisparo}
+                        onSalvar={async (d, h) => {
+                          await atualizarDisparo(disparo.id, { dataDisparo: d, horarioDisparo: h })
+                          addToast('success', `Reagendado pra ${d} às ${h}`)
+                        }}
+                      />
+                    ) : (
+                      <div className="text-[var(--text-primary)]">{disparo.dataDisparo} {disparo.horarioDisparo}</div>
+                    )}
                   </div>
                   {resumoSms && (
                     <div>

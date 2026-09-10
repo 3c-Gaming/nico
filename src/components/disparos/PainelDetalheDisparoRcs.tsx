@@ -15,6 +15,7 @@ import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs } from '@
 import type { RcsContent } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { RcsSuggestionChips } from './RcsSuggestionChips'
+import { EditarAgendamento } from './EditarAgendamento'
 import type { Disparo } from '@/types'
 
 const LARGURA = 440
@@ -440,7 +441,18 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                       {disparo.status === 'agendado' && <CalendarClock size={10} />}
                       Data/Hora
                     </div>
-                    <div className="text-[var(--text-primary)]">{disparo.dataDisparo} {disparo.horarioDisparo}</div>
+                    {disparo.status === 'agendado' ? (
+                      <EditarAgendamento
+                        dataDisparo={disparo.dataDisparo}
+                        horarioDisparo={disparo.horarioDisparo}
+                        onSalvar={async (d, h) => {
+                          await atualizarDisparo(disparo.id, { dataDisparo: d, horarioDisparo: h })
+                          addToast('success', `Reagendado pra ${d} às ${h}`)
+                        }}
+                      />
+                    ) : (
+                      <div className="text-[var(--text-primary)]">{disparo.dataDisparo} {disparo.horarioDisparo}</div>
+                    )}
                   </div>
                   <div>
                     <div className="text-[var(--text-muted)]">Entregues / Lidas / Cliques</div>
