@@ -176,7 +176,7 @@ function TemplateCard({
 
 export default function RcsCompletoPage() {
   const { addToast } = useToast()
-  const { create: createDisparo } = useDisparos()
+  const { create: createDisparo, update: updateDisparo } = useDisparos()
   const { toggle: togglePin } = usePinnedDisparos()
   const { list: casasList } = useCasasAposta()
   const { confirm: confirmar, dialog: confirmDialog } = useConfirm()
@@ -225,7 +225,54 @@ export default function RcsCompletoPage() {
   const [resultados, setResultados] = useState<ResultadoEnvio[] | null>(null)
   const [atualizandoStatus, setAtualizandoStatus] = useState(false)
 
+  // Edição de um disparo RCS agendado (via ?edit=<id>)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [modoEdicao, setModoEdicao] = useState(false)
+
   useEffect(() => { carregarTemplates() }, [])
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('edit')
+    if (!id) return
+    fetch(`/api/disparos/${id}`)
+      .then((r) => r.json())
+      .then(({ disparo: d }: { disparo?: Disparo }) => {
+        if (!d) { addToast('error', 'Disparo não encontrado'); return }
+        if (d.status !== 'agendado') { addToast('error', 'Só dá pra editar disparo que ainda está agendado'); return }
+        setEditId(id)
+        setModoEdicao(true)
+        setCampanha(d.nomenclatura)
+        setTemplateSelId(d.rcsTemplateId ?? '')
+        const c = d.rcsConteudo as RcsContent | undefined
+        if (c?.type === 'text') {
+          setTipo('text'); setTexto(c.text ?? ''); setSuggestions(c.suggestions ?? [])
+        } else if (c?.type === 'card') {
+          setTipo('card'); setTexto('')
+          setCardTitle(c.card.title ?? ''); setCardDesc(c.card.description ?? '')
+          setMediaUrl(c.card.media?.url ?? ''); setMediaHeight(c.card.media?.height ?? 'MEDIUM')
+          setOrientation(c.card.orientation ?? 'VERTICAL'); setSuggestions(c.card.suggestions ?? [])
+        }
+        const fb = d.rcsFallback as RcsSmsFallback | null | undefined
+        setFallbackOn(!!fb?.enabled)
+        setFallbackFrom(fb?.from || 'solvefy')
+        setFallbackText(fb?.text || '')
+        if (d.utm) { setCasaTracking('superbet'); setUtmValor(d.utm) }
+        else if (d.betmgmPid) { setCasaTracking('betmgm'); setUtmValor(d.betmgmPid) }
+        setAgendar(true)
+        setDataAgendada(d.dataDisparo)
+        setHorarioAgendado(d.horarioDisparo)
+        const dests = (d.rcsDestinatarios ?? []) as LinhaBase[]
+        if (dests.length) {
+          const varKeys = [...new Set(dests.flatMap((l) => Object.keys(l.variables ?? {})))]
+          setHeaders(['telefone', ...varKeys])
+          setColTelefone('telefone')
+          setLinhas(dests.map((l) => ({ telefone: l.telefone, variables: l.variables ?? {} })))
+        }
+        setNomeArquivo(d.base?.nomeArquivo ?? 'base-do-agendamento')
+      })
+      .catch(() => addToast('error', 'Erro ao carregar o disparo pra edição'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function carregarTemplates() {
     try {
@@ -436,8 +483,40 @@ export default function RcsCompletoPage() {
     return data.disparo
   }
 
+  async function handleSalvarEdicao() {
+    if (!editId || !podeEnviar) return
+    const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
+    if (quando <= new Date()) { addToast('error', 'Escolha uma data/hora no futuro'); return }
+    setEnviando(true)
+    try {
+      const casaId = casaTracking
+        ? casasList.find((c) => c.nome.toLowerCase().includes(casaTracking === 'superbet' ? 'super' : 'mgm'))?.id
+        : undefined
+      updateDisparo(editId, {
+        nomenclatura: campanha.trim(),
+        casasAposta: casaId ? [casaId] : [],
+        dataDisparo: dataAgendada,
+        horarioDisparo: horarioAgendado,
+        base: { status: 'disponivel', totalRegistros: total, nomeArquivo: nomeArquivo ?? undefined },
+        utm: casaTracking === 'superbet' ? utmValor.trim() || undefined : undefined,
+        betmgmPid: casaTracking === 'betmgm' ? utmValor.trim() || undefined : undefined,
+        rcsTemplateId: templateSelId || undefined,
+        rcsConteudo: conteudo,
+        rcsFallback: fallback ?? undefined,
+        rcsDestinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
+      } as Partial<Disparo>)
+      addToast('success', `Disparo agendado atualizado — ${dataAgendada} às ${horarioAgendado}`)
+      router.push('/daxx')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
   async function handleEnviar() {
     if (!podeEnviar) return
+    if (modoEdicao) { handleSalvarEdicao(); return }
 
     if (agendar) {
       const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
@@ -531,9 +610,17 @@ export default function RcsCompletoPage() {
   return (
     <div className="flex-1 flex flex-col">
       {confirmDialog}
-      <PageHeader titulo="Disparo RCS" descricao="Templates com imagem + botões, envio pra base via Solvefy" />
+      <PageHeader
+        titulo={modoEdicao ? 'Editar disparo RCS agendado' : 'Disparo RCS'}
+        descricao="Templates com imagem + botões, envio pra base via Solvefy"
+      />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {modoEdicao && (
+          <div className="max-w-5xl rounded-lg border border-[var(--d1)]/40 bg-[var(--d1)]/10 px-3 py-2 text-xs text-[var(--text-secondary)]">
+            Editando um disparo RCS <b>agendado</b>. Pode mudar template, base, tracking, fallback, data/hora — ao salvar, ele continua agendado com os novos dados.
+          </div>
+        )}
         {/* ===== TEMPLATES ===== */}
         <section className="max-w-5xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)]">
           <div className="flex items-center justify-between mb-3">
@@ -851,10 +938,15 @@ export default function RcsCompletoPage() {
               {total} envio(s) · R$ {CUSTO_RCS_POR_ENVIO.toFixed(2)} por entregue · teto <strong className="text-[var(--text-primary)]">R$ {custoTeto.toFixed(2)}</strong> <span className="text-[var(--text-muted)]">(falha não é cobrada)</span>
               {fallbackOn && <span className="text-[var(--text-muted)]"> · + R$ {CUSTO_FALLBACK_SMS.toFixed(3)} por SMS de fallback</span>}
             </span>
-            <Button onClick={handleEnviar} loading={enviando} disabled={!podeEnviar}>
-              {agendar ? <CalendarClock size={16} /> : <Send size={16} />}
-              {agendar ? 'Agendar' : 'Enviar agora'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {modoEdicao && (
+                <Button variant="secondary" onClick={() => router.push('/daxx')}>Cancelar</Button>
+              )}
+              <Button onClick={handleEnviar} loading={enviando} disabled={!podeEnviar}>
+                {modoEdicao ? <Save size={16} /> : agendar ? <CalendarClock size={16} /> : <Send size={16} />}
+                {modoEdicao ? 'Salvar alterações' : agendar ? 'Agendar' : 'Enviar agora'}
+              </Button>
+            </div>
           </div>
         </section>
 

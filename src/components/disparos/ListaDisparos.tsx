@@ -11,7 +11,7 @@ import { Chip } from '../ui/Chip'
 import { StatusDot } from '../ui/StatusDot'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
-import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle, Copy } from 'lucide-react'
+import { Search, GitBranch, ExternalLink, Trash2, RefreshCw, Building2, Layers, BarChart3, CheckCircle, Copy, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { sincronizarResultados } from '@/lib/casas/sync'
 import { clonarDisparo, salvarCloneRemoto } from '@/lib/cloneDisparo'
@@ -140,6 +140,19 @@ function DisparoRow({ d, casas, resumoSms, onNavigate, onMarcarExecutado, onClon
           >
             <ExternalLink size={14} />
           </Link>
+          {d.status === 'agendado' && (d.canal === 'sms' || d.canal === 'rcs' || d.canal === 'telegram-csv') && (
+            <Link
+              href={
+                d.canal === 'sms' ? `/disparos/sms-rapido?edit=${d.id}`
+                : d.canal === 'rcs' ? `/disparos/rcs?edit=${d.id}`
+                : `/disparos/telegram-rapido?edit=${d.id}`
+              }
+              className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--bg-elevated)] transition-colors"
+              title="Editar disparo agendado"
+            >
+              <Pencil size={14} />
+            </Link>
+          )}
           {d.status !== 'executado' && (
             <button
               onClick={() => onMarcarExecutado(d.id)}

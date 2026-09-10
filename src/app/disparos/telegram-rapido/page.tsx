@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Upload, Send, Save, BookmarkPlus, CalendarClock, Search, Tag as TagIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Upload, Send, Save, BookmarkPlus, CalendarClock, Search, Tag as TagIcon, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -105,8 +106,12 @@ function parsearCsv(texto: string): { headers: string[]; linhas: string[][] } {
 }
 
 export default function TelegramRapidoPage() {
+  const router = useRouter()
   const { addToast } = useToast()
-  const { create: createDisparo } = useDisparos()
+  const { create: createDisparo, update: updateDisparo } = useDisparos()
+
+  const [editId, setEditId] = useState<string | null>(null)
+  const [modoEdicao, setModoEdicao] = useState(false)
 
   const [campanha, setCampanha] = useState(() => `telegram-${new Date().toISOString().slice(0, 10)}`)
   const [corpo, setCorpo] = useState('')
@@ -151,6 +156,36 @@ export default function TelegramRapidoPage() {
       .then((r) => r.json())
       .then((data) => setTemplates(data.templates ?? []))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('edit')
+    if (!id) return
+    fetch(`/api/disparos/${id}`)
+      .then((r) => r.json())
+      .then(({ disparo: d }: { disparo?: Disparo }) => {
+        if (!d) { addToast('error', 'Disparo não encontrado'); return }
+        if (d.status !== 'agendado') { addToast('error', 'Só dá pra editar disparo que ainda está agendado'); return }
+        setEditId(id)
+        setModoEdicao(true)
+        setCampanha(d.nomenclatura)
+        setCorpo(d.telegramCorpo ?? '')
+        if (d.telegramBotUsername) setBotSelecionado(d.telegramBotUsername)
+        setAgendar(true)
+        setDataAgendada(d.dataDisparo)
+        setHorarioAgendado(d.horarioDisparo)
+        const dests = (d.telegramDestinatarios ?? []) as LinhaBase[]
+        if (dests.length) {
+          setFonte('csv')
+          setHeaders(['username'])
+          setColunaUsername('username')
+          setLinhasCruas(dests.map((l) => [l.username ?? '']))
+          setLinhas(dests.map((l) => ({ ...l })))
+        }
+        setNomeArquivo(d.base?.nomeArquivo ?? 'base-do-agendamento')
+      })
+      .catch(() => addToast('error', 'Erro ao carregar o disparo pra edição'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Assinatura do que o preview de match foi calculado em cima — se a base ou o bot mudarem
@@ -341,8 +376,33 @@ export default function TelegramRapidoPage() {
     return data.disparo
   }
 
+  async function handleSalvarEdicao() {
+    if (!editId || !podeEnviar) return
+    const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
+    if (quando <= new Date()) { addToast('error', 'Escolha uma data/hora no futuro'); return }
+    setEnviando(true)
+    try {
+      updateDisparo(editId, {
+        nomenclatura: campanha,
+        dataDisparo: dataAgendada,
+        horarioDisparo: horarioAgendado,
+        base: { status: 'disponivel', totalRegistros: linhas.length, nomeArquivo: nomeArquivo ?? undefined },
+        telegramCorpo: corpo,
+        telegramBotUsername: botSelecionado,
+        telegramDestinatarios: linhas,
+      } as Partial<Disparo>)
+      addToast('success', `Disparo agendado atualizado — ${dataAgendada} às ${horarioAgendado}`)
+      router.push('/daxx')
+    } catch (err) {
+      addToast('error', (err as Error).message)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
   async function handleEnviar() {
     if (!podeEnviar) return
+    if (modoEdicao) { handleSalvarEdicao(); return }
 
     if (agendar) {
       const quando = new Date(`${dataAgendada}T${horarioAgendado}:00-03:00`)
@@ -389,7 +449,10 @@ export default function TelegramRapidoPage() {
 
   return (
     <>
-      <PageHeader titulo="Disparo Telegram" descricao="Envio direto via Bot API pra uma base externa (CSV de @usernames)" />
+      <PageHeader
+        titulo={modoEdicao ? 'Editar disparo Telegram agendado' : 'Disparo Telegram'}
+        descricao="Envio direto via Bot API pra uma base externa (CSV de @usernames)"
+      />
       <div className="p-6 space-y-5 max-w-3xl mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
@@ -631,13 +694,27 @@ export default function TelegramRapidoPage() {
           </div>
         )}
 
-        <Button icon={agendar ? <CalendarClock size={14} /> : <Send size={14} />} onClick={handleEnviar} disabled={!podeEnviar} loading={enviando}>
-          {enviando
-            ? (agendar ? 'Agendando...' : 'Enviando...')
-            : agendar
-              ? `Agendar pra ${linhas.length || 0} usuário(s)`
-              : `Enviar pra ${linhas.length || 0} usuário(s)`}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            icon={modoEdicao ? <Save size={14} /> : agendar ? <CalendarClock size={14} /> : <Send size={14} />}
+            onClick={handleEnviar}
+            disabled={!podeEnviar}
+            loading={enviando}
+          >
+            {enviando
+              ? (modoEdicao ? 'Salvando...' : agendar ? 'Agendando...' : 'Enviando...')
+              : modoEdicao
+                ? 'Salvar alterações'
+                : agendar
+                  ? `Agendar pra ${linhas.length || 0} usuário(s)`
+                  : `Enviar pra ${linhas.length || 0} usuário(s)`}
+          </Button>
+          {modoEdicao && (
+            <Button variant="secondary" icon={<X size={14} />} onClick={() => router.push('/daxx')}>
+              Cancelar
+            </Button>
+          )}
+        </div>
 
         {resultados && (
           <div className="space-y-2">

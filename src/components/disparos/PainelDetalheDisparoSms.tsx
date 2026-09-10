@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock, Users, MousePointerClick } from 'lucide-react'
+import { X, MessageSquare, Send, Link as LinkIcon, CalendarClock, Users, MousePointerClick, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
@@ -159,9 +159,19 @@ export function PainelDetalheDisparoSms({ disparo, resumoSms, onClose }: { dispa
                   <Badge variant="status" value={disparo.status} />
                 </span>
               </div>
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {disparo.status === 'agendado' && (
+                  <button
+                    onClick={() => router.push(`/disparos/sms-rapido?edit=${disparo.id}`)}
+                    className="flex items-center gap-1 text-[11px] px-2 h-7 rounded border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
+                  >
+                    <Pencil size={12} /> Editar
+                  </button>
+                )}
+                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight, Ban } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight, Ban, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { useToast } from '@/components/ui/Toast'
@@ -111,6 +112,7 @@ function PreviewRcs({ disparo }: { disparo: Disparo }) {
 }
 
 export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo | null; onClose: () => void }) {
+  const router = useRouter()
   const { update: atualizarDisparo } = useDisparos()
   const { addToast } = useToast()
   const { confirm, dialog: confirmDialog } = useConfirm()
@@ -299,6 +301,14 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {disparo.status === 'agendado' && (
+                  <button
+                    onClick={() => router.push(`/disparos/rcs?edit=${disparo.id}`)}
+                    className="flex items-center gap-1 text-[11px] px-2 h-7 rounded border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
+                  >
+                    <Pencil size={12} /> Editar
+                  </button>
+                )}
                 {podeCancelar && (
                   <button
                     onClick={cancelarDisparo}
