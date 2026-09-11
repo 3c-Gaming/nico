@@ -49,7 +49,7 @@ export function ApresentacaoResultado({ titulo, dados, topicos = TOPICOS_VAZIOS 
   const slides = [
     { id: 'capa', render: () => <SlideCapa titulo={titulo} dados={dados} topicos={topicos} /> },
     { id: 'totais', render: () => <SlideTotais dados={dadosComSegundaCasa} topicos={topicos} /> },
-    { id: 'ciclo', render: () => <SlideCiclo dados={dados} /> },
+    { id: 'ciclo', render: () => <SlideCiclo dados={dados} topicos={topicos} /> },
     { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo={titulo} /> },
     { id: 'por-casa', render: () => <SlidePorCasa dados={dadosComSegundaCasa} topicos={topicos} /> },
     ...(dados.segundaCasa?.length ? [{ id: 'segunda-casa', render: () => <SlideSegundaCasa itens={dados.segundaCasa!} /> }] : []),

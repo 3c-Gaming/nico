@@ -84,7 +84,7 @@ function SecaoAccordion({
   )
 }
 
-type Secao = 'capa' | 'estilo' | 'segunda-casa' | 'funis-whatsapp' | 'ocultar' | 'acertos' | 'atencao' | 'passos'
+type Secao = 'capa' | 'estilo' | 'segunda-casa' | 'funis-whatsapp' | 'ocultar' | 'textos' | 'acertos' | 'atencao' | 'passos'
 
 export default function EditarResultadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -123,6 +123,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
           logoAltura: data.resultado.topicos?.logoAltura ?? 48,
           capaTituloCor: data.resultado.topicos?.capaTituloCor ?? '',
           slidesOcultos: data.resultado.topicos?.slidesOcultos ?? [],
+          cicloSubtitulo: data.resultado.topicos?.cicloSubtitulo ?? '',
         })
       }
     } finally {
@@ -605,6 +606,24 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
                 </div>
               ))}
               <p className="text-[11px] text-[var(--text-muted)]">Clique em “Salvar tópicos” pra aplicar.</p>
+            </div>
+          </SecaoAccordion>
+
+          <SecaoAccordion titulo="Textos dos slides" aberta={secaoAberta === 'textos'} onToggle={() => setSecaoAberta('textos')}>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-[var(--text-muted)] mb-1">Subtítulo — &quot;Conversão por etapa do ciclo&quot;</label>
+                <textarea
+                  value={topicos.cicloSubtitulo ?? ''}
+                  onChange={(e) => setTopicos({ ...topicos, cicloSubtitulo: e.target.value })}
+                  placeholder="Vazio = texto automático a partir dos dados do ciclo"
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-none"
+                />
+                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                  Deixe em branco pra usar o texto gerado automaticamente (compara D1 com a etapa mais fraca — só faz sentido quando D3/D5/D7 têm disparo no mês).
+                </p>
+              </div>
             </div>
           </SecaoAccordion>
 

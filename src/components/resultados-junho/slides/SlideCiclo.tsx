@@ -1,18 +1,25 @@
 'use client'
 
-import type { ResultadosJunho2026 } from '@/types'
+import type { ResultadosJunho2026, TopicosResultado } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { BarraComparativa } from '../BarraComparativa'
 import { StatTile } from '../StatTile'
 import { CORES_CICLO, formatarMoeda } from '../formato'
 
-export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
+export function SlideCiclo({ dados, topicos }: { dados: ResultadosJunho2026; topicos?: TopicosResultado }) {
   const { porCiclo } = dados
   const ciclos = ['D1', 'D3', 'D5', 'D7'] as const
 
   const melhor = porCiclo.D1.roas
   const pior = Math.min(...ciclos.map((c) => porCiclo[c].roas))
   const razao = pior > 0 ? (melhor / pior).toFixed(1) : '—'
+
+  // Sem dado (só D1 ativo no mês, por exemplo) a razão vira "—x" e a frase fica sem sentido —
+  // troca por um texto que se sustenta sozinho quando não dá pra comparar com as outras etapas.
+  const subtituloAuto = pior > 0
+    ? `A base "quente" logo após o registro (D1) teve ROI ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`
+    : `A base "quente" logo após o registro (D1) foi a etapa do ciclo com melhor resposta no período, com ROI de ${melhor.toFixed(2)}x. Ainda não há disparos suficientes em D3/D5/D7 pra comparar.`
+  const subtitulo = topicos?.cicloSubtitulo?.trim() || subtituloAuto
 
   const totalCiclo = ciclos.reduce(
     (acc, c) => ({
@@ -29,7 +36,7 @@ export function SlideCiclo({ dados }: { dados: ResultadosJunho2026 }) {
       compact
       eyebrow="Esteira Ciclo de 7 dias"
       titulo="Conversão por etapa do ciclo"
-      subtitulo={`A base "quente" logo após o registro (D1) teve ROI ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`}
+      subtitulo={subtitulo}
     >
       <SlideItem className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
         <StatTile label="Investimento" value={totalCiclo.custo} prefix="R$ " decimals={0} cor="var(--text-primary)" />
