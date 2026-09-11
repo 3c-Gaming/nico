@@ -736,9 +736,10 @@ export interface TopicosResultado {
   logos?: string[]
   logoAltura?: number
   capaTituloCor?: string
-  /** subtítulo do slide "Conversão por etapa do ciclo" — quando vazio, usa o texto
-   *  auto-gerado a partir dos dados (ver SlideCiclo). */
-  cicloSubtitulo?: string
+  /** subtítulos customizados por slide — chave = id do slide (ver SUBTITULOS_SLIDE em
+   *  components/resultados-junho/textosSlide.ts). Vazio/ausente = cada slide usa o texto
+   *  automático gerado a partir dos dados. */
+  subtitulosSlide?: Record<string, string>
   /** chaves de elementos de slide (KPIs/cards/gráficos) que o usuário escolheu ocultar —
    *  ver ELEMENTOS_OCULTAVEIS em components/resultados-junho/elementosOcultaveis.ts */
   slidesOcultos?: string[]

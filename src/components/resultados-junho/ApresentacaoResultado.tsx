@@ -50,9 +50,9 @@ export function ApresentacaoResultado({ titulo, dados, topicos = TOPICOS_VAZIOS 
     { id: 'capa', render: () => <SlideCapa titulo={titulo} dados={dados} topicos={topicos} /> },
     { id: 'totais', render: () => <SlideTotais dados={dadosComSegundaCasa} topicos={topicos} /> },
     { id: 'ciclo', render: () => <SlideCiclo dados={dados} topicos={topicos} /> },
-    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo={titulo} /> },
+    { id: 'base-total', render: () => <SlideBaseTotal dados={dados} titulo={titulo} topicos={topicos} /> },
     { id: 'por-casa', render: () => <SlidePorCasa dados={dadosComSegundaCasa} topicos={topicos} /> },
-    ...(dados.segundaCasa?.length ? [{ id: 'segunda-casa', render: () => <SlideSegundaCasa itens={dados.segundaCasa!} /> }] : []),
+    ...(dados.segundaCasa?.length ? [{ id: 'segunda-casa', render: () => <SlideSegundaCasa itens={dados.segundaCasa!} topicos={topicos} /> }] : []),
     ...(dados.funisWhatsapp?.itens?.length
       ? [{ id: 'funis-whatsapp', render: () => <SlideFunisWhatsapp dados={dados.funisWhatsapp!} topicos={topicos} /> }]
       : []),

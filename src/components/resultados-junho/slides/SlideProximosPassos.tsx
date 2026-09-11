@@ -3,6 +3,7 @@
 import { ArrowRight } from 'lucide-react'
 import type { ResultadosJunho2026, TopicosResultado } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
+import { subtituloCustom } from '../textosSlide'
 
 interface SlideProximosPassosProps {
   dados: ResultadosJunho2026
@@ -27,7 +28,11 @@ export function SlideProximosPassos({ dados, topicos }: SlideProximosPassosProps
   const passos = topicos?.proximosPassos?.length ? topicos.proximosPassos : passosSugeridos
 
   return (
-    <SlideShell eyebrow="Olhando pra frente" titulo="Próximos passos" subtitulo="Ideias/Sugestões que podemos tirar dos dados apresentados.">
+    <SlideShell
+      eyebrow="Olhando pra frente"
+      titulo="Próximos passos"
+      subtitulo={subtituloCustom(topicos, 'proximos-passos') ?? 'Ideias/Sugestões que podemos tirar dos dados apresentados.'}
+    >
       <SlideItem className="w-full flex flex-col gap-3 text-left">
         {passos.map((texto, i) => (
           <div

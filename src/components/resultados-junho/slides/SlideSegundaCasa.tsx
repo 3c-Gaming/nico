@@ -1,8 +1,9 @@
 'use client'
 
-import type { ItemSegundaCasa } from '@/types'
+import type { ItemSegundaCasa, TopicosResultado } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { CORES_CASA, formatarMoeda, formatarNumero } from '../formato'
+import { subtituloCustom } from '../textosSlide'
 
 function TabelaSegundaCasa({ itens }: { itens: ItemSegundaCasa[] }) {
   const totalRegistros = itens.reduce((sum, item) => sum + item.registros, 0)
@@ -49,14 +50,15 @@ function TabelaSegundaCasa({ itens }: { itens: ItemSegundaCasa[] }) {
   )
 }
 
-export function SlideSegundaCasa({ itens }: { itens: ItemSegundaCasa[] }) {
+export function SlideSegundaCasa({ itens, topicos }: { itens: ItemSegundaCasa[]; topicos?: TopicosResultado }) {
   const totalFaturamento = itens.reduce((s, d) => s + d.faturamento, 0)
+  const subtituloAuto = 'Faturamento da base total dos disparos que ou já tinham cadastro ou aproveitaram além da oferta do disparo padrão uma oferta complementar em outra casa — sem custo de disparo próprio, potencializando o LTV.'
 
   return (
     <SlideShell
       eyebrow="LTV e Impulsionamento"
       titulo="Oferta de Segunda Casa"
-      subtitulo="Faturamento da base total dos disparos que ou já tinham cadastro ou aproveitaram além da oferta do disparo padrão uma oferta complementar em outra casa — sem custo de disparo próprio, potencializando o LTV."
+      subtitulo={subtituloCustom(topicos, 'segunda-casa') ?? subtituloAuto}
     >
       <SlideItem className="w-full">
         <TabelaSegundaCasa itens={itens} />

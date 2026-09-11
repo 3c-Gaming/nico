@@ -10,6 +10,7 @@ import { Plus, X, Presentation, Globe, Copy, Save, ChevronDown, Image as ImageIc
 import type { Resultado, TopicosResultado } from '@/types'
 import { FONTES_PRESET } from '@/components/resultados-junho/fontes'
 import { ELEMENTOS_OCULTAVEIS } from '@/components/resultados-junho/elementosOcultaveis'
+import { SUBTITULOS_SLIDE } from '@/components/resultados-junho/textosSlide'
 
 function ListaEditavel({
   label,
@@ -123,7 +124,7 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
           logoAltura: data.resultado.topicos?.logoAltura ?? 48,
           capaTituloCor: data.resultado.topicos?.capaTituloCor ?? '',
           slidesOcultos: data.resultado.topicos?.slidesOcultos ?? [],
-          cicloSubtitulo: data.resultado.topicos?.cicloSubtitulo ?? '',
+          subtitulosSlide: data.resultado.topicos?.subtitulosSlide ?? {},
         })
       }
     } finally {
@@ -611,19 +612,26 @@ export default function EditarResultadoPage({ params }: { params: Promise<{ id: 
 
           <SecaoAccordion titulo="Textos dos slides" aberta={secaoAberta === 'textos'} onToggle={() => setSecaoAberta('textos')}>
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Subtítulo — &quot;Conversão por etapa do ciclo&quot;</label>
-                <textarea
-                  value={topicos.cicloSubtitulo ?? ''}
-                  onChange={(e) => setTopicos({ ...topicos, cicloSubtitulo: e.target.value })}
-                  placeholder="Vazio = texto automático a partir dos dados do ciclo"
-                  rows={3}
-                  className="w-full px-3 py-2 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-none"
-                />
-                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                  Deixe em branco pra usar o texto gerado automaticamente (compara D1 com a etapa mais fraca — só faz sentido quando D3/D5/D7 têm disparo no mês).
-                </p>
-              </div>
+              <p className="text-xs text-[var(--text-muted)]">
+                Descrição abaixo do título de cada slide. Em branco = texto automático a partir dos dados do mês.
+              </p>
+              {SUBTITULOS_SLIDE.map((s) => (
+                <div key={s.id}>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1">{s.label}</label>
+                  <textarea
+                    value={topicos.subtitulosSlide?.[s.id] ?? ''}
+                    onChange={(e) =>
+                      setTopicos({
+                        ...topicos,
+                        subtitulosSlide: { ...topicos.subtitulosSlide, [s.id]: e.target.value },
+                      })
+                    }
+                    placeholder="Vazio = texto automático"
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors resize-none"
+                  />
+                </div>
+              ))}
             </div>
           </SecaoAccordion>
 

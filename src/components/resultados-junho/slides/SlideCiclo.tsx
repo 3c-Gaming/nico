@@ -5,6 +5,7 @@ import { SlideShell, SlideItem } from '../SlideShell'
 import { BarraComparativa } from '../BarraComparativa'
 import { StatTile } from '../StatTile'
 import { CORES_CICLO, formatarMoeda } from '../formato'
+import { subtituloCustom } from '../textosSlide'
 
 export function SlideCiclo({ dados, topicos }: { dados: ResultadosJunho2026; topicos?: TopicosResultado }) {
   const { porCiclo } = dados
@@ -19,7 +20,7 @@ export function SlideCiclo({ dados, topicos }: { dados: ResultadosJunho2026; top
   const subtituloAuto = pior > 0
     ? `A base "quente" logo após o registro (D1) teve ROI ${razao}x maior que o estágio mais fraco do ciclo. Impacto expressivo no reaproveitamento da mesma base com novas ofertas. Leads captados hoje, convertem pelo resto da semana.`
     : `A base "quente" logo após o registro (D1) foi a etapa do ciclo com melhor resposta no período, com ROI de ${melhor.toFixed(2)}x. Ainda não há disparos suficientes em D3/D5/D7 pra comparar.`
-  const subtitulo = topicos?.cicloSubtitulo?.trim() || subtituloAuto
+  const subtitulo = subtituloCustom(topicos, 'ciclo') ?? subtituloAuto
 
   const totalCiclo = ciclos.reduce(
     (acc, c) => ({

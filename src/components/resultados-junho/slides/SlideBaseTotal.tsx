@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import type { ResultadosJunho2026 } from '@/types'
+import type { ResultadosJunho2026, TopicosResultado } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { StatTile } from '../StatTile'
 import { formatarMoeda, slugMes } from '../formato'
+import { subtituloCustom } from '../textosSlide'
 
 type DisparoTop = ResultadosJunho2026['topDisparos'][number]
 
@@ -42,7 +43,7 @@ function TopCard({ disparo, posicao, pasta }: { disparo: DisparoTop; posicao: nu
   )
 }
 
-export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; titulo: string }) {
+export function SlideBaseTotal({ dados, titulo, topicos }: { dados: ResultadosJunho2026; titulo: string; topicos?: TopicosResultado }) {
   const total = dados.porCiclo.TOTAL
   const pastaImagens = slugMes(titulo)
   const top3 = dados.disparos
@@ -50,15 +51,16 @@ export function SlideBaseTotal({ dados, titulo }: { dados: ResultadosJunho2026; 
     .sort((a, b) => b.lucro - a.lucro)
     .slice(0, 3)
 
+  const subtituloAuto = `${total.disparos} disparos pra base total, com promoções pontuais dos jogos da copa — foram responsáveis por ${(
+    dados.totais.lucro !== 0 ? (total.lucro / dados.totais.lucro) * 100 : 0
+  ).toFixed(0)}% do lucro do mês.`
+
   return (
     <SlideShell
       compact
       eyebrow="Destaques do mês"
       titulo="Disparos Pontuais"
-      subtitulo={`${total.disparos} disparos pra base total, com promoções pontuais dos jogos da copa — foram responsáveis por ${(
-        (total.lucro / dados.totais.lucro) *
-        100
-      ).toFixed(0)}% do lucro do mês.`}
+      subtitulo={subtituloCustom(topicos, 'base-total') ?? subtituloAuto}
     >
       <SlideItem className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full">
         <StatTile label="DISPAROS" value={total.disparos} cor="var(--text-primary)" delay={0.3} />

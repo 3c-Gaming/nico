@@ -6,6 +6,7 @@ import { BarraComparativa } from '../BarraComparativa'
 import { CORES_CASA, formatarMoeda, formatarNumero } from '../formato'
 import { porCasaComFunisWhatsapp } from '@/lib/resultados/funisWhatsapp'
 import { estaOculto } from '../elementosOcultaveis'
+import { subtituloCustom } from '../textosSlide'
 
 export function SlidePorCasa({ dados, topicos }: { dados: ResultadosJunho2026; topicos?: TopicosResultado }) {
   // FTDs por casa = disparos + funis de WhatsApp (só reg/FTD; lucro/ROI seguem só dos disparos)
@@ -17,7 +18,7 @@ export function SlidePorCasa({ dados, topicos }: { dados: ResultadosJunho2026; t
     <SlideShell
       eyebrow="Resultados Por casa"
       titulo={`${melhorCasa} como foco para FTD`}
-      subtitulo="FTDs por casa somando disparos e funis de WhatsApp"
+      subtitulo={subtituloCustom(topicos, 'por-casa') ?? 'FTDs por casa somando disparos e funis de WhatsApp'}
     >
       {!estaOculto(topicos, 'porCasa.barras') && (
         <SlideItem className="w-full">

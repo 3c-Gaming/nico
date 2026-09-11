@@ -4,6 +4,7 @@ import { CheckCircle2, AlertTriangle } from 'lucide-react'
 import type { ResultadosJunho2026, TopicosResultado } from '@/types'
 import { SlideShell, SlideItem } from '../SlideShell'
 import { formatarMoeda } from '../formato'
+import { subtituloCustom } from '../textosSlide'
 
 interface SlideErrosAcertosProps {
   dados: ResultadosJunho2026
@@ -42,7 +43,11 @@ export function SlideErrosAcertos({ dados, topicos }: SlideErrosAcertosProps) {
   const pontosDeAtencao = topicos?.pontosAtencao?.length ? topicos.pontosAtencao : pontosDeAtencaoSugeridos
 
   return (
-    <SlideShell eyebrow="Retrospectiva do setor" titulo="Erros e acertos" subtitulo="Ideias/Sugestões que podemos tirar dos dados apresentados.">
+    <SlideShell
+      eyebrow="Retrospectiva do setor"
+      titulo="Erros e acertos"
+      subtitulo={subtituloCustom(topicos, 'erros-acertos') ?? 'Ideias/Sugestões que podemos tirar dos dados apresentados.'}
+    >
       <SlideItem className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-[var(--success)]">
