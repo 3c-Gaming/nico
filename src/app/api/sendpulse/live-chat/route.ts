@@ -32,8 +32,8 @@ async function fetchComTimeout<T>(
 async function processarBot(numero: Awaited<ReturnType<typeof listarNumerosTodasContas>>[number]): Promise<NumeroMonitorado> {
   const apiKey = apiKeyParaBot(numero.id)
   const [statsR, fluxosR] = await Promise.allSettled([
-    fetchComTimeout((signal) => obterStatusBot(numero.id, apiKey, signal)),
-    fetchComTimeout((signal) => listarFluxos(numero.id, apiKey, signal)),
+    fetchComTimeout((signal) => obterStatusBot(numero.id, apiKey, signal, numero.canal)),
+    fetchComTimeout((signal) => listarFluxos(numero.id, apiKey, signal, numero.canal)),
   ])
 
   const statsOk = statsR.status === 'fulfilled' && statsR.value.ok
@@ -67,7 +67,7 @@ async function processarBot(numero: Awaited<ReturnType<typeof listarNumerosTodas
 }
 
 async function fetchAllBots(): Promise<DadosMonitoramento> {
-  const numerosResult = await fetchComTimeout((signal) => listarNumerosTodasContas(signal))
+  const numerosResult = await fetchComTimeout((signal) => listarNumerosTodasContas(signal, ['whatsapp', 'telegram']))
   if (!numerosResult.ok) {
     throw new Error('Timeout ao listar números')
   }
