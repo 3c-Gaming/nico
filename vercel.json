@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/gtmetrix",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/funil-metricas-snapshot",
+      "schedule": "10 3 * * *"
     }
   ]
 }

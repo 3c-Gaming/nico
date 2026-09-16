@@ -113,3 +113,17 @@ body {
   background-size: 300% 300%;
   animation: gradiente-resultados 14s ease infinite;
 }
+
+@keyframes barra-progresso-indeterminada {
+  0% { left: -35%; right: 100%; }
+  60% { left: 100%; right: -60%; }
+  100% { left: 100%; right: -60%; }
+}
+
+.barra-progresso-indeterminada {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: var(--d1);
+  animation: barra-progresso-indeterminada 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

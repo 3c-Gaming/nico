@@ -479,6 +479,180 @@ function BlocoGastoMeta({
   )
 }
 
+/** Lucro por FTD (configurável por casa vinculada ao funil), links de Registro/Aposta e o ROI
+ * resultante — mesmo padrão de auto-save no blur dos outros campos desse painel (comentarios,
+ * campanhasMeta). ROI aqui é um best-effort client-side: só calcula quando exatamente UMA casa
+ * tem lucro configurado (não dá pra separar `ftds` por casa nesse ponto da árvore de props sem
+ * replicar o cálculo pesado que já roda mais acima) — o valor por-casa correto e histórico fica
+ * gravado em funil_metricas_diarias (ver src/lib/funilSnapshot.ts, calcularSnapshotDoFunil). */
+function BlocoLucroELinks({
+  flowId,
+  dataInicio,
+  dataFim,
+  ftds,
+  editavel,
+}: {
+  flowId: string
+  dataInicio: string
+  dataFim: string
+  ftds: number
+  editavel?: boolean
+}) {
+  const config = useSyncExternalStore(
+    (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
+    () => getState().flowTagConfigs[flowId],
+    () => undefined,
+  )
+  const casasAposta = getState().casasAposta as Record<string, CasaAposta>
+  const casas = config?.casas ?? []
+  const lpUrl = config?.lpUrl ?? ''
+
+  // Mesmo fetch de BlocoGastoMeta (não compartilhado — cada Bloco* dessa tela busca o que
+  // precisa por conta própria, ver comentário na definição dela) só pra chegar no gasto já
+  // atribuído a esse funil e calcular o ROI.
+  const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
+  useEffect(() => {
+    let ativo = true
+    fetch(`/api/meta-ads/campanhas?from=${dataInicio}&to=${dataFim}`)
+      .then((r) => r.json())
+      .then((data) => { if (ativo && !data.error) setCampanhas(data.campanhas ?? []) })
+      .catch(() => {})
+    return () => { ativo = false }
+  }, [dataInicio, dataFim])
+  const funisPorCampanha = contarFunisPorCampanha(Object.values(getState().flowTagConfigs))
+  const gastoTotal = campanhas ? gastoDoFunil(config?.campanhasMeta, campanhas, funisPorCampanha) : 0
+
+  const [lucroPorCasa, setLucroPorCasa] = useState<Record<string, string>>({})
+  const [linkRegistro, setLinkRegistro] = useState('')
+  const [linkAposta, setLinkAposta] = useState('')
+  const [buscandoLinks, setBuscandoLinks] = useState(false)
+  const [erroBusca, setErroBusca] = useState<string | null>(null)
+
+  useEffect(() => {
+    const lucro: Record<string, string> = {}
+    for (const casaId of casas) {
+      const v = config?.lucroFtdPorCasa?.[casaId]
+      if (v !== undefined) lucro[casaId] = String(v)
+    }
+    setLucroPorCasa(lucro)
+    setLinkRegistro(config?.linkRegistro ?? '')
+    setLinkAposta(config?.linkAposta ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowId, config?.lucroFtdPorCasa, config?.linkRegistro, config?.linkAposta])
+
+  function salvarLucroCasa(casaId: string, valor: string) {
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    const numero = valor.trim() === '' ? undefined : Number(valor.replace(',', '.'))
+    const atual = { ...(configAtual.lucroFtdPorCasa ?? {}) }
+    if (numero === undefined || isNaN(numero)) delete atual[casaId]
+    else atual[casaId] = numero
+    updateFlowTagConfig({ ...configAtual, lucroFtdPorCasa: atual })
+  }
+
+  function salvarLinks() {
+    const configAtual = getState().flowTagConfigs[flowId]
+    if (!configAtual) return
+    if ((configAtual.linkRegistro ?? '') === linkRegistro && (configAtual.linkAposta ?? '') === linkAposta) return
+    updateFlowTagConfig({ ...configAtual, linkRegistro: linkRegistro || null, linkAposta: linkAposta || null })
+  }
+
+  async function buscarDaLp() {
+    if (!lpUrl || casas.length === 0) return
+    setBuscandoLinks(true)
+    setErroBusca(null)
+    try {
+      const res = await fetch(`/api/funis/extrair-links?lpUrl=${encodeURIComponent(lpUrl)}&casaIds=${casas.join(',')}`)
+      const data = await res.json()
+      if (data.error) { setErroBusca(data.error); return }
+      const candidatos: string[] = Object.values(data.candidatos ?? {}).flat() as string[]
+      if (candidatos.length === 0) { setErroBusca('Nenhum link reconhecido nessa LP'); return }
+      if (!linkRegistro) setLinkRegistro(candidatos[0])
+      if (!linkAposta && candidatos[1]) setLinkAposta(candidatos[1])
+    } catch (err) {
+      setErroBusca((err as Error).message)
+    } finally {
+      setBuscandoLinks(false)
+    }
+  }
+
+  // ROI só quando dá pra atribuir o FTD todo a uma casa só (ver comentário da função) — com mais
+  // de uma casa com lucro configurado, mostra "—" em vez de arriscar um número errado.
+  const casasComLucro = Object.entries(lucroPorCasa).filter(([, v]) => v.trim() !== '' && !isNaN(Number(v.replace(',', '.'))))
+  const lucroFtdTotal = casasComLucro.length === 1 ? ftds * Number(casasComLucro[0][1].replace(',', '.')) : null
+  const roi = lucroFtdTotal !== null && gastoTotal > 0 ? ((lucroFtdTotal - gastoTotal) / gastoTotal) * 100 : null
+
+  if (casas.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+        <span className="text-xs font-medium text-[var(--text-muted)]">Lucro por FTD / ROI</span>
+        {roi !== null && (
+          <span className={`text-xs font-mono font-semibold ${roi >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+            ROI {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {casas.map((casaId) => {
+          const casa = casasAposta[casaId]
+          return (
+            <div key={casaId} className="flex items-center gap-1.5">
+              <span className="text-[11px] text-[var(--text-muted)] truncate flex-1" title={casa?.nome}>{casa?.nome ?? casaId}</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                disabled={!editavel}
+                value={lucroPorCasa[casaId] ?? ''}
+                onChange={(e) => setLucroPorCasa((prev) => ({ ...prev, [casaId]: e.target.value }))}
+                onBlur={(e) => salvarLucroCasa(casaId, e.target.value)}
+                placeholder="R$/FTD"
+                className="w-20 h-6 px-1.5 text-[11px] font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] disabled:opacity-50"
+              />
+            </div>
+          )
+        })}
+      </div>
+      {editavel && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={linkRegistro}
+              onChange={(e) => setLinkRegistro(e.target.value)}
+              onBlur={salvarLinks}
+              placeholder="Link de registro (opcional)"
+              className="flex-1 h-6 px-1.5 text-[11px] bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] font-mono truncate"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={linkAposta}
+              onChange={(e) => setLinkAposta(e.target.value)}
+              onBlur={salvarLinks}
+              placeholder="Link de aposta (opcional)"
+              className="flex-1 h-6 px-1.5 text-[11px] bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] font-mono truncate"
+            />
+            {lpUrl && (
+              <button
+                onClick={buscarDaLp}
+                disabled={buscandoLinks}
+                className="text-[10px] font-medium px-1.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 shrink-0 whitespace-nowrap"
+                title="Buscar links na LP configurada"
+              >
+                {buscandoLinks ? <Spinner size={10} /> : 'Buscar da LP'}
+              </button>
+            )}
+          </div>
+          {erroBusca && <p className="text-[10px] text-[var(--error)]">{erroBusca}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Combobox pesquisável pra escolher um funil na comparação — o app tem dezenas de funis
  * configurados, um <select> nativo fica ruim de usar (lista gigante sem busca). Mesmo padrão
  * de interação do TagComboBox (ui/TagComboBox.tsx). */
@@ -1005,6 +1179,15 @@ export function PainelConversasFluxo({
                       ftds={ftds}
                       tags={tags}
                       contagensPorTag={contagensPorTag}
+                      editavel
+                    />
+                  )}
+                  {flowId && (
+                    <BlocoLucroELinks
+                      flowId={flowId}
+                      dataInicio={dataInicio}
+                      dataFim={dataReferencia}
+                      ftds={ftds}
                       editavel
                     />
                   )}

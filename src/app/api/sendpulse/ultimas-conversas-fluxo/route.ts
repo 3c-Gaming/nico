@@ -8,13 +8,20 @@ import {
 } from '@/lib/integrações/sendpulseConversaFluxo'
 import { comContaECanalDoBot } from '@/lib/integrações/contasSendpulse'
 
-export const maxDuration = 60
+// Processar em lotes (ver BATCH_SIZE_MENSAGENS) é mais lento que tudo em paralelo — folga maior
+// que o padrão da Vercel pra não matar a função no meio de uma busca ainda válida.
+export const maxDuration = 120
 
 const QUANTIDADE_PADRAO = 50
 // Pede mais candidatos do que precisa — um contato pode ter a tag mas não ter mensagem
 // correlacionável a esse flowId específico (ex: tag setada manualmente, ou por outro
 // caminho que não passou por esse fluxo). Busca com folga e filtra os que sobram.
 const MULTIPLICADOR_CANDIDATOS = 3
+// Cada candidato dispara pelo menos 1 chamada à SendPulse (histórico de mensagens) — buscar todos
+// de uma vez (até quantidade × MULTIPLICADOR_CANDIDATOS = 150 por padrão) estoura o limite de 30
+// req/min da conta. Processa em lotes pequenos (mesmo princípio de BATCH_SIZE em
+// monitoramento/route.ts) — mais lento, mas não derruba a conta inteira num rate limit.
+const BATCH_SIZE_MENSAGENS = 6
 
 interface LeadComConversa {
   contactId: string
@@ -59,13 +66,19 @@ export async function GET(request: NextRequest) {
     const resolvidos = await comContaECanalDoBot(botId, async (apiKey, canal) => {
       const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS, canal)
 
-      return Promise.allSettled(
-        candidatos.map(async (candidato): Promise<LeadComConversa> => {
-          const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId, canal)
-          const mensagens = filtrarConversaPorFluxo(brutas, flowId)
-          return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
-        }),
-      )
+      const resultados: PromiseSettledResult<LeadComConversa>[] = []
+      for (let i = 0; i < candidatos.length; i += BATCH_SIZE_MENSAGENS) {
+        const lote = candidatos.slice(i, i + BATCH_SIZE_MENSAGENS)
+        const loteResolvido = await Promise.allSettled(
+          lote.map(async (candidato): Promise<LeadComConversa> => {
+            const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId, canal)
+            const mensagens = filtrarConversaPorFluxo(brutas, flowId)
+            return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
+          }),
+        )
+        resultados.push(...loteResolvido)
+      }
+      return resultados
     })
 
     // Descarta quem não tem mensagem correlacionável a esse fluxo (ou cuja busca falhou), e

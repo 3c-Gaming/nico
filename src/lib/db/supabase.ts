@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -75,6 +75,16 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   urlTemplate: 'url_template',
   userStories: 'user_stories',
   valorTotalBase: 'valor_total_base',
+  lucroFtdPorCasa: 'lucro_ftd_por_casa',
+  linkRegistro: 'link_registro',
+  linkAposta: 'link_aposta',
+  ftdsPorCasa: 'ftds_por_casa',
+  tagsContagem: 'tags_contagem',
+  gastoMeta: 'gasto_meta',
+  custoEntrada: 'custo_entrada',
+  custoRegistro: 'custo_registro',
+  custoFtd: 'custo_ftd',
+  lucroFtdTotal: 'lucro_ftd_total',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -158,6 +168,16 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   quantidade_compras: 'quantidadeCompras',
   receita_vendas: 'receitaVendas',
   ticket_medio: 'ticketMedio',
+  lucro_ftd_por_casa: 'lucroFtdPorCasa',
+  link_registro: 'linkRegistro',
+  link_aposta: 'linkAposta',
+  ftds_por_casa: 'ftdsPorCasa',
+  tags_contagem: 'tagsContagem',
+  gasto_meta: 'gastoMeta',
+  custo_entrada: 'custoEntrada',
+  custo_registro: 'custoRegistro',
+  custo_ftd: 'custoFtd',
+  lucro_ftd_total: 'lucroFtdTotal',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -549,6 +569,31 @@ export async function atualizarFlowTagConfig(config: FlowTagConfig): Promise<Flo
 export async function deletarFlowTagConfig(flowId: string): Promise<boolean> {
   const { error } = await tb('flow_tag_configs').delete().eq('flow_id', flowId)
   return !error
+}
+
+// --- Funil Métricas Diárias ---
+
+export async function upsertFunilMetricaDiaria(metrica: FunilMetricaDiaria): Promise<FunilMetricaDiaria> {
+  const { data, error } = await tb('funil_metricas_diarias')
+    .upsert(toSnakeCase(metrica as any), { onConflict: 'flow_id,data' })
+    .select()
+    .single()
+  if (error) throw new Error(`Erro ao gravar métrica diária do funil: ${error.message}`)
+  return row<FunilMetricaDiaria>(data)!
+}
+
+export async function listarMetricasDiariasDoFunil(flowId: string, dataInicio: string, dataFim: string): Promise<FunilMetricaDiaria[]> {
+  const { data, error } = await tb('funil_metricas_diarias')
+    .select('*')
+    .eq('flow_id', flowId)
+    .gte('data', dataInicio)
+    .lte('data', dataFim)
+    .order('data')
+  if (error) {
+    console.warn('[supabase] listarMetricasDiariasDoFunil error:', error.message)
+    return []
+  }
+  return rows<FunilMetricaDiaria>(data)
 }
 
 // --- Cache Metricas ---

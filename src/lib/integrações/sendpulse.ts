@@ -2,6 +2,7 @@ import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasB
 import { listarContasSendpulse, registrarContaDoBot, registrarCanalDoBot, apiKeyParaBot } from './contasSendpulse'
 import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
 import { getPreferencias } from '@/lib/db/supabase'
+import { getOrFetch } from '@/lib/cache'
 
 /** Nome amigável que o usuário deu à conta na tela de Configurações sobrepõe o nome vindo do
  * .env (SENDPULSE_NN_NOME) — sem isso, contas sem essa env var preenchida caem no fallback
@@ -29,6 +30,21 @@ function getHeaders(apiKey: string) {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   }
+}
+
+/** Retry com backoff exponencial só pra 429 ("max 30 requests per minute", limite por conta da
+ * SendPulse) — fácil de estourar em telas que buscam algo por número/fluxo/bot em lote (uma conta
+ * pode ter 70+ números). Outros status voltam direto pro chamador, sem retry (não adianta
+ * re-tentar um bot_id que genuinamente não existe). Mesmo padrão de
+ * sendpulseConversaFluxo.ts:fetchSendpulseComRetry. */
+async function fetchComRetry429(url: string, apiKey: string, signal?: AbortSignal, tentativas = 4): Promise<Response> {
+  let ultimaResposta: Response
+  for (let i = 0; i < tentativas; i++) {
+    ultimaResposta = await fetch(url, { headers: getHeaders(apiKey), signal })
+    if (ultimaResposta.status !== 429) return ultimaResposta
+    if (i < tentativas - 1) await new Promise((r) => setTimeout(r, 1000 * 2 ** i))
+  }
+  return ultimaResposta!
 }
 
 function traduzirStatusBot(status: number): 'ativo' | 'inativo' {
@@ -61,10 +77,32 @@ function mapearBotParaNumero(bot: any, canal: Canal): NumeroSendpulse {
 }
 
 export async function listarNumeros(apiKey: string, canal: Canal, signal?: AbortSignal): Promise<NumeroSendpulse[]> {
-  const res = await fetch(`${baseUrl(canal)}/bots`, { headers: getHeaders(apiKey), signal })
+  const res = await fetchComRetry429(`${baseUrl(canal)}/bots`, apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   return (json.data ?? []).map((bot: unknown) => mapearBotParaNumero(bot, canal))
+}
+
+// Conta com plano expirado/excedido na SendPulse ainda aceita a maioria das chamadas de leitura —
+// filtrar isso globalmente (dentro de listarNumerosTodasContas) faria números de disparo sumirem
+// de Disparos/monitoramento/crons sem aviso. Por isso o filtro fica opt-in, exposto aqui só como
+// helper (ver uso em /api/sendpulse/numeros com ?apenasContasAtivas=true, hoje só a tela de
+// Funis) — cada consumidor decide se quer esconder conta expirada ou não. Cache curto porque isso
+// chama /whatsapp/account por conta a cada vez (ver buscarStatusPlanoTodasContas).
+const TTL_STATUS_PLANO_MS = 5 * 60_000
+
+export async function idsContasComPlanoAtivo(): Promise<Set<string>> {
+  const contas = listarContasSendpulse()
+  const status = await getOrFetch('sendpulse-status-plano', 'todas', TTL_STATUS_PLANO_MS, () => buscarStatusPlanoTodasContas())
+  const statusPorConta = new Map(status.map((s) => [s.contaId, s]))
+  const ativas = contas.filter((conta) => {
+    const s = statusPorConta.get(conta.id)
+    // Sem resposta de status (erro pontual, timeout) não bloqueia a conta — só some quando a
+    // SendPulse confirma expirado/excedido.
+    if (!s) return true
+    return !s.isExpired && !s.isExceeded
+  })
+  return new Set(ativas.map((c) => c.id))
 }
 
 /** Busca números de TODAS as contas configuradas (e, por padrão, só do canal WhatsApp — passe
@@ -73,7 +111,8 @@ export async function listarNumeros(apiKey: string, canal: Canal, signal?: Abort
  * canal pra outras chamadas (fluxos, status, tags) saberem qual API key/canal usar sem precisar
  * buscar todos os números de novo. `signal` mantido na 1ª posição (não antes de `canais`) pra não
  * quebrar os vários call sites existentes que já chamam listarNumerosTodasContas(signal) — default
- * só-WhatsApp preserva o comportamento de todo chamador existente que não sabe de Telegram. */
+ * só-WhatsApp preserva o comportamento de todo chamador existente que não sabe de Telegram. Inclui
+ * contas com plano expirado/excedido (ver idsContasComPlanoAtivo pra quem precisa filtrar isso). */
 export async function listarNumerosTodasContas(signal?: AbortSignal, canais: Canal[] = ['whatsapp']): Promise<NumeroSendpulse[]> {
   const contas = listarContasSendpulse()
   const [resultados, nomesPersonalizados] = await Promise.all([
@@ -133,7 +172,7 @@ export async function listarTagsSendpulse(botId: string, apiKey: string, canal: 
   const tags: TagSendpulse[] = []
   let skip = 0
   for (;;) {
-    const res = await fetch(`${baseUrl(canal)}/tags?bot_id=${encodeURIComponent(botId)}&skip=${skip}`, { headers: getHeaders(apiKey) })
+    const res = await fetchComRetry429(`${baseUrl(canal)}/tags?bot_id=${encodeURIComponent(botId)}&skip=${skip}`, apiKey)
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,7 +199,7 @@ export async function buscarContatosCompletosPorTag(botId: string, tag: string, 
   let skip = 0
   for (;;) {
     const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
-    const res = await fetch(url, { headers: getHeaders(apiKey) })
+    const res = await fetchComRetry429(url, apiKey)
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,7 +231,7 @@ export interface StatusPlanoSendpulse {
 }
 
 async function buscarStatusPlano(conta: { id: string; nome: string; apiKey: string }, nomesPersonalizados: Record<string, string>, signal?: AbortSignal): Promise<StatusPlanoSendpulse> {
-  const res = await fetch(`${baseUrl('whatsapp')}/account`, { headers: getHeaders(conta.apiKey), signal })
+  const res = await fetchComRetry429(`${baseUrl('whatsapp')}/account`, conta.apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const t = json.data?.tariff ?? {}
@@ -222,7 +261,7 @@ export async function buscarStatusPlanoTodasContas(signal?: AbortSignal): Promis
 // canal por último (não antes de signal) pra não quebrar os call sites existentes que já passam
 // um AbortSignal na 3ª posição — default 'whatsapp' preserva o comportamento de todos eles.
 export async function listarFluxos(botId: string, apiKey: string, signal?: AbortSignal, canal: Canal = 'whatsapp'): Promise<FluxoSendpulse[]> {
-  const res = await fetch(`${baseUrl(canal)}/flows?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(apiKey), signal })
+  const res = await fetchComRetry429(`${baseUrl(canal)}/flows?bot_id=${encodeURIComponent(botId)}`, apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -237,7 +276,7 @@ export async function listarFluxos(botId: string, apiKey: string, signal?: Abort
 }
 
 export async function obterStatusBot(botId: string, apiKey: string, signal?: AbortSignal, canal: Canal = 'whatsapp'): Promise<EstatisticasBotSendpulse> {
-  const res = await fetch(`${baseUrl(canal)}/bots/statistics?bot_id=${encodeURIComponent(botId)}`, { headers: getHeaders(apiKey), signal })
+  const res = await fetchComRetry429(`${baseUrl(canal)}/bots/statistics?bot_id=${encodeURIComponent(botId)}`, apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const d = json.data ?? {}
@@ -263,7 +302,7 @@ export interface ContagemTagHoje {
  */
 export async function contarPorTagHojeSendpulse(botId: string, tag: string, apiKey: string, signal?: AbortSignal, canal: Canal = 'whatsapp'): Promise<ContagemTagHoje> {
   const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=1000`
-  const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+  const res = await fetchComRetry429(url, apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const total = Number(json.meta?.total ?? 0)
@@ -319,7 +358,7 @@ export async function contarPorTagIntervaloSendpulse(
   for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
     const skip = pagina * TAMANHO_PAGINA_GETBYTAG
     const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
-    const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+    const res = await fetchComRetry429(url, apiKey, signal)
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -366,7 +405,7 @@ export async function buscarContatosPorTagIntervaloSendpulse(
   for (let pagina = 0; pagina < MAX_PAGINAS_GETBYTAG; pagina++) {
     const skip = pagina * TAMANHO_PAGINA_GETBYTAG
     const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${TAMANHO_PAGINA_GETBYTAG}&skip=${skip}`
-    const res = await fetch(url, { headers: getHeaders(apiKey), signal })
+    const res = await fetchComRetry429(url, apiKey, signal)
     if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
     const json = await res.json()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -519,10 +558,7 @@ export async function listarChatsAtivos(
   apiKey: string,
   signal?: AbortSignal
 ): Promise<{ chats: ChatAtivoSendpulse[]; total: number }> {
-  const res = await fetch(
-    `${baseUrl('whatsapp')}/chats?bot_id=${encodeURIComponent(botId)}&limit=100`,
-    { headers: getHeaders(apiKey), signal }
-  )
+  const res = await fetchComRetry429(`${baseUrl('whatsapp')}/chats?bot_id=${encodeURIComponent(botId)}&limit=100`, apiKey, signal)
   if (!res.ok) throw new Error(`Sendpulse API error: ${res.status}`)
   const json = await res.json()
   const total: number = json.meta?.total ?? 0

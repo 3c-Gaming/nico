@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, real, boolean, integer } from 'drizzle-orm/pg-core'
+import { pgTable, text, jsonb, real, boolean, integer, primaryKey } from 'drizzle-orm/pg-core'
 
 export const disparos = pgTable('disparos', {
   id: text('id').primaryKey(),
@@ -100,7 +100,31 @@ export const flowTagConfigs = pgTable('flow_tag_configs', {
   kpisBotao: jsonb('kpis_botao').default('[]'),
   campanhasMeta: jsonb('campanhas_meta').default('[]'),
   kpisCusto: jsonb('kpis_custo').default('[]'),
+  lucroFtdPorCasa: jsonb('lucro_ftd_por_casa').default('{}'),
+  linkRegistro: text('link_registro'),
+  linkAposta: text('link_aposta'),
 })
+
+// Snapshot diário de leads/custos/ROI por funil (ver src/lib/funis.ts, calcularSnapshotDoFunil) —
+// "leads hoje"/custos eram só calculados ao vivo e somem quando o dia vira; essa tabela guarda o
+// histórico pra consulta por data.
+export const funilMetricasDiarias = pgTable('funil_metricas_diarias', {
+  flowId: text('flow_id').notNull(),
+  data: text('data').notNull(), // YYYY-MM-DD, fuso Brasília
+  funil: text('funil'),
+  leads: integer('leads').notNull().default(0),
+  registros: integer('registros').notNull().default(0),
+  ftds: integer('ftds').notNull().default(0),
+  ftdsPorCasa: jsonb('ftds_por_casa').default('{}'),
+  tagsContagem: jsonb('tags_contagem').default('{}'),
+  gastoMeta: real('gasto_meta'),
+  custoEntrada: real('custo_entrada'),
+  custoRegistro: real('custo_registro'),
+  custoFtd: real('custo_ftd'),
+  lucroFtdTotal: real('lucro_ftd_total'),
+  roi: real('roi'),
+  atualizadoEm: text('atualizado_em').notNull(),
+}, (t) => ({ pk: primaryKey({ columns: [t.flowId, t.data] }) }))
 
 export const demandas = pgTable('demandas', {
   id: text('id').primaryKey(),

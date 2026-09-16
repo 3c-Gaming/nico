@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Play, Pause, FileText, AlertTriangle, Layers, Pen, Save, X, Search, Pin, Plus, Check, Download, Presentation, History, ChevronUp, ChevronDown, ChevronRight, Eye, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { BarraProgresso } from '@/components/ui/BarraProgresso'
 import { Modal } from '@/components/ui/Modal'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { TagComboBox } from '@/components/ui/TagComboBox'
@@ -386,6 +387,9 @@ function FlowTagEditor({ flow, botId, onSave }: { flow: FluxoSendpulse; botId: s
 }
 
 const MAX_DIAS_EXPORT_INTERVALO = 31
+// Concorrência máxima ao buscar fluxos de todos os números carregados — cada chamada bate na
+// SendPulse (limite de 30 req/min por conta), e uma conta pode ter 70+ números.
+const BATCH_SIZE_FLUXOS = 6
 
 function FunisPageInner() {
   const searchParams = useSearchParams()
@@ -460,7 +464,7 @@ function FunisPageInner() {
     setError(null)
 
     try {
-      const numRes = await fetch('/api/sendpulse/numeros?canal=todos')
+      const numRes = await fetch('/api/sendpulse/numeros?canal=todos&apenasContasAtivas=true')
       if (!numRes.ok) throw new Error('Erro ao carregar números')
       const numData = await numRes.json()
       const nums: NumeroSendpulse[] = numData.numeros
@@ -468,14 +472,25 @@ function FunisPageInner() {
 
       const naoMonitorados = getState().numerosNaoMonitorados
       const fluxos: Record<string, FluxoSendpulse[]> = {}
-      await Promise.allSettled(
-        nums.filter((num) => !naoMonitorados.includes(num.id)).map(async (num) => {
-          const fRes = await fetch(`/api/sendpulse/fluxos?bot_id=${encodeURIComponent(num.id)}`)
-          if (!fRes.ok) return
-          const fData = await fRes.json()
-          fluxos[num.id] = fData.fluxos
-        })
-      )
+      // Bot inativo na SendPulse recusa /flows com 400 "Bot is not active" — numa conta com 70+
+      // números, a maioria costuma ser número antigo/desligado (ex: conta 03 hoje tem só 2 de 79
+      // ativos). Pedir fluxo dos inativos só desperdiça cota de rate limit (30 req/min) sem nunca
+      // dar em nada, e foi o que fazia a tela inteira falhar ("0 fluxo(s)").
+      const numsMonitorados = nums.filter((num) => !naoMonitorados.includes(num.id) && num.status === 'ativo')
+      // Buscar fluxos de todos os números de uma vez (pode passar de 70 numa conta só) estourava o
+      // limite de 30 req/min da SendPulse e a tela inteira ficava sem fluxo nenhum ("0 fluxo(s)").
+      // Mesmo princípio de lote pequeno já usado em ultimas-conversas-fluxo/route.ts.
+      for (let i = 0; i < numsMonitorados.length; i += BATCH_SIZE_FLUXOS) {
+        const lote = numsMonitorados.slice(i, i + BATCH_SIZE_FLUXOS)
+        await Promise.allSettled(
+          lote.map(async (num) => {
+            const fRes = await fetch(`/api/sendpulse/fluxos?bot_id=${encodeURIComponent(num.id)}`)
+            if (!fRes.ok) return
+            const fData = await fRes.json()
+            fluxos[num.id] = fData.fluxos
+          })
+        )
+      }
       setFluxosMap(fluxos)
 
       const configs = getState().flowTagConfigs
@@ -1142,6 +1157,7 @@ function FunisPageInner() {
           </div>
         }
       />
+      <BarraProgresso ativa={loading || refreshing || carregandoFlows.size > 0 || carregandoIntervaloBots.size > 0} />
 
       <div className="p-6 space-y-4">
         {error && (
@@ -1386,7 +1402,6 @@ function FunisPageInner() {
                   </th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Número</th>
                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Fluxo</th>
-                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Tags</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                   <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
@@ -1449,16 +1464,13 @@ function FunisPageInner() {
                           </span>
                         </td>
                          <td className="py-3 px-3">
-                           <div className="text-[var(--text-primary)] font-medium text-sm">{row.flow.nome}</div>
+                           <div className="text-[var(--text-primary)] font-medium text-xs line-clamp-1">{row.flow.nome}</div>
                            {row.flow.triggers.length > 0 && (
                              <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                                {row.flow.triggers.map((t) => t.nome).join(', ')}
                              </div>
                            )}
                          </td>
-                        <td className="py-3 px-3">
-                          <FlowStatusBadge status={row.flow.status} />
-                        </td>
                         <td className="py-3 px-3">
                           {row.tags.length === 0 ? (
                             <span className="text-[10px] text-[var(--text-muted)]/40 italic">sem tags</span>

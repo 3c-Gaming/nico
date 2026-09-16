@@ -393,6 +393,34 @@ export interface FlowTagConfig {
   /** KPIs customizados de custo por etapa da jornada — escolhe uma tag do fluxo e calcula
    * gasto (Meta) ÷ leads com aquela tag, ex: "custo por CTA". Ver painel de Detalhes. */
   kpisCusto?: KpiCusto[]
+  /** Lucro por FTD (R$) configurado por casa vinculada ao funil (chave = CasaAposta.id) — usado
+   * pra calcular o ROI do funil. Casas sem valor configurado não entram no ROI. */
+  lucroFtdPorCasa?: Record<string, number>
+  /** Link de registro/aposta usados nesse funil — preenchidos manualmente ou via "Buscar da LP"
+   * (ver painel de Detalhes). Distintos do link geral da casa (betting-links). */
+  linkRegistro?: string | null
+  linkAposta?: string | null
+}
+
+/** Snapshot diário de leads/registros/FTDs/custos/ROI de um funil — grava o histórico que hoje só
+ * existe calculado ao vivo (ver src/lib/funis.ts, calcularSnapshotDoFunil). Chave composta
+ * (flowId, data). */
+export interface FunilMetricaDiaria {
+  flowId: string
+  data: string // YYYY-MM-DD, fuso Brasília
+  funil?: string | null
+  leads: number
+  registros: number
+  ftds: number
+  ftdsPorCasa?: Record<string, number>
+  tagsContagem?: Record<string, number>
+  gastoMeta?: number | null
+  custoEntrada?: number | null
+  custoRegistro?: number | null
+  custoFtd?: number | null
+  lucroFtdTotal?: number | null
+  roi?: number | null
+  atualizadoEm: string
 }
 
 export interface KpiCusto {

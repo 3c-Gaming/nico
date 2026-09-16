@@ -4,6 +4,7 @@
 
 import { chaveTagBot, contarLeadsIntervalo, type GrupoBotTags } from './sendpulseLeads'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
+import type { CasaAposta, FunilMetricaDiaria } from '@/types'
 
 // Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
 // diferentes) — soma os resultados de todas ao invés de só olhar a principal.
@@ -64,6 +65,11 @@ export interface ResultadoLinhaDia {
   ftds: number
   convFtd: number | null // percentual (ex: 19.1), não fração 0-1
   convReg: number | null
+  /** registros/ftds separados por casa (chave = CasaAposta.id quando `casasPorSlug` casa o slug do
+   * evento de tracking com uma casa cadastrada; senão cai no slug cru — ver calcularSnapshotDoFunil,
+   * que é quem usa isso pra aplicar o lucro por FTD configurado por casa). */
+  registrosPorCasa: Record<string, number>
+  ftdsPorCasa: Record<string, number>
 }
 
 /** Aplica o resultado de um dia (ver buscarResultadosDoDia) numa linha (config de fluxo com
@@ -85,31 +91,87 @@ export function calcularResultadoLinhaNoDia(
   cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string },
   dia: ResultadoDia,
   funisPorUtm?: Map<string, number>,
+  casasPorSlug?: Map<string, string>,
 ): ResultadoLinhaDia {
   const utms = utmsDoFluxo(cfg)
   let registros = 0
   let ftds = 0
+  const registrosPorCasa: Record<string, number> = {}
+  const ftdsPorCasa: Record<string, number> = {}
+  function somarPorCasa(slug: string, reg: number, ftd: number) {
+    const chave = casasPorSlug?.get(slug) ?? slug
+    registrosPorCasa[chave] = (registrosPorCasa[chave] ?? 0) + reg
+    ftdsPorCasa[chave] = (ftdsPorCasa[chave] ?? 0) + ftd
+  }
   for (const item of dia.superbetEvents) {
     const utmCasada = utmQueCasou(utms, String(item.acid), false)
     if (utmCasada) {
       const divisor = funisPorUtm?.get(utmCasada) ?? 1
-      registros += (item.registrations ?? 0) / divisor
-      ftds += (item.ftds ?? 0) / divisor
+      const reg = (item.registrations ?? 0) / divisor
+      const ftd = (item.ftds ?? 0) / divisor
+      registros += reg
+      ftds += ftd
+      somarPorCasa('superbet', reg, ftd)
     }
   }
   for (const item of dia.betmgmEvents) {
     const utmCasada = utmQueCasou(utms, String(item.marketing_source_id), true)
     if (utmCasada) {
       const divisor = funisPorUtm?.get(utmCasada) ?? 1
-      registros += (item.registrations ?? 0) / divisor
-      ftds += (item.ftds ?? 0) / divisor
+      const reg = (item.registrations ?? 0) / divisor
+      const ftd = (item.ftds ?? 0) / divisor
+      registros += reg
+      ftds += ftd
+      somarPorCasa('betmgm', reg, ftd)
     }
   }
   const tagEntrada = tagDeEntradaDoFluxo(cfg.tags)
   const leads = tagEntrada && cfg.botId ? (dia.leadsPorTag[chaveTagBot(cfg.botId, tagEntrada)] ?? 0) : 0
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
-  return { leads, registros, ftds, convFtd, convReg }
+  return { leads, registros, ftds, convFtd, convReg, registrosPorCasa, ftdsPorCasa }
+}
+
+/** Snapshot completo de um funil pra um dia (ou período já agregado em `dia`/`gasto`) — junta
+ * leads/registros/FTDs (calcularResultadoLinhaNoDia) com o lucro por FTD configurado por casa
+ * (FlowTagConfig.lucroFtdPorCasa) pra chegar no ROI. Usado tanto pelo cron de snapshot diário
+ * (funil-metricas-snapshot) quanto ao salvar um funil na tela (grava o dia corrente). Sem
+ * `atualizadoEm`/`data`/`funil` — quem chama preenche isso (são metadados do registro, não do
+ * cálculo em si). */
+export function calcularSnapshotDoFunil(
+  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; lucroFtdPorCasa?: Record<string, number> },
+  dia: ResultadoDia,
+  casasAposta: CasaAposta[],
+  gasto: number,
+  funisPorUtm?: Map<string, number>,
+): Omit<FunilMetricaDiaria, 'flowId' | 'data' | 'funil' | 'atualizadoEm'> {
+  // O slug de CasaAposta é um código curto interno (ex: "SB", "MGM" — usado em UTM/link
+  // template), não bate com o identificador de casa do tracking 3CGG ("superbet"/"betmgm", ver
+  // CASAS_TRACKING em src/lib/tracking.ts). A correlação confiável que existe é pelo nome.
+  const casasPorSlug = new Map<string, string>()
+  for (const casa of casasAposta) {
+    const nome = casa.nome.toLowerCase()
+    if (nome.includes('superbet')) casasPorSlug.set('superbet', casa.id)
+    else if (nome.includes('betmgm') || nome.includes('bet mgm')) casasPorSlug.set('betmgm', casa.id)
+  }
+  const resultado = calcularResultadoLinhaNoDia(cfg, dia, funisPorUtm, casasPorSlug)
+  const lucroPorCasa = cfg.lucroFtdPorCasa ?? {}
+  let lucroFtdTotal = 0
+  for (const [casaId, ftdsCasa] of Object.entries(resultado.ftdsPorCasa)) {
+    lucroFtdTotal += ftdsCasa * (lucroPorCasa[casaId] ?? 0)
+  }
+  return {
+    leads: resultado.leads,
+    registros: Math.round(resultado.registros),
+    ftds: Math.round(resultado.ftds),
+    ftdsPorCasa: resultado.ftdsPorCasa,
+    gastoMeta: gasto,
+    custoEntrada: gasto > 0 && resultado.leads > 0 ? gasto / resultado.leads : null,
+    custoRegistro: gasto > 0 && resultado.registros > 0 ? gasto / resultado.registros : null,
+    custoFtd: gasto > 0 && resultado.ftds > 0 ? gasto / resultado.ftds : null,
+    lucroFtdTotal,
+    roi: gasto > 0 ? (lucroFtdTotal - gasto) / gasto : null,
+  }
 }
 
 /** Arredonda um grupo de valores fracionários (ex: registros/FTDs já divididos por funil, ver

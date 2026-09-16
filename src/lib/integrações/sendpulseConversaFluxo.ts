@@ -32,6 +32,21 @@ function getHeaders(apiKey: string) {
   return { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
 }
 
+/** Retry com backoff exponencial só pra 429 ("max 30 requests per minute", limite por conta da
+ * SendPulse) — fácil de estourar aqui porque "Conversas ao vivo" busca o histórico de cada lead
+ * candidato em paralelo (ver ultimas-conversas-fluxo/route.ts, que também limita a concorrência).
+ * Outros status (400, 404, etc.) voltam direto pro chamador — não adianta re-tentar um
+ * contact_id/canal que genuinely não existe. */
+async function fetchSendpulseComRetry(url: string, apiKey: string, tentativas = 4): Promise<Response> {
+  let ultimaResposta: Response
+  for (let i = 0; i < tentativas; i++) {
+    ultimaResposta = await fetch(url, { headers: getHeaders(apiKey) })
+    if (ultimaResposta.status !== 429) return ultimaResposta
+    if (i < tentativas - 1) await new Promise((r) => setTimeout(r, 500 * 2 ** i))
+  }
+  return ultimaResposta!
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MensagemBruta = any
 
@@ -41,9 +56,9 @@ export async function buscarMensagensDoContatoNaConta(apiKey: string, contactId:
   const todas: MensagemBruta[] = []
   let skip = 0
   while (todas.length < MAX_MENSAGENS) {
-    const res = await fetch(
+    const res = await fetchSendpulseComRetry(
       `${baseUrl(canal)}/chats/messages?contact_id=${encodeURIComponent(contactId)}&order=asc&size=${TAMANHO_PAGINA}&skip=${skip}`,
-      { headers: getHeaders(apiKey) },
+      apiKey,
     )
     if (!res.ok) throw new Error(`Sendpulse chats/messages error ${res.status}`)
     const json = await res.json()
@@ -93,7 +108,7 @@ export async function buscarUltimosContatosPorTag(
   canal: Canal = 'whatsapp',
 ): Promise<ContatoResumo[]> {
   const url = `${baseUrl(canal)}/contacts/getByTag?bot_id=${encodeURIComponent(botId)}&tag=${encodeURIComponent(tag)}&size=${quantidade}`
-  const res = await fetch(url, { headers: getHeaders(apiKey) })
+  const res = await fetchSendpulseComRetry(url, apiKey)
   if (!res.ok) throw new Error(`Sendpulse getByTag error ${res.status}`)
   const json = await res.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

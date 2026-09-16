@@ -145,6 +145,12 @@ export function updateFlowTagConfig(config: FlowTagConfig): void {
   state.flowTagConfigs[config.flowId] = { ...state.flowTagConfigs[config.flowId], ...config }
   setState(state)
   syncToApi('/api/flow-tag-configs', 'POST', config)
+  // Toda atualização de um funil (nome, UTM, tags, casas, lucro por FTD, links, campanhas Meta
+  // atribuídas, etc.) já grava a config em si acima — dispara também o snapshot do dia corrente
+  // (leads/registros/FTDs/custos/ROI, ver funil_metricas_diarias) pra refletir imediatamente no
+  // histórico, sem esperar o cron da meia-noite. Fire-and-forget: se falhar (funil sem tags ainda,
+  // erro pontual), o cron cobre no fechamento do dia seguinte.
+  syncToApi('/api/funil-metricas-diarias/snapshot', 'POST', { flowId: config.flowId })
 }
 
 export function deleteFlowTagConfig(flowId: string): void {
