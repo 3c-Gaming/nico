@@ -1520,7 +1520,7 @@ function FunisPageInner() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {!row.utm ? (
-                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                            <span className="text-xs text-success">—</span>
                           ) : !trackingLoaded && row.funil && getState().cacheMetricas[row.funil] ? (
                             <span className="font-semibold font-mono text-[var(--text-muted)]/60">
                               {getState().cacheMetricas[row.funil].registros}
@@ -1533,7 +1533,7 @@ function FunisPageInner() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {!row.utm ? (
-                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                            <span className="text-xs text-success">—</span>
                           ) : !trackingLoaded && row.funil && getState().cacheMetricas[row.funil] ? (
                             <span className="font-semibold font-mono text-[var(--text-muted)]/60">
                               {getState().cacheMetricas[row.funil].ftds}
