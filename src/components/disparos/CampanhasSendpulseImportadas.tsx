@@ -93,7 +93,11 @@ function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaPro
   }
 
   const dest = c.relatorio?.stats.destinatarios
-  const msgs = c.relatorio?.stats.mensagens
+  // Soma os cliques únicos de cada botão — exato pra campanha de 1 CTA (o caso comum); com mais
+  // de um botão diferente pode superestimar um pouco quem clicou (a mesma pessoa clicando em dois
+  // botões diferentes conta duas vezes), mas ainda assim muito mais preciso que a amostra.
+  const botoes = c.relatorio?.stats.botoes ?? []
+  const cliquesUnicosTotal = botoes.reduce((soma, b) => soma + b.unicos, 0)
 
   return (
     <>
@@ -151,82 +155,86 @@ function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaPro
       {aberto && (
         <tr className="border-b border-[var(--glass-border)] last:border-0 bg-[var(--bg-elevated)]/40">
           <td colSpan={11} className="px-4 py-3">
-            {carregandoDestinatarios ? (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><Spinner size={14} /> Carregando engajamento...</div>
-            ) : !destinatarios ? (
-              <p className="text-xs text-[var(--error)]">Erro ao carregar detalhes de engajamento.</p>
-            ) : (
-              <div className="grid grid-cols-[1.3fr_1fr_1.4fr] gap-6">
-                <div>
-                  <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Funil de entrega</p>
-                  <FunilConversaoChart
-                    estagios={[
-                      { tag: 'Destinatários', contagem: dest?.all ?? 0 },
-                      { tag: 'Entregues', contagem: dest?.delivered ?? 0 },
-                      { tag: 'Clicaram', contagem: destinatarios.clicaram },
-                    ]}
-                    cor="#0088cc"
-                    orientacao="vertical"
-                  />
-                  <div className="mt-2 space-y-1 text-xs">
-                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">Com atividade</span><span className="font-mono text-[var(--text-primary)]">{dest?.activity ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.activity ?? 0, dest?.delivered ?? 0)})</span></span></div>
-                  </div>
-                  {destinatarios.motivosRejeicao.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
-                      <p className="text-[10px] font-medium text-[var(--error)] uppercase tracking-wide">Rejeitados / denúncias — {dest?.rejected ?? 0} ({formatarPct(dest?.rejected ?? 0, dest?.all ?? 0)})</p>
-                      {destinatarios.motivosRejeicao.map((m) => (
-                        <div key={m.motivo} className="flex justify-between gap-2 text-[11px]">
-                          <span className="text-[var(--error)] truncate" title={m.motivo}>{traduzirMotivoRejeicao(m.motivo)}</span>
-                          <span className="font-mono text-[var(--error)] shrink-0">{m.quantidade}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {destinatarios.escaneados < destinatarios.total && (
-                    <p className="text-[10px] text-[var(--text-muted)] pt-2">Escaneados {destinatarios.escaneados} de {destinatarios.total} destinatários (amostra).</p>
-                  )}
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5 flex items-center gap-1"><MousePointerClick size={11} /> Cliques por botão</p>
-                  {destinatarios.porBotao.length === 0 ? (
-                    <p className="text-xs text-[var(--text-muted)]">Nenhum clique registrado ainda.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {destinatarios.porBotao.map((b) => (
-                        <div key={b.titulo} className="text-xs">
-                          <div className="flex justify-between mb-0.5">
-                            <span className="text-[var(--text-primary)] truncate" title={b.titulo}>{b.titulo}</span>
-                            <span className="font-mono text-[var(--d1)] shrink-0 ml-2">{b.cliques}</span>
-                          </div>
-                          <div className="h-1 rounded bg-[var(--bg-surface)] overflow-hidden">
-                            <div
-                              className="h-full bg-[var(--d1)]"
-                              style={{ width: `${Math.min(100, (b.cliques / (destinatarios.porBotao[0]?.cliques || 1)) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Quem clicou</p>
-                  {destinatarios.quemClicou.length === 0 ? (
-                    <p className="text-xs text-[var(--text-muted)]">Ninguém clicou ainda.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                      {destinatarios.quemClicou.map((q, i) => (
-                        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-secondary)]" title={q.botoesClicados.join(', ')}>
-                          {q.username ?? q.nome}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+            <div className="grid grid-cols-[1.3fr_1fr_1.4fr] gap-6">
+              <div>
+                <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Funil de entrega</p>
+                <FunilConversaoChart
+                  estagios={[
+                    { tag: 'Destinatários', contagem: dest?.all ?? 0 },
+                    { tag: 'Entregues', contagem: dest?.delivered ?? 0 },
+                    { tag: 'Clicaram', contagem: cliquesUnicosTotal },
+                  ]}
+                  cor="#0088cc"
+                  orientacao="vertical"
+                />
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Números exatos (agregados pela própria SendPulse sobre todos os destinatários, não uma amostra).</p>
+                <div className="mt-2 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-[var(--text-muted)]">Com atividade</span><span className="font-mono text-[var(--text-primary)]">{dest?.activity ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.activity ?? 0, dest?.delivered ?? 0)})</span></span></div>
                 </div>
               </div>
-            )}
+
+              <div>
+                <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5 flex items-center gap-1"><MousePointerClick size={11} /> Cliques por botão</p>
+                {botoes.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)]">Nenhum clique registrado ainda.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {botoes.map((b) => (
+                      <div key={b.titulo} className="text-xs">
+                        <div className="flex justify-between mb-0.5">
+                          <span className="text-[var(--text-primary)] truncate" title={b.titulo}>{b.titulo}</span>
+                          <span className="font-mono text-[var(--d1)] shrink-0 ml-2">{b.unicos} <span className="text-[var(--text-muted)]">({b.total} cliques)</span></span>
+                        </div>
+                        <div className="h-1 rounded bg-[var(--bg-surface)] overflow-hidden">
+                          <div
+                            className="h-full bg-[var(--d1)]"
+                            style={{ width: `${Math.min(100, (b.unicos / (botoes[0]?.unicos || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Rejeitados / denúncias — {dest?.rejected ?? 0} ({formatarPct(dest?.rejected ?? 0, dest?.all ?? 0)})</p>
+                {carregandoDestinatarios ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><Spinner size={12} /> Carregando amostra...</div>
+                ) : !destinatarios ? (
+                  <p className="text-xs text-[var(--error)]">Erro ao carregar.</p>
+                ) : destinatarios.motivosRejeicao.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)]">Nenhuma rejeição na amostra.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {destinatarios.motivosRejeicao.map((m) => (
+                      <div key={m.motivo} className="flex justify-between gap-2 text-[11px]">
+                        <span className="text-[var(--error)] truncate" title={m.motivo}>{traduzirMotivoRejeicao(m.motivo)}</span>
+                        <span className="font-mono text-[var(--error)] shrink-0">{m.quantidade}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {destinatarios && destinatarios.escaneados < destinatarios.total && (
+                  <p className="text-[10px] text-[var(--text-muted)] pt-1">Amostra: {destinatarios.escaneados} de {destinatarios.total} destinatários escaneados — só essa lista de motivos e "quem clicou" abaixo são amostra, os números do funil e cliques por botão acima já são exatos.</p>
+                )}
+
+                <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5 mt-3">Quem clicou (amostra)</p>
+                {carregandoDestinatarios ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><Spinner size={12} /> Carregando...</div>
+                ) : !destinatarios ? null : destinatarios.quemClicou.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)]">Ninguém clicou na amostra escaneada.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                    {destinatarios.quemClicou.map((q, i) => (
+                      <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-secondary)]" title={q.botoesClicados.join(', ')}>
+                        {q.username ?? q.nome}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </td>
         </tr>
       )}

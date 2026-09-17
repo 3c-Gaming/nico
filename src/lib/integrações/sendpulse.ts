@@ -178,6 +178,12 @@ export async function buscarCampanhaSendpulse(campanhaId: string, apiKey: string
     stats: {
       mensagens: d.stats?.messages ?? STATS_VAZIA,
       destinatarios: d.stats?.recipients ?? STATS_VAZIA,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      botoes: ((d.stats?.buttons ?? []) as any[]).map((b) => ({
+        titulo: String(b.title ?? ''),
+        total: Number(b.non_unique ?? 0),
+        unicos: Number(b.unique ?? 0),
+      })),
     },
   }
 }

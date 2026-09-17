@@ -457,6 +457,11 @@ export interface RelatorioCampanhaSendpulse {
   stats: {
     mensagens: { all: number; sent: number; rejected: number; delivered: number; opened: number; redirected: number }
     destinatarios: { all: number; sent: number; rejected: number; partial_rejected?: number; delivered: number; opened: number; redirected: number; activity?: number }
+    /** Clique por botão já agregado pela própria SendPulse sobre TODOS os destinatários (não uma
+     * amostra) — vem pronto no /campaigns/report, sem precisar paginar campaigns/recipients pra
+     * ter esse número. `unicos` é quantos destinatários distintos clicaram; `total` conta clique
+     * repetido do mesmo destinatário também. */
+    botoes: { titulo: string; total: number; unicos: number }[]
   }
 }
 
