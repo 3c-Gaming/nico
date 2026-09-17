@@ -193,6 +193,9 @@ export const campanhasSendpulseImportadas = pgTable('campanhas_sendpulse_importa
   sendAt: text('send_at'),
   criadoEmSendpulse: text('criado_em_sendpulse').notNull(),
   importadoEm: text('importado_em').notNull(),
+  // UTM vinculada manualmente (ver painel de Disparos) — usada pra cruzar a campanha com
+  // registros/FTDs reais do tracking (SuperBet/BetMGM), mesmo princípio de FlowTagConfig.utm.
+  utm: text('utm'),
 })
 
 export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {

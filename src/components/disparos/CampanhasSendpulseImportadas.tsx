@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, ExternalLink, Megaphone } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Megaphone, Check } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
+import { UtmComboBox } from '../ui/UtmComboBox'
 import { useToast } from '../ui/Toast'
 import type { CampanhaSendpulseImportada, RelatorioCampanhaSendpulse } from '@/types'
 
 interface CampanhaComRelatorio extends CampanhaSendpulseImportada {
   relatorio: RelatorioCampanhaSendpulse | null
+  resultadoUtm: { registros: number; ftds: number } | null
 }
 
 function formatarData(iso: string | null): string {
@@ -27,6 +29,82 @@ function statusDaCampanha(r: RelatorioCampanhaSendpulse | null): { texto: string
   if (sent === 0) return { texto: 'agendada', cor: 'text-amber-400' }
   if (sent < all) return { texto: 'enviando', cor: 'text-[var(--d1)]' }
   return { texto: 'enviada', cor: 'text-[var(--success)]' }
+}
+
+interface LinhaCampanhaProps {
+  campanha: CampanhaComRelatorio
+  onSalvarUtm: (id: string, utm: string) => Promise<void>
+  onExcluir: (id: string) => void
+}
+
+/** UTM em estado local — só grava (PATCH) quando o usuário clica em salvar, mesmo princípio dos
+ * outros campos editáveis desse tipo no app (ver FlowTagEditor em Funis): UtmComboBox dispara
+ * onChange a cada tecla, gravar isso direto faria um PATCH por letra digitada. */
+function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaProps) {
+  const [utm, setUtm] = useState(c.utm ?? '')
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => { setUtm(c.utm ?? '') }, [c.utm])
+
+  const st = statusDaCampanha(c.relatorio)
+  const mudou = utm !== (c.utm ?? '')
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      await onSalvarUtm(c.id, utm)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <tr className="border-b border-[var(--glass-border)] last:border-0">
+      <td className="px-3 py-2 text-xs text-[var(--text-primary)] max-w-[240px] truncate" title={c.titulo}>{c.titulo}</td>
+      <td className="px-3 py-2 text-xs text-[var(--text-secondary)]">{formatarData(c.sendAt ?? c.criadoEmSendpulse)}</td>
+      <td className={`px-3 py-2 text-xs font-medium ${st.cor}`}>{st.texto}</td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.all ?? '—'}</td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.sent ?? '—'}</td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.delivered ?? '—'}</td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--d1)]">{c.relatorio?.stats.destinatarios.opened ?? '—'}</td>
+      <td className="px-3 py-2 w-40">
+        <div className="flex items-center gap-1">
+          <UtmComboBox value={utm} onChange={setUtm} placeholder="vincular UTM..." size="sm" />
+          {mudou && (
+            <button
+              onClick={salvar}
+              disabled={salvando}
+              className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--success)] hover:bg-[var(--bg-elevated)] transition-colors shrink-0 disabled:opacity-40"
+              title="Salvar UTM"
+            >
+              {salvando ? <Spinner size={12} /> : <Check size={13} />}
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.utm ? (c.resultadoUtm?.registros ?? 0) : '—'}</td>
+      <td className="px-3 py-2 text-right text-xs font-mono text-[var(--d1)]">{c.utm ? (c.resultadoUtm?.ftds ?? 0) : '—'}</td>
+      <td className="px-3 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <a
+            href={`https://login.sendpulse.com/messengers/campaign/${c.canal}/${c.id}/report/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Abrir no painel da SendPulse"
+          >
+            <ExternalLink size={13} />
+          </a>
+          <button
+            onClick={() => onExcluir(c.id)}
+            className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"
+            title="Remover"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
 }
 
 export function CampanhasSendpulseImportadas() {
@@ -76,6 +154,20 @@ export function CampanhasSendpulseImportadas() {
     await fetch(`/api/sendpulse/campanhas?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
 
+  async function salvarUtm(id: string, utm: string) {
+    const res = await fetch('/api/sendpulse/campanhas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, utm: utm || null }),
+    })
+    if (!res.ok) {
+      addToast('error', 'Erro ao salvar UTM')
+      return
+    }
+    addToast('success', 'UTM vinculada')
+    carregar()
+  }
+
   return (
     <div className="px-6 pt-6 pb-4 space-y-3 border-b border-[var(--border)]">
       <div className="flex items-center justify-between">
@@ -119,44 +211,16 @@ export function CampanhasSendpulseImportadas() {
                 <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2">Enviadas</th>
                 <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2">Entregues</th>
                 <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2">Abertas</th>
+                <th className="text-left text-xs text-[var(--text-muted)] font-medium px-3 py-2" title="Vincula essa campanha a uma UTM/PID pra cruzar com registros/FTDs reais (SuperBet/BetMGM)">UTM</th>
+                <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2">Reg</th>
+                <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2">FTDs</th>
                 <th className="text-right text-xs text-[var(--text-muted)] font-medium px-3 py-2 w-16">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {campanhas.map((c) => {
-                const st = statusDaCampanha(c.relatorio)
-                return (
-                  <tr key={c.id} className="border-b border-[var(--glass-border)] last:border-0">
-                    <td className="px-3 py-2 text-xs text-[var(--text-primary)] max-w-[280px] truncate" title={c.titulo}>{c.titulo}</td>
-                    <td className="px-3 py-2 text-xs text-[var(--text-secondary)]">{formatarData(c.sendAt ?? c.criadoEmSendpulse)}</td>
-                    <td className={`px-3 py-2 text-xs font-medium ${st.cor}`}>{st.texto}</td>
-                    <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.all ?? '—'}</td>
-                    <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.sent ?? '—'}</td>
-                    <td className="px-3 py-2 text-right text-xs font-mono text-[var(--text-primary)]">{c.relatorio?.stats.destinatarios.delivered ?? '—'}</td>
-                    <td className="px-3 py-2 text-right text-xs font-mono text-[var(--d1)]">{c.relatorio?.stats.destinatarios.opened ?? '—'}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-1">
-                        <a
-                          href={`https://login.sendpulse.com/messengers/campaign/${c.canal}/${c.id}/report/`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-                          title="Abrir no painel da SendPulse"
-                        >
-                          <ExternalLink size={13} />
-                        </a>
-                        <button
-                          onClick={() => excluir(c.id)}
-                          className="flex items-center justify-center w-6 h-6 rounded text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--bg-elevated)] transition-colors"
-                          title="Remover"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+              {campanhas.map((c) => (
+                <LinhaCampanha key={c.id} campanha={c} onSalvarUtm={salvarUtm} onExcluir={excluir} />
+              ))}
             </tbody>
           </table>
         </div>

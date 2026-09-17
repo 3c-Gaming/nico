@@ -626,6 +626,16 @@ export async function deletarCampanhaSendpulseImportada(id: string): Promise<boo
   return !error
 }
 
+export async function atualizarUtmCampanhaSendpulse(id: string, utm: string | null): Promise<CampanhaSendpulseImportada> {
+  const { data, error } = await tb('campanhas_sendpulse_importadas')
+    .update({ utm })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw new Error(`Erro ao atualizar UTM da campanha: ${error.message}`)
+  return row<CampanhaSendpulseImportada>(data)!
+}
+
 // --- Cache Metricas ---
 
 export async function listarCacheMetricas(): Promise<CacheMetrica[]> {

@@ -434,6 +434,9 @@ export interface CampanhaSendpulseImportada {
   sendAt: string | null
   criadoEmSendpulse: string
   importadoEm: string
+  /** UTM/PID vinculada manualmente (painel de Disparos) — cruza com registros/FTDs reais do
+   * tracking (SuperBet/BetMGM), mesmo princípio de FlowTagConfig.utm. */
+  utm?: string | null
 }
 
 /** Números ao vivo de uma campanha de broadcast da SendPulse (GET /campaigns/report) — não
