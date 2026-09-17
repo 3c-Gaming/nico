@@ -93,11 +93,12 @@ function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaPro
   }
 
   const dest = c.relatorio?.stats.destinatarios
-  // Soma os cliques únicos de cada botão — exato pra campanha de 1 CTA (o caso comum); com mais
-  // de um botão diferente pode superestimar um pouco quem clicou (a mesma pessoa clicando em dois
-  // botões diferentes conta duas vezes), mas ainda assim muito mais preciso que a amostra.
   const botoes = c.relatorio?.stats.botoes ?? []
-  const cliquesUnicosTotal = botoes.reduce((soma, b) => soma + b.unicos, 0)
+  // "Com atividade" (dest.activity) é o mesmo número que a própria SendPulse mostra como
+  // "Engajamento" no painel dela — bate com o Switchy. Não usar soma de cliques únicos por
+  // botão aqui: com mais de um botão a mesma pessoa clicando em dois conta duas vezes,
+  // inflando o total acima do que SendPulse/Switchy reportam.
+  const cliquesUnicosTotal = dest?.activity ?? 0
 
   return (
     <>
@@ -167,10 +168,7 @@ function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaPro
                   cor="#0088cc"
                   orientacao="vertical"
                 />
-                <p className="text-[10px] text-[var(--text-muted)] mt-1">Números exatos (agregados pela própria SendPulse sobre todos os destinatários, não uma amostra).</p>
-                <div className="mt-2 space-y-1 text-xs">
-                  <div className="flex justify-between"><span className="text-[var(--text-muted)]">Com atividade</span><span className="font-mono text-[var(--text-primary)]">{dest?.activity ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.activity ?? 0, dest?.delivered ?? 0)})</span></span></div>
-                </div>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Números exatos (agregados pela própria SendPulse sobre todos os destinatários, não uma amostra) — "Clicaram" é o mesmo engajamento que aparece no painel da SendPulse.</p>
               </div>
 
               <div>

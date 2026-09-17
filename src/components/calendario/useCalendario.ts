@@ -189,8 +189,11 @@ export function useCalendario() {
             entregues = dest?.delivered
             rejeitados = dest?.rejected
             // Telegram não tem "lido" (opened sempre 0, sem confirmação de leitura como
-            // WhatsApp) — usa cliques únicos aqui, é o engajamento real que a SendPulse dá.
-            lidas = campanha.relatorio?.stats.botoes.reduce((soma, b) => soma + b.unicos, 0)
+            // WhatsApp) — usa dest.activity, o mesmo número que a própria SendPulse mostra
+            // como "Engajamento" (bate com o Switchy). Não é a soma de cliques únicos por
+            // botão: com mais de um botão a mesma pessoa clicando em dois conta duas vezes,
+            // inflando o total acima do que SendPulse/Switchy reportam.
+            lidas = dest?.activity
             campanhaSp = campanha
           }
         }
