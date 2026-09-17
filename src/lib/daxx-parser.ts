@@ -86,7 +86,12 @@ export function parsearNomeCampanhaDaxx(nome: string): CampanhaDaxxParsed {
     resultado.tipo = `D${tipoMatch[1]}` as TipoDisparo
   }
 
-  const baseMatch = nome.match(/BASE\s+(.+?)\s+D[1357]\b/)
+  // Convenção da DAXX é "BASE <nome> D<n>", mas campanhas do Telegram (importadas da SendPulse,
+  // ver CampanhasSendpulseImportadas) costumam vir na ordem invertida "D<n> BASE <nome>" — tenta
+  // as duas antes de desistir do nome da base (sem isso, o nome bate no tipo certo mas não
+  // agrupa em esteira/projeta D3-D5-D7 futuros, ver disparosPorDia em useCalendario.ts).
+  let baseMatch = nome.match(/BASE\s+(.+?)\s+D[1357]\b/)
+  if (!baseMatch) baseMatch = nome.match(/\bD[1357]\s+BASE\s+(.+)$/)
   if (baseMatch) {
     resultado.baseNome = baseMatch[1].trim()
   }

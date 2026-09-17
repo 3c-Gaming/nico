@@ -153,7 +153,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
   }, [onResultado, item.id, disparoLocal, resultadoFinanceiro, custo, receita])
 
   useEffect(() => {
-    if (open && item.fonte === 'daxx' && item.campanhaDaxx) {
+    if (open && ((item.fonte === 'daxx' && item.campanhaDaxx) || (item.fonte === 'sendpulse-campanha' && item.campanhaSendpulse))) {
       setCasasSelecionadas(casaPadraoPorTipo(item.tipo, casasList))
       setUtmEscolhida('')
       setPidEscolhido('')
@@ -231,42 +231,50 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
 
   async function handleCadastrar(overrides?: { utm?: string; pid?: string }) {
     const campanha = item.campanhaDaxx
-    if (!campanha || !item.tipo || cadastrando) return
+    const campanhaSp = item.campanhaSendpulse
+    if ((!campanha && !campanhaSp) || !item.tipo || cadastrando) return
     setCadastrando(true)
 
     try {
       const now = new Date().toISOString()
-      const parsed = parsearNomeCampanhaDaxx(campanha.nome)
+      const nome = campanha?.nome ?? campanhaSp!.titulo
+      const parsed = parsearNomeCampanhaDaxx(nome)
       const utmSel = utmConfigs.find((u) => u.valor === (overrides?.utm ?? utmEscolhida))
       const pidSel = utmConfigs.find((u) => u.valor === (overrides?.pid ?? pidEscolhido))
+      const destSp = campanhaSp?.relatorio?.stats.destinatarios
 
       const disparoData: Disparo = {
         id: crypto.randomUUID(),
         tipo: item.tipo,
-        nomenclatura: campanha.nome,
+        nomenclatura: nome,
         status: 'rascunho',
         casasAposta: casasSelecionadas,
         dataDisparo: item.dataDisparo,
         horarioDisparo: '09:30',
-        base: {
+        base: campanha ? {
           status: 'disponivel',
           totalRegistros: campanha.totalBase,
           nomeArquivo: `DAXX: ${campanha.nome}`,
+        } : {
+          status: 'disponivel',
+          totalRegistros: destSp?.all,
+          nomeArquivo: `SendPulse: ${campanhaSp!.titulo}`,
         },
-        templateDaxx: {
+        templateDaxx: campanha ? {
           id: campanha.id,
           nome: campanha.nome,
           url: campanha.linkTemplate,
           descricao: `Base: ${campanha.totalBase} | Entregues: ${campanha.entregues} | Lidas: ${campanha.lidas}`,
-        },
-        daxxCampanhaId: campanha.id,
+        } : undefined,
+        daxxCampanhaId: campanha?.id,
+        sendpulseCampanhaId: campanhaSp?.id,
         utm: utmSel?.valor,
         betmgmPid: pidSel?.valor,
         criadoEm: now,
         atualizadoEm: now,
-        valorTotalBase: campanha.totalBase,
+        valorTotalBase: campanha?.totalBase ?? destSp?.all,
         conversao: {
-          entreguesDaxx: campanha.entregues,
+          entreguesDaxx: campanha?.entregues ?? destSp?.delivered ?? 0,
           leadsFluxo: 0,
           atualizadoEm: now,
         },
@@ -281,7 +289,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
       })
 
       if (res.status === 409) {
-        addToast('error', 'Essa campanha da DAXX já foi cadastrada')
+        addToast('error', `Essa campanha da ${campanha ? 'DAXX' : 'SendPulse'} já foi cadastrada`)
         setOpen(false)
         return
       }
@@ -294,7 +302,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
       create(resultado.disparo)
       if (resultado.esteira) createEsteira(resultado.esteira)
 
-      addToast('success', `${item.tipo} cadastrado a partir da DAXX`)
+      addToast('success', `${item.tipo} cadastrado a partir da ${campanha ? 'DAXX' : 'SendPulse'}`)
       setOpen(false)
     } catch {
       addToast('error', 'Erro de rede ao cadastrar disparo')
@@ -325,7 +333,9 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     )
   }
 
-  if (item.fonte === 'daxx') {
+  if (item.fonte === 'daxx' || item.fonte === 'sendpulse-campanha') {
+    const origemDaxx = item.fonte === 'daxx'
+    const sp = item.campanhaSendpulse
     return (
       <>
         <button
@@ -341,7 +351,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
             <span className="text-xs font-semibold" style={{ color: cor }}>{item.tipo}</span>
             <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)]">
               <Database size={9} />
-              DAXX
+              {origemDaxx ? 'DAXX' : 'SendPulse'}
             </span>
           </div>
           <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
@@ -363,7 +373,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           </div>
           {(item.entregues != null || item.lidas != null) && (
             <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-muted)]">
-              {item.entregues != null && <span>Enviados: {formatNumero(item.entregues)}</span>}
+              {item.entregues != null && <span>{origemDaxx ? 'Enviados' : 'Entregues'}: {formatNumero(item.entregues)}</span>}
               {item.lidas != null && <span>Lidos: {formatNumero(item.lidas)}</span>}
               {item.rejeitados != null && item.rejeitados > 0 && <span className="text-[var(--error)]">Rej: {formatNumero(item.rejeitados)}</span>}
             </div>
@@ -378,7 +388,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                 <Badge variant="tipo" value={item.tipo} />
               </div>
               <div>
-                <span className="text-[var(--text-muted)] block text-xs">Status DAXX</span>
+                <span className="text-[var(--text-muted)] block text-xs">Status {origemDaxx ? 'DAXX' : 'SendPulse'}</span>
                 <span className="text-[var(--text-primary)]">{item.status}</span>
               </div>
               <div>
@@ -395,7 +405,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.entregues != null ? <StatNumber value={item.entregues} /> : '—'}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">{origemDaxx ? 'Enviados' : 'Entregues'}</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? <StatNumber value={item.lidas} /> : '—'}</div>
@@ -412,6 +422,16 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                 <span className="text-[var(--text-muted)] block text-xs">Responsável</span>
                 <span className="text-[var(--text-primary)]">{item.campanhaDaxx.responsavel}</span>
               </div>
+            )}
+            {sp && (
+              <a
+                href={`https://login.sendpulse.com/messengers/campaign/${sp.canal}/${sp.id}/report/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                <ExternalLink size={11} /> Abrir relatório completo no painel da SendPulse
+              </a>
             )}
 
             <div className="pt-2 border-t border-[var(--border)] space-y-3">
@@ -516,43 +536,6 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           </div>
         </Modal>
       </>
-    )
-  }
-
-  if (item.fonte === 'sendpulse-campanha') {
-    const c = item.campanhaSendpulse
-    const dest = c?.relatorio?.stats.destinatarios
-    return (
-      <a
-        href={c ? `https://login.sendpulse.com/messengers/campaign/${c.canal}/${c.id}/report/` : undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block w-full text-left rounded p-2.5"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px dashed var(--border-strong)',
-          borderLeft: '3px solid var(--d1)',
-        }}
-        title="Abrir no painel da SendPulse"
-      >
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-xs font-semibold" style={{ color: 'var(--d1)' }}>{item.tipo}</span>
-          <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)]">
-            <Database size={9} />
-            SendPulse
-          </span>
-        </div>
-        <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
-          {nomeCurto(item.nome)}
-        </p>
-        {dest && (
-          <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-muted)]">
-            <span>Dest: {formatNumero(dest.all)}</span>
-            <span>Env: {formatNumero(dest.sent)}</span>
-            <span>Entr: {formatNumero(dest.delivered)}</span>
-          </div>
-        )}
-      </a>
     )
   }
 

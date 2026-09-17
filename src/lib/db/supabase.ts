@@ -36,6 +36,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   rcsDestinatarios: 'rcs_destinatarios',
   clientesCaptados: 'clientes_captados',
   daxxCampanhaId: 'daxx_campanha_id',
+  sendpulseCampanhaId: 'sendpulse_campanha_id',
   dataConclusao: 'data_conclusao',
   dataCriacao: 'data_criacao',
   dataDisparo: 'data_disparo',
@@ -133,6 +134,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   rcs_fallback: 'rcsFallback',
   rcs_destinatarios: 'rcsDestinatarios',
   daxx_campanha_id: 'daxxCampanhaId',
+  sendpulse_campanha_id: 'sendpulseCampanhaId',
   casa_id: 'casaId',
   url_template: 'urlTemplate',
   flow_id: 'flowId',
@@ -328,7 +330,13 @@ export async function getDisparo(id: string): Promise<Disparo | null> {
 export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
   const { data, error } = await tb('disparos').insert(toSnakeCase(disparo as any)).select().single()
   if (error) {
-    if (error.code === '23505') throw new Error(`DUPLICATE_DAXX_CAMPANHA:${disparo.daxxCampanhaId ?? ''}`)
+    if (error.code === '23505') {
+      // Um insert só pode violar uma dessas duas (nunca as duas juntas — o disparo veio de uma
+      // fonte externa ou de outra, nunca das duas), então o campo preenchido no próprio disparo
+      // já diz qual constraint foi.
+      if (disparo.sendpulseCampanhaId) throw new Error(`DUPLICATE_SENDPULSE_CAMPANHA:${disparo.sendpulseCampanhaId}`)
+      throw new Error(`DUPLICATE_DAXX_CAMPANHA:${disparo.daxxCampanhaId ?? ''}`)
+    }
     throw new Error(`Erro ao criar disparo: ${error.message}`)
   }
   return row<Disparo>(data)!
@@ -336,6 +344,11 @@ export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
 
 export async function getDisparoPorDaxxCampanhaId(daxxCampanhaId: string): Promise<Disparo | null> {
   const { data } = await tb('disparos').select('*').eq('daxx_campanha_id', daxxCampanhaId).maybeSingle()
+  return row<Disparo>(data)
+}
+
+export async function getDisparoPorSendpulseCampanhaId(sendpulseCampanhaId: string): Promise<Disparo | null> {
+  const { data } = await tb('disparos').select('*').eq('sendpulse_campanha_id', sendpulseCampanhaId).maybeSingle()
   return row<Disparo>(data)
 }
 

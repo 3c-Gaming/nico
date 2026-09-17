@@ -6,6 +6,7 @@ import {
   atualizarDisparo as dbAtualizarDisparo,
   deletarDisparo as dbDeletarDisparo,
   getDisparoPorDaxxCampanhaId as dbGetDisparoPorDaxxCampanhaId,
+  getDisparoPorSendpulseCampanhaId as dbGetDisparoPorSendpulseCampanhaId,
   listarEsteiras as dbListarEsteiras,
   getEsteira as dbGetEsteira,
   criarEsteira as dbCriarEsteira,
@@ -86,7 +87,7 @@ export async function criarDisparo(disparo: Disparo): Promise<Disparo> {
     try {
       return await dbCriarDisparo(disparo)
     } catch (err) {
-      if (err instanceof Error && err.message.startsWith('DUPLICATE_DAXX_CAMPANHA')) throw err
+      if (err instanceof Error && (err.message.startsWith('DUPLICATE_DAXX_CAMPANHA') || err.message.startsWith('DUPLICATE_SENDPULSE_CAMPANHA'))) throw err
       // Sem isso, um insert real que falha (coluna faltando, tipo errado etc.) cai pro store em
       // memória sem deixar rastro nenhum — parece funcionar (200, objeto de volta) mas nunca
       // grava de verdade. Já aconteceu (custo_por_envio sem migration) e o erro ficou invisível.
@@ -104,6 +105,15 @@ export async function getDisparoPorDaxxCampanhaId(daxxCampanhaId: string): Promi
     } catch { }
   }
   return Object.values(getMemStore().disparos).find((d) => d.daxxCampanhaId === daxxCampanhaId) ?? null
+}
+
+export async function getDisparoPorSendpulseCampanhaId(sendpulseCampanhaId: string): Promise<Disparo | null> {
+  if (isDbAvailable()) {
+    try {
+      return await dbGetDisparoPorSendpulseCampanhaId(sendpulseCampanhaId)
+    } catch { }
+  }
+  return Object.values(getMemStore().disparos).find((d) => d.sendpulseCampanhaId === sendpulseCampanhaId) ?? null
 }
 
 export async function atualizarDisparo(id: string, updates: Partial<Disparo>): Promise<Disparo | null> {

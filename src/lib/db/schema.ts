@@ -11,6 +11,7 @@ export const disparos = pgTable('disparos', {
   base: jsonb('base').notNull().default('{}'),
   templateDaxx: jsonb('template_daxx'),
   daxxCampanhaId: text('daxx_campanha_id'),
+  sendpulseCampanhaId: text('sendpulse_campanha_id'),
   numeroSendpulse: jsonb('numero_sendpulse'),
   esteiraPaiId: text('esteira_pai_id'),
   numerosSendpulse: jsonb('numeros_sendpulse'),

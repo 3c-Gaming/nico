@@ -293,6 +293,10 @@ export interface Disparo {
   base: BaseCSV
   templateDaxx?: TemplateDaxx
   daxxCampanhaId?: string
+  /** ID da campanha da SendPulse (ver CampanhaSendpulseImportada) quando esse disparo foi
+   * cadastrado a partir do calendário a partir de uma campanha importada — mesmo princípio de
+   * daxxCampanhaId, evita cadastrar a mesma campanha duas vezes. */
+  sendpulseCampanhaId?: string
   numeroSendpulse?: NumeroSendpulse
   esteiraPaiId?: string
   numerosSendpulse?: NumeroSendpulse[]

@@ -267,11 +267,15 @@ export function useCalendario() {
       for (const campanha of campanhasSendpulse) {
         const dataRef = (campanha.sendAt ?? campanha.criadoEmSendpulse).slice(0, 10)
         if (dataRef !== key) continue
-        if (filtros.tipos.length > 0 && !filtros.tipos.includes('PONTUAL')) continue
+        // Título segue a mesma convenção da DAXX ("... D1", "... D3"...) — sem isso, toda
+        // campanha do Telegram caía em PONTUAL mesmo fazendo parte de um ciclo D1/D3/D5, e nunca
+        // dava pra cadastrar como o tipo certo nem projetar as etapas futuras.
+        const tipoDetectado = parsearNomeCampanhaDaxx(campanha.titulo).tipo
+        if (filtros.tipos.length > 0 && !filtros.tipos.includes(tipoDetectado)) continue
 
         itens.push({
           id: `sendpulse_${campanha.id}`,
-          tipo: 'PONTUAL',
+          tipo: tipoDetectado,
           nome: campanha.titulo,
           nomenclatura: campanha.titulo,
           dataDisparo: key,
@@ -279,6 +283,7 @@ export function useCalendario() {
           status: campanha.relatorio ? String(campanha.relatorio.status) : 'sem dados',
           fonte: 'sendpulse-campanha',
           entregues: campanha.relatorio?.stats.destinatarios.delivered,
+          rejeitados: campanha.relatorio?.stats.destinatarios.rejected,
           totalBase: campanha.relatorio?.stats.destinatarios.all,
           campanhaSendpulse: campanha,
         })
@@ -307,7 +312,7 @@ export function useCalendario() {
 
       for (const [, itensDoDia] of map) {
         for (const item of [...itensDoDia]) {
-          if (item.fonte !== 'daxx' && item.fonte !== 'local') continue
+          if (item.fonte !== 'daxx' && item.fonte !== 'local' && item.fonte !== 'sendpulse-campanha') continue
           const offsetAtual = offsetPorTipo[item.tipo]
           if (offsetAtual == null) continue
 
@@ -329,7 +334,7 @@ export function useCalendario() {
 
             const itensDoDiaAlvo = map.get(keyProjetada) ?? []
             const jaExisteReal = itensDoDiaAlvo.some((it) =>
-              (it.fonte === 'daxx' || it.fonte === 'local') && it.tipo === tipoFuturo && rotuloBase(it.nome) === label,
+              (it.fonte === 'daxx' || it.fonte === 'local' || it.fonte === 'sendpulse-campanha') && it.tipo === tipoFuturo && rotuloBase(it.nome) === label,
             )
             if (jaExisteReal) continue
 

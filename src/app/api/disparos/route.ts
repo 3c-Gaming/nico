@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Disparo, Esteira } from '@/types'
-import { listarDisparos, criarDisparo, criarEsteira, getDisparoPorDaxxCampanhaId, upsertEtapaDaxx } from '@/lib/api-store'
+import { listarDisparos, criarDisparo, criarEsteira, getDisparoPorDaxxCampanhaId, getDisparoPorSendpulseCampanhaId, upsertEtapaDaxx } from '@/lib/api-store'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -24,6 +24,10 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof Error && err.message.startsWith('DUPLICATE_DAXX_CAMPANHA')) {
       const existente = pai.daxxCampanhaId ? await getDisparoPorDaxxCampanhaId(pai.daxxCampanhaId) : null
+      return NextResponse.json({ error: 'duplicate', disparo: existente }, { status: 409 })
+    }
+    if (err instanceof Error && err.message.startsWith('DUPLICATE_SENDPULSE_CAMPANHA')) {
+      const existente = pai.sendpulseCampanhaId ? await getDisparoPorSendpulseCampanhaId(pai.sendpulseCampanhaId) : null
       return NextResponse.json({ error: 'duplicate', disparo: existente }, { status: 409 })
     }
     throw err
