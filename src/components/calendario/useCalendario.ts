@@ -154,6 +154,7 @@ export function useCalendario() {
     for (const c of campanhasDaxx) {
       if (c.id && !c.id.startsWith('fallback_')) daxxPorTemplateId.set(c.id, c)
     }
+    const sendpulsePorId = new Map(campanhasSendpulse.map((c) => [c.id, c]))
 
     for (const dia of diasVisiveis) {
       const key = dia.toISOString().split('T')[0]
@@ -167,6 +168,7 @@ export function useCalendario() {
         let lidas: number | undefined
         let rejeitados: number | undefined
         let statusDaxx: string | undefined
+        let campanhaSp: CampanhaSendpulseImportada & { relatorio: RelatorioCampanhaSendpulse | null } | undefined
 
         if (d.daxxCampanhaId) {
           const campanha = daxxPorTemplateId.get(d.daxxCampanhaId)
@@ -175,6 +177,21 @@ export function useCalendario() {
             lidas = campanha.lidas
             rejeitados = campanha.rejeitados
             statusDaxx = campanha.status
+          }
+        } else if (d.sendpulseCampanhaId) {
+          // Sem isso, um disparo cadastrado a partir de uma campanha da SendPulse perdia todo o
+          // resultado (entregues/rejeitados/cliques) assim que virava um Disparo "local" — só o
+          // daxxCampanhaId era considerado aqui, então o card voltava a ficar sem dado nenhum
+          // depois do cadastro, mesmo a SendPulse já tendo o resultado.
+          const campanha = sendpulsePorId.get(d.sendpulseCampanhaId)
+          if (campanha) {
+            const dest = campanha.relatorio?.stats.destinatarios
+            entregues = dest?.delivered
+            rejeitados = dest?.rejected
+            // Telegram não tem "lido" (opened sempre 0, sem confirmação de leitura como
+            // WhatsApp) — usa cliques únicos aqui, é o engajamento real que a SendPulse dá.
+            lidas = campanha.relatorio?.stats.botoes.reduce((soma, b) => soma + b.unicos, 0)
+            campanhaSp = campanha
           }
         }
 
@@ -193,6 +210,7 @@ export function useCalendario() {
           rejeitados,
           totalBase: d.base.totalRegistros,
           disparoLocal: d,
+          campanhaSendpulse: campanhaSp,
         })
       }
 

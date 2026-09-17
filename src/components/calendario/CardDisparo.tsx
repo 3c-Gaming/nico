@@ -357,7 +357,10 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
             {nomeCurto(item.nome)}
           </p>
-          {item.entregues != null && (
+          {/* Telegram não tem custo por mensagem (diferente do DAXX/WhatsApp, de onde vem
+              CUSTO_POR_ENTREGUE) — campanha da SendPulse não mostra esse valor, ele seria
+              simplesmente errado. */}
+          {item.entregues != null && origemDaxx && (
             <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
               <StatNumber value={item.entregues * CUSTO_POR_ENTREGUE} prefix="R$ " decimals={2} />
             </div>
@@ -374,7 +377,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           {(item.entregues != null || item.lidas != null) && (
             <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-muted)]">
               {item.entregues != null && <span>{origemDaxx ? 'Enviados' : 'Entregues'}: {formatNumero(item.entregues)}</span>}
-              {item.lidas != null && <span>Lidos: {formatNumero(item.lidas)}</span>}
+              {item.lidas != null && <span>{origemDaxx ? 'Lidos' : 'Clicaram'}: {formatNumero(item.lidas)}</span>}
               {item.rejeitados != null && item.rejeitados > 0 && <span className="text-[var(--error)]">Rej: {formatNumero(item.rejeitados)}</span>}
             </div>
           )}
@@ -409,7 +412,7 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? <StatNumber value={item.lidas} /> : '—'}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">{origemDaxx ? 'Lidos' : 'Clicaram'}</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? <StatNumber value={item.rejeitados} /> : '—'}</div>
@@ -627,7 +630,10 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
           {nomeCurto(item.nomenclatura)}
         </p>
 
-        {item.entregues != null && (
+        {/* Telegram não tem custo por mensagem (diferente do WhatsApp, de onde vem
+            CUSTO_POR_ENTREGUE) — disparo cadastrado a partir de uma campanha da SendPulse não
+            mostra esse valor, ele seria simplesmente errado. */}
+        {item.entregues != null && !disparoLocal?.sendpulseCampanhaId && (
           <div className="text-base font-semibold text-[var(--text-primary)] leading-none mb-1">
             <StatNumber value={item.entregues * CUSTO_POR_ENTREGUE} prefix="R$ " decimals={2} />
           </div>
@@ -789,21 +795,33 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
 
           {item.entregues != null && (
             <div>
-              <span className="text-[var(--text-muted)] block text-xs mb-1">Métricas DAXX</span>
+              <span className="text-[var(--text-muted)] block text-xs mb-1">
+                Métricas {disparoLocal?.sendpulseCampanhaId ? 'SendPulse' : 'DAXX'}
+              </span>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]"><StatNumber value={item.entregues} /></div>
-                  <div className="text-[10px] text-[var(--text-muted)]">Enviados</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">{disparoLocal?.sendpulseCampanhaId ? 'Entregues' : 'Enviados'}</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.lidas != null ? <StatNumber value={item.lidas} /> : '—'}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">Lidos</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">{disparoLocal?.sendpulseCampanhaId ? 'Clicaram' : 'Lidos'}</div>
                 </div>
                 <div className="text-center p-2 rounded bg-[var(--bg-surface)]">
                   <div className="text-lg font-semibold text-[var(--text-primary)]">{item.rejeitados != null ? <StatNumber value={item.rejeitados} /> : '—'}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Rejeitados</div>
                 </div>
               </div>
+              {item.campanhaSendpulse && (
+                <a
+                  href={`https://login.sendpulse.com/messengers/campaign/${item.campanhaSendpulse.canal}/${item.campanhaSendpulse.id}/report/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mt-1.5"
+                >
+                  <ExternalLink size={11} /> Abrir relatório completo no painel da SendPulse
+                </a>
+              )}
             </div>
           )}
 
