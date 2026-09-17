@@ -13,6 +13,7 @@ import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { formatMoeda, formatNumero } from '@/lib/resultadoDisparo'
 import { PainelDetalheDisparoSms, type ResumoCampanhaSms } from '@/components/disparos/PainelDetalheDisparoSms'
 import { PainelDetalheDisparoRcs } from '@/components/disparos/PainelDetalheDisparoRcs'
+import { CampanhasSendpulseImportadas } from '@/components/disparos/CampanhasSendpulseImportadas'
 import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import type { Disparo } from '@/types'
 
@@ -190,6 +191,8 @@ export default function DisparosPage() {
           </div>
         }
       />
+
+      <CampanhasSendpulseImportadas />
 
       <div className="p-6 space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
