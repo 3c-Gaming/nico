@@ -475,6 +475,14 @@ export interface DestinatarioComClique {
 /** Agregado de campaigns/recipients (ver src/lib/integrações/sendpulse.ts,
  * buscarDestinatariosCampanha) — busca sob demanda (não em todo carregamento da lista, é uma
  * chamada paginada por campanha), por isso fica separado do RelatorioCampanhaSendpulse. */
+/** Motivo de rejeição agrupado (texto cru devolvido pela SendPulse/Telegram, ex: "Forbidden: bot
+ * was blocked by the user" — é como o Telegram reporta bloqueio/denúncia, não tem um campo
+ * "denuncia" separado). */
+export interface MotivoRejeicao {
+  motivo: string
+  quantidade: number
+}
+
 export interface ResumoDestinatariosCampanha {
   total: number
   escaneados: number
@@ -485,6 +493,7 @@ export interface ResumoDestinatariosCampanha {
   rejeitados: number
   porBotao: CliquesPorBotao[]
   quemClicou: DestinatarioComClique[]
+  motivosRejeicao: MotivoRejeicao[]
 }
 
 export interface KpiCusto {

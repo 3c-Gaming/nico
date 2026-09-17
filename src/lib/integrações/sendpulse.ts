@@ -212,6 +212,7 @@ export async function buscarDestinatariosCampanha(campanhaId: string, apiKey: st
   let rejeitados = 0
   const porBotao = new Map<string, number>()
   const quemClicou: DestinatarioComClique[] = []
+  const motivosRejeicao = new Map<string, number>()
 
   let searchAfter: string[] | undefined
   for (;;) {
@@ -232,7 +233,17 @@ export async function buscarDestinatariosCampanha(campanhaId: string, apiKey: st
       if (dest.delivered) entregues++
       if (dest.opened) abriram++
       if (dest.activity) comAtividade++
-      if (dest.rejected) rejeitados++
+      if (dest.rejected) {
+        rejeitados++
+        // Uma campanha manda mais de uma mensagem (ex: foto + texto) — o mesmo motivo pode
+        // aparecer repetido no array pro mesmo destinatário. Conta 1 destinatário por motivo
+        // distinto, não 1 por mensagem falhada (senão "quantos bloquearam" fica inflado).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const motivosDesteContato = new Set(((dest.errors ?? []) as any[]).map((e) => String(e)))
+        for (const motivo of motivosDesteContato) {
+          motivosRejeicao.set(motivo, (motivosRejeicao.get(motivo) ?? 0) + 1)
+        }
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const botoes = (dest.buttons ?? []) as any[]
@@ -268,6 +279,7 @@ export async function buscarDestinatariosCampanha(campanhaId: string, apiKey: st
     rejeitados,
     porBotao: [...porBotao.entries()].map(([titulo, cliques]) => ({ titulo, cliques })).sort((a, b) => b.cliques - a.cliques),
     quemClicou,
+    motivosRejeicao: [...motivosRejeicao.entries()].map(([motivo, quantidade]) => ({ motivo, quantidade })).sort((a, b) => b.quantidade - a.quantidade),
   }
 }
 

@@ -6,6 +6,7 @@ import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
 import { UtmComboBox } from '../ui/UtmComboBox'
 import { useToast } from '../ui/Toast'
+import { FunilConversaoChart } from '../funis/FunilConversaoChart'
 import type { CampanhaSendpulseImportada, RelatorioCampanhaSendpulse, ResumoDestinatariosCampanha } from '@/types'
 
 interface CampanhaComRelatorio extends CampanhaSendpulseImportada {
@@ -35,6 +36,19 @@ interface LinhaCampanhaProps {
   campanha: CampanhaComRelatorio
   onSalvarUtm: (id: string, utm: string) => Promise<void>
   onExcluir: (id: string) => void
+}
+
+// A SendPulse repassa o erro cru do Telegram (em inglês) — sem um campo "denúncia" separado,
+// bloqueio do bot pelo usuário é o proxy mais próximo disso (geralmente é isso ou trava de
+// notificação; o Telegram não distingue "bloqueou por denúncia" de "bloqueou por outro motivo").
+const TRADUCOES_REJEICAO: Record<string, string> = {
+  'Forbidden: bot was blocked by the user': 'Usuário bloqueou o bot',
+  'Forbidden: user is deactivated': 'Conta do usuário desativada',
+  'Bad Request: chat not found': 'Chat não encontrado (conta apagada/nunca iniciou o bot)',
+}
+
+function traduzirMotivoRejeicao(motivo: string): string {
+  return TRADUCOES_REJEICAO[motivo] ?? motivo
 }
 
 function formatarPct(parte: number, total: number): string {
@@ -142,19 +156,35 @@ function LinhaCampanha({ campanha: c, onSalvarUtm, onExcluir }: LinhaCampanhaPro
             ) : !destinatarios ? (
               <p className="text-xs text-[var(--error)]">Erro ao carregar detalhes de engajamento.</p>
             ) : (
-              <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-6">
+              <div className="grid grid-cols-[1.3fr_1fr_1.4fr] gap-6">
                 <div>
                   <p className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1.5">Funil de entrega</p>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">Destinatários</span><span className="font-mono text-[var(--text-primary)]">{dest?.all ?? '—'}</span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">Entregues</span><span className="font-mono text-[var(--text-primary)]">{dest?.delivered ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.delivered ?? 0, dest?.all ?? 0)})</span></span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">Rejeitados</span><span className="font-mono text-[var(--error)]">{dest?.rejected ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.rejected ?? 0, dest?.all ?? 0)})</span></span></div>
+                  <FunilConversaoChart
+                    estagios={[
+                      { tag: 'Destinatários', contagem: dest?.all ?? 0 },
+                      { tag: 'Entregues', contagem: dest?.delivered ?? 0 },
+                      { tag: 'Clicaram', contagem: destinatarios.clicaram },
+                    ]}
+                    cor="#0088cc"
+                    orientacao="vertical"
+                  />
+                  <div className="mt-2 space-y-1 text-xs">
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">Com atividade</span><span className="font-mono text-[var(--text-primary)]">{dest?.activity ?? '—'} <span className="text-[var(--text-muted)]">({formatarPct(dest?.activity ?? 0, dest?.delivered ?? 0)})</span></span></div>
-                    <div className="flex justify-between"><span className="text-[var(--d1)] font-medium">Clicaram (algum botão)</span><span className="font-mono text-[var(--d1)] font-medium">{destinatarios.clicaram} <span className="text-[var(--text-muted)]">({formatarPct(destinatarios.clicaram, dest?.delivered ?? 0)})</span></span></div>
-                    {destinatarios.escaneados < destinatarios.total && (
-                      <p className="text-[10px] text-[var(--text-muted)] pt-1">Escaneados {destinatarios.escaneados} de {destinatarios.total} destinatários (amostra).</p>
-                    )}
                   </div>
+                  {destinatarios.motivosRejeicao.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
+                      <p className="text-[10px] font-medium text-[var(--error)] uppercase tracking-wide">Rejeitados / denúncias — {dest?.rejected ?? 0} ({formatarPct(dest?.rejected ?? 0, dest?.all ?? 0)})</p>
+                      {destinatarios.motivosRejeicao.map((m) => (
+                        <div key={m.motivo} className="flex justify-between gap-2 text-[11px]">
+                          <span className="text-[var(--error)] truncate" title={m.motivo}>{traduzirMotivoRejeicao(m.motivo)}</span>
+                          <span className="font-mono text-[var(--error)] shrink-0">{m.quantidade}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {destinatarios.escaneados < destinatarios.total && (
+                    <p className="text-[10px] text-[var(--text-muted)] pt-2">Escaneados {destinatarios.escaneados} de {destinatarios.total} destinatários (amostra).</p>
+                  )}
                 </div>
 
                 <div>
