@@ -423,6 +423,36 @@ export interface FunilMetricaDiaria {
   atualizadoEm: string
 }
 
+/** Campanha de broadcast criada direto no painel da SendPulse, importada pra aparecer em
+ * Disparos/Calendário — ver CampanhaSendpulseReport pros números ao vivo (não persistidos). */
+export interface CampanhaSendpulseImportada {
+  id: string
+  contaId: string
+  botId: string
+  canal: 'telegram' | 'whatsapp'
+  titulo: string
+  sendAt: string | null
+  criadoEmSendpulse: string
+  importadoEm: string
+}
+
+/** Números ao vivo de uma campanha de broadcast da SendPulse (GET /campaigns/report) — não
+ * persistidos, buscados de novo a cada carregamento (ver src/lib/integrações/sendpulse.ts,
+ * buscarCampanhaSendpulse). */
+export interface RelatorioCampanhaSendpulse {
+  id: string
+  titulo: string
+  botId: string
+  status: number
+  sendAt: string | null
+  criadoEm: string
+  atualizadoEm: string
+  stats: {
+    mensagens: { all: number; sent: number; rejected: number; delivered: number; opened: number; redirected: number }
+    destinatarios: { all: number; sent: number; rejected: number; delivered: number; opened: number; redirected: number }
+  }
+}
+
 export interface KpiCusto {
   id: string
   nome: string
@@ -616,7 +646,7 @@ export interface ItemCalendario {
   horarioDisparo?: string
   casasAposta: string[]
   status: string
-  fonte: 'local' | 'daxx' | 'agendado' | 'projetado'
+  fonte: 'local' | 'daxx' | 'agendado' | 'projetado' | 'sendpulse-campanha'
   entregues?: number
   lidas?: number
   rejeitados?: number
@@ -624,6 +654,7 @@ export interface ItemCalendario {
   disparoLocal?: Disparo
   campanhaDaxx?: DisparoDaxx
   agendado?: DisparoAgendadoDaxx
+  campanhaSendpulse?: CampanhaSendpulseImportada & { relatorio: RelatorioCampanhaSendpulse | null }
 }
 
 export interface AppState {

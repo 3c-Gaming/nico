@@ -1,4 +1,4 @@
-import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse } from '@/types'
+import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse, RelatorioCampanhaSendpulse } from '@/types'
 import { listarContasSendpulse, registrarContaDoBot, registrarCanalDoBot, apiKeyParaBot } from './contasSendpulse'
 import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
 import { getPreferencias } from '@/lib/db/supabase'
@@ -153,6 +153,54 @@ export async function resolverContaEBotTelegram(botIdentificador: string): Promi
     }
   }
   return null
+}
+
+const STATS_VAZIA = { all: 0, sent: 0, rejected: 0, delivered: 0, opened: 0, redirected: 0 }
+
+/** Campanha de broadcast criada direto no painel da SendPulse (não pelo nico) — só existe
+ * `/campaigns/report?id=`, sem endpoint de listagem (ver AI/sendpulse-api.md). `null` se o ID não
+ * existir NESSA conta especificamente (ver resolverContaDaCampanha, que tenta todas) — plano
+ * expirado também cai aqui (a SendPulse recusa o endpoint com "Available only on a paid tariff"). */
+export async function buscarCampanhaSendpulse(campanhaId: string, apiKey: string, canal: Canal = 'telegram'): Promise<RelatorioCampanhaSendpulse | null> {
+  const res = await fetchComRetry429(`${baseUrl(canal)}/campaigns/report?id=${encodeURIComponent(campanhaId)}`, apiKey)
+  if (!res.ok) return null
+  const json = await res.json()
+  if (!json.success || !json.data) return null
+  const d = json.data
+  return {
+    id: d.id,
+    titulo: d.title ?? '',
+    botId: d.bot_id ?? '',
+    status: d.status ?? 0,
+    sendAt: d.send_at ?? null,
+    criadoEm: d.created_at ?? '',
+    atualizadoEm: d.updated_at ?? '',
+    stats: {
+      mensagens: d.stats?.messages ?? STATS_VAZIA,
+      destinatarios: d.stats?.recipients ?? STATS_VAZIA,
+    },
+  }
+}
+
+/** Sem saber de antemão em qual das contas configuradas a campanha foi criada — tenta cada uma
+ * até achar (mesmo princípio de resolverContaEBotTelegram). */
+export async function resolverContaDaCampanha(campanhaId: string, canal: Canal = 'telegram'): Promise<{ contaId: string; relatorio: RelatorioCampanhaSendpulse } | null> {
+  for (const conta of listarContasSendpulse()) {
+    const relatorio = await buscarCampanhaSendpulse(campanhaId, conta.apiKey, canal)
+    if (relatorio) return { contaId: conta.id, relatorio }
+  }
+  return null
+}
+
+/** Aceita tanto o ID cru quanto o link do painel da SendPulse (ex:
+ * https://login.sendpulse.com/messengers/campaign/telegram/{id}/report/) — o usuário só tem
+ * acesso ao link colando da barra de endereço do painel, então extrai o ID de qualquer um dos
+ * dois formatos. `null` se não achar nada parecido com um ID de campanha (24 chars hex). */
+export function extrairIdCampanhaSendpulse(input: string): string | null {
+  const doLink = input.match(/\/campaign\/(?:telegram|whatsapp|messenger)\/([a-f0-9]{24})/i)
+  if (doLink) return doLink[1]
+  const bruto = input.trim().match(/^[a-f0-9]{24}$/i)
+  return bruto ? bruto[0] : null
 }
 
 export interface TagSendpulse {

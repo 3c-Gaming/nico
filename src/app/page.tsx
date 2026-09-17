@@ -1077,7 +1077,7 @@ export default function HomePage() {
                   return casa ? (
                     <span
                       key={casaId}
-                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold font-mono"
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold font-mono max-w-[140px]"
                       style={{
                         backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
                         border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
@@ -1085,7 +1085,7 @@ export default function HomePage() {
                       }}
                       title={casa.nome}
                     >
-                      {casa.nome}
+                      <span className="line-clamp-1">{casa.nome}</span>
                     </span>
                   ) : null
                 })
@@ -1098,8 +1098,8 @@ export default function HomePage() {
                 <span className="text-xs text-[var(--text-muted)]/40">—</span>
               ) : (
                 row.botNomes.map((nome) => (
-                  <span key={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)]">
-                    {nome}
+                  <span key={nome} title={nome} className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] max-w-[160px]">
+                    <span className="line-clamp-1">{nome}</span>
                   </span>
                 ))
               )}

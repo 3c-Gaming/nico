@@ -180,6 +180,21 @@ export const funisApresentacoes = pgTable('funis_apresentacoes', {
   atualizadoEm: text('atualizado_em').notNull(),
 })
 
+// Campanhas de broadcast criadas direto no painel da SendPulse (fora do nico) — a API não expõe
+// um jeito de listar todas, só de consultar uma pelo ID (ver /campaigns/report). Importadas uma a
+// uma colando o link/ID na tela de Disparos; só guarda a identidade aqui, os números
+// (enviadas/entregues/etc.) são buscados ao vivo a cada carregamento, não persistidos.
+export const campanhasSendpulseImportadas = pgTable('campanhas_sendpulse_importadas', {
+  id: text('id').primaryKey(),
+  contaId: text('conta_id').notNull(),
+  botId: text('bot_id').notNull(),
+  canal: text('canal').notNull().default('telegram'),
+  titulo: text('titulo').notNull(),
+  sendAt: text('send_at'),
+  criadoEmSendpulse: text('criado_em_sendpulse').notNull(),
+  importadoEm: text('importado_em').notNull(),
+})
+
 export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),

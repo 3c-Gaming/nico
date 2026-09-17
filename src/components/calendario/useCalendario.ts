@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react'
-import type { Disparo, TipoDisparo, StatusDisparo, ItemCalendario, DisparoDaxx, DisparoAgendadoDaxx } from '@/types'
+import type { Disparo, TipoDisparo, StatusDisparo, ItemCalendario, DisparoDaxx, DisparoAgendadoDaxx, CampanhaSendpulseImportada, RelatorioCampanhaSendpulse } from '@/types'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { useEtapaConfigs } from '@/hooks/useEtapaConfigs'
@@ -83,6 +83,7 @@ export function useCalendario() {
 
   const [campanhasDaxx, setCampanhasDaxx] = useState<DisparoDaxx[]>([])
   const [agendadosDaxx, setAgendadosDaxx] = useState<DisparoAgendadoDaxx[]>([])
+  const [campanhasSendpulse, setCampanhasSendpulse] = useState<(CampanhaSendpulseImportada & { relatorio: RelatorioCampanhaSendpulse | null })[]>([])
 
   useEffect(() => {
     const cache = carregarCacheDaxx()
@@ -100,11 +101,23 @@ export function useCalendario() {
         .catch(() => {})
     }
 
+    // Campanhas criadas direto no painel da SendPulse (importadas na tela de Disparos, ver
+    // CampanhasSendpulseImportadas.tsx) — mesmo princípio de recarga periódica da DAXX acima,
+    // pra números (enviadas/entregues/etc.) não ficarem presos no snapshot inicial.
+    function buscarCampanhasSendpulse() {
+      fetch('/api/sendpulse/campanhas')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => { if (data?.campanhas) setCampanhasSendpulse(data.campanhas) })
+        .catch(() => {})
+    }
+
     buscarCampanhas()
+    buscarCampanhasSendpulse()
     // Recarrega periodicamente enquanto a aba do calendário está aberta — sem isso os dados
     // de entregues/lidas/novas campanhas ficam presos no snapshot do carregamento inicial,
     // ficando "desatualizados" pra quem deixa a página aberta acompanhando disparos do dia.
     const intervalId = setInterval(buscarCampanhas, DAXX_POLL_INTERVAL)
+    const intervalIdSendpulse = setInterval(buscarCampanhasSendpulse, DAXX_POLL_INTERVAL)
 
     const token = localStorage.getItem('nico_daxx_token')
     if (token) {
@@ -118,7 +131,7 @@ export function useCalendario() {
         .catch(() => {})
     }
 
-    return () => clearInterval(intervalId)
+    return () => { clearInterval(intervalId); clearInterval(intervalIdSendpulse) }
   }, [])
 
   const diasVisiveis = useMemo(() => gerarRangeDias(inicioRange, fimRange), [inicioRange, fimRange])
@@ -248,6 +261,29 @@ export function useCalendario() {
         }
       }
 
+      // Campanhas criadas direto no painel da SendPulse (não passam pelo toggle "mostrar DAXX" —
+      // não têm nada a ver com DAXX, são uma fonte independente). Data pelo agendamento
+      // (send_at) quando existe, senão pela data em que a campanha foi criada na SendPulse.
+      for (const campanha of campanhasSendpulse) {
+        const dataRef = (campanha.sendAt ?? campanha.criadoEmSendpulse).slice(0, 10)
+        if (dataRef !== key) continue
+        if (filtros.tipos.length > 0 && !filtros.tipos.includes('PONTUAL')) continue
+
+        itens.push({
+          id: `sendpulse_${campanha.id}`,
+          tipo: 'PONTUAL',
+          nome: campanha.titulo,
+          nomenclatura: campanha.titulo,
+          dataDisparo: key,
+          casasAposta: [],
+          status: campanha.relatorio ? String(campanha.relatorio.status) : 'sem dados',
+          fonte: 'sendpulse-campanha',
+          entregues: campanha.relatorio?.stats.destinatarios.delivered,
+          totalBase: campanha.relatorio?.stats.destinatarios.all,
+          campanhaSendpulse: campanha,
+        })
+      }
+
       if (itens.length > 0) {
         itens.sort((a, b) => (ORDEM_TIPO[a.tipo] ?? 99) - (ORDEM_TIPO[b.tipo] ?? 99))
         map.set(key, itens)
@@ -327,7 +363,7 @@ export function useCalendario() {
     }
 
     return map
-  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, filtros, casas, casasList, etapaConfigsRaw])
+  }, [diasVisiveis, disparosLocais, todosDisparos, campanhasDaxx, agendadosDaxx, campanhasSendpulse, filtros, casas, casasList, etapaConfigsRaw])
 
   const setFiltros = useCallback((f: Partial<FiltrosCalendario>) => {
     setFiltrosState((prev) => {

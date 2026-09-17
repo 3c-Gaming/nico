@@ -519,6 +519,43 @@ export function CardItemCalendario({ item, onResultado }: CardItemCalendarioProp
     )
   }
 
+  if (item.fonte === 'sendpulse-campanha') {
+    const c = item.campanhaSendpulse
+    const dest = c?.relatorio?.stats.destinatarios
+    return (
+      <a
+        href={c ? `https://login.sendpulse.com/messengers/campaign/${c.canal}/${c.id}/report/` : undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block w-full text-left rounded p-2.5"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px dashed var(--border-strong)',
+          borderLeft: '3px solid var(--d1)',
+        }}
+        title="Abrir no painel da SendPulse"
+      >
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-xs font-semibold" style={{ color: 'var(--d1)' }}>{item.tipo}</span>
+          <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-[var(--border)] text-[var(--text-muted)]">
+            <Database size={9} />
+            SendPulse
+          </span>
+        </div>
+        <p className="font-mono text-[11px] text-[var(--text-secondary)] truncate mb-1" title={item.nome}>
+          {nomeCurto(item.nome)}
+        </p>
+        {dest && (
+          <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-muted)]">
+            <span>Dest: {formatNumero(dest.all)}</span>
+            <span>Env: {formatNumero(dest.sent)}</span>
+            <span>Entr: {formatNumero(dest.delivered)}</span>
+          </div>
+        )}
+      </a>
+    )
+  }
+
   if (item.fonte === 'agendado') {
     return (
       <>

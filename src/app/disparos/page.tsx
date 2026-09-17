@@ -2,6 +2,7 @@
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ListaDisparos } from '@/components/disparos/ListaDisparos'
+import { CampanhasSendpulseImportadas } from '@/components/disparos/CampanhasSendpulseImportadas'
 import { Button } from '@/components/ui/Button'
 import { Plus, MessageSquare, MessagesSquare } from 'lucide-react'
 import Link from 'next/link'
@@ -32,6 +33,7 @@ export default function DisparosPage() {
           </div>
         }
       />
+      <CampanhasSendpulseImportadas />
       <ListaDisparos />
     </>
   )

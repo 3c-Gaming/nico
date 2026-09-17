@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -85,6 +85,10 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   custoRegistro: 'custo_registro',
   custoFtd: 'custo_ftd',
   lucroFtdTotal: 'lucro_ftd_total',
+  contaId: 'conta_id',
+  sendAt: 'send_at',
+  criadoEmSendpulse: 'criado_em_sendpulse',
+  importadoEm: 'importado_em',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -178,6 +182,10 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   custo_registro: 'custoRegistro',
   custo_ftd: 'custoFtd',
   lucro_ftd_total: 'lucroFtdTotal',
+  conta_id: 'contaId',
+  send_at: 'sendAt',
+  criado_em_sendpulse: 'criadoEmSendpulse',
+  importado_em: 'importadoEm',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -594,6 +602,28 @@ export async function listarMetricasDiariasDoFunil(flowId: string, dataInicio: s
     return []
   }
   return rows<FunilMetricaDiaria>(data)
+}
+
+// --- Campanhas SendPulse Importadas ---
+
+export async function listarCampanhasSendpulseImportadas(): Promise<CampanhaSendpulseImportada[]> {
+  const { data, error } = await tb('campanhas_sendpulse_importadas').select('*').order('criado_em_sendpulse', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarCampanhasSendpulseImportadas error:', error.message)
+    return []
+  }
+  return rows<CampanhaSendpulseImportada>(data)
+}
+
+export async function criarCampanhaSendpulseImportada(campanha: CampanhaSendpulseImportada): Promise<CampanhaSendpulseImportada> {
+  const { data, error } = await tb('campanhas_sendpulse_importadas').upsert(toSnakeCase(campanha as any)).select().single()
+  if (error) throw new Error(`Erro ao importar campanha: ${error.message}`)
+  return row<CampanhaSendpulseImportada>(data)!
+}
+
+export async function deletarCampanhaSendpulseImportada(id: string): Promise<boolean> {
+  const { error } = await tb('campanhas_sendpulse_importadas').delete().eq('id', id)
+  return !error
 }
 
 // --- Cache Metricas ---
