@@ -615,6 +615,12 @@ export async function listarCampanhasSendpulseImportadas(): Promise<CampanhaSend
   return rows<CampanhaSendpulseImportada>(data)
 }
 
+export async function buscarCampanhaSendpulseImportada(id: string): Promise<CampanhaSendpulseImportada | null> {
+  const { data, error } = await tb('campanhas_sendpulse_importadas').select('*').eq('id', id).single()
+  if (error) return null
+  return row<CampanhaSendpulseImportada>(data)
+}
+
 export async function criarCampanhaSendpulseImportada(campanha: CampanhaSendpulseImportada): Promise<CampanhaSendpulseImportada> {
   const { data, error } = await tb('campanhas_sendpulse_importadas').upsert(toSnakeCase(campanha as any)).select().single()
   if (error) throw new Error(`Erro ao importar campanha: ${error.message}`)

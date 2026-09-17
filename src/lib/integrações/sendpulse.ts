@@ -1,4 +1,4 @@
-import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse, RelatorioCampanhaSendpulse } from '@/types'
+import type { NumeroSendpulse, FluxoSendpulse, ChatAtivoSendpulse, EstatisticasBotSendpulse, RelatorioCampanhaSendpulse, ResumoDestinatariosCampanha, DestinatarioComClique } from '@/types'
 import { listarContasSendpulse, registrarContaDoBot, registrarCanalDoBot, apiKeyParaBot } from './contasSendpulse'
 import { hojeBrasilISO, dataParaBrasilISO } from '@/lib/datas'
 import { getPreferencias } from '@/lib/db/supabase'
@@ -179,6 +179,95 @@ export async function buscarCampanhaSendpulse(campanhaId: string, apiKey: string
       mensagens: d.stats?.messages ?? STATS_VAZIA,
       destinatarios: d.stats?.recipients ?? STATS_VAZIA,
     },
+  }
+}
+
+// Trava de paginação — campanha com muitos milhares de destinatários não precisa ser escaneada
+// inteira pra um resumo de engajamento ser representativo, e evita uma requisição que nunca
+// termina. `escaneados` no resultado avisa quando o corte pegou antes do fim.
+const MAX_DESTINATARIOS_ESCANEADOS = 2000
+const TAMANHO_PAGINA_DESTINATARIOS = 100
+const MAX_QUEM_CLICOU = 30
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function nomeContato(contact: any): { nome: string; username: string | null } {
+  // Contato de campanha vem soltos no nível raiz (full_name/first_name/username), diferente do
+  // contato de getByTag (aninhado em channel_data) — confirmado testando ao vivo.
+  const dados = contact ?? {}
+  const nome = dados.full_name || dados.name || dados.first_name || 'Sem nome'
+  const username = dados.username ? `@${dados.username}` : null
+  return { nome, username }
+}
+
+/** Agrega campaigns/recipients — traz clique POR BOTÃO (cada botão da mensagem tem seu próprio
+ * contador), não só o clique agregado da campanha (que /campaigns/report já dá). Pagina com
+ * search_after (cursor da própria SendPulse) até acabar ou bater o teto de segurança. */
+export async function buscarDestinatariosCampanha(campanhaId: string, apiKey: string, canal: Canal = 'telegram'): Promise<ResumoDestinatariosCampanha> {
+  let total = 0
+  let escaneados = 0
+  let entregues = 0
+  let abriram = 0
+  let clicaram = 0
+  let comAtividade = 0
+  let rejeitados = 0
+  const porBotao = new Map<string, number>()
+  const quemClicou: DestinatarioComClique[] = []
+
+  let searchAfter: string[] | undefined
+  for (;;) {
+    const params = new URLSearchParams({ id: campanhaId, size: String(TAMANHO_PAGINA_DESTINATARIOS) })
+    if (searchAfter?.length) params.set('search_after', searchAfter.join(','))
+    const res = await fetchComRetry429(`${baseUrl(canal)}/campaigns/recipients?${params.toString()}`, apiKey)
+    if (!res.ok) break
+    const json = await res.json()
+    if (!json.success || !json.data) break
+
+    total = json.data.total ?? total
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pagina = (json.data.list ?? []) as any[]
+    if (pagina.length === 0) break
+
+    for (const dest of pagina) {
+      escaneados++
+      if (dest.delivered) entregues++
+      if (dest.opened) abriram++
+      if (dest.activity) comAtividade++
+      if (dest.rejected) rejeitados++
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const botoes = (dest.buttons ?? []) as any[]
+      const botoesClicadosDesteContato: string[] = []
+      for (const b of botoes) {
+        const cliques = Number(b.clicks ?? 0)
+        if (cliques > 0) {
+          porBotao.set(b.title, (porBotao.get(b.title) ?? 0) + cliques)
+          botoesClicadosDesteContato.push(b.title)
+        }
+      }
+
+      if (dest.clicked) {
+        clicaram++
+        if (quemClicou.length < MAX_QUEM_CLICOU) {
+          const { nome, username } = nomeContato(dest.contact)
+          quemClicou.push({ nome, username, botoesClicados: botoesClicadosDesteContato })
+        }
+      }
+    }
+
+    searchAfter = json.data.search_after
+    if (!searchAfter?.length || pagina.length < TAMANHO_PAGINA_DESTINATARIOS || escaneados >= MAX_DESTINATARIOS_ESCANEADOS) break
+  }
+
+  return {
+    total,
+    escaneados,
+    entregues,
+    abriram,
+    clicaram,
+    comAtividade,
+    rejeitados,
+    porBotao: [...porBotao.entries()].map(([titulo, cliques]) => ({ titulo, cliques })).sort((a, b) => b.cliques - a.cliques),
+    quemClicou,
   }
 }
 

@@ -452,8 +452,39 @@ export interface RelatorioCampanhaSendpulse {
   atualizadoEm: string
   stats: {
     mensagens: { all: number; sent: number; rejected: number; delivered: number; opened: number; redirected: number }
-    destinatarios: { all: number; sent: number; rejected: number; delivered: number; opened: number; redirected: number }
+    destinatarios: { all: number; sent: number; rejected: number; partial_rejected?: number; delivered: number; opened: number; redirected: number; activity?: number }
   }
+}
+
+/** Clique agregado por botão da campanha (soma de campaigns/recipients[].buttons[].clicks entre
+ * todos os destinatários escaneados) — permite saber qual call-to-action performou melhor, não só
+ * o clique agregado da campanha inteira. */
+export interface CliquesPorBotao {
+  titulo: string
+  cliques: number
+}
+
+/** Um destinatário que clicou em algum botão — capado a alguns exemplos (ver
+ * ResumoDestinatariosCampanha.quemClicou), não a lista inteira (pode ter milhares). */
+export interface DestinatarioComClique {
+  nome: string
+  username: string | null
+  botoesClicados: string[]
+}
+
+/** Agregado de campaigns/recipients (ver src/lib/integrações/sendpulse.ts,
+ * buscarDestinatariosCampanha) — busca sob demanda (não em todo carregamento da lista, é uma
+ * chamada paginada por campanha), por isso fica separado do RelatorioCampanhaSendpulse. */
+export interface ResumoDestinatariosCampanha {
+  total: number
+  escaneados: number
+  entregues: number
+  abriram: number
+  clicaram: number
+  comAtividade: number
+  rejeitados: number
+  porBotao: CliquesPorBotao[]
+  quemClicou: DestinatarioComClique[]
 }
 
 export interface KpiCusto {
