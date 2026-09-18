@@ -173,7 +173,8 @@ export async function handleGtmetrixLista(reply: ReplyFn, channelId?: string) {
     await reply({ content: `🔍 Rodando GTmetrix em ${urls.length} página(s)… isso leva alguns minutos.` })
     const { rodada, creditosRecusados, avisoCreditos } = await rodarRodadaGTmetrix(urls)
     await postarRodadaDiscord(alvo, rodada, { creditosRecusados, avisoCreditos })
-    await reply({ content: `✅ Rodada concluída: ${rodada.ok.length} ok · ${rodada.comProblema.length} com problema · ${rodada.quebradas.length + rodada.falhasApi.length} fora do ar.` })
+    const semTeste = rodada.falhasApi.length > 0 ? ` · ${rodada.falhasApi.length} sem teste (GTmetrix)` : ''
+    await reply({ content: `✅ Rodada concluída: ${rodada.ok.length} ok · ${rodada.comProblema.length} com problema · ${rodada.quebradas.length} fora do ar${semTeste}.` })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao rodar a lista GTmetrix: ${(err as Error).message}`)] })
   }

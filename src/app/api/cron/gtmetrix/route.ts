@@ -57,7 +57,8 @@ export async function GET(request: Request) {
       total: rodada.totalTestado,
       ok_count: rodada.ok.length,
       com_problema: rodada.comProblema.length,
-      fora_do_ar: rodada.quebradas.length + rodada.falhasApi.length,
+      fora_do_ar: rodada.quebradas.length,
+      sem_teste_gtmetrix: rodada.falhasApi.length,
       creditos: `${rodada.creditosAntes} → ${rodada.creditosDepois}`,
       timestamp: new Date().toISOString(),
     })

@@ -2,6 +2,7 @@ import { sendChannelMessage } from '@/lib/discord/verify'
 import {
   embedGtProblema,
   embedGtQuebrada,
+  embedGtNaoTestado,
   embedGtResumo,
   embedGtChaveRecusada,
 } from './embeds'
@@ -32,7 +33,7 @@ export async function postarRodadaDiscord(
   }
   if (opts.avisoCreditos) await enviar(opts.avisoCreditos)
   for (const f of rodada.falhasApi) {
-    await enviar(embedGtQuebrada(f.url, f.motivo))
+    await enviar(embedGtNaoTestado(f.url, f.motivo))
   }
   for (const p of rodada.comProblema) {
     await enviar(embedGtProblema(p.url, p.dados, p.problemas))

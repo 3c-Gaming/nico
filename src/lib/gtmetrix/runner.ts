@@ -12,6 +12,7 @@ import {
   embedGtProblema,
   embedGtOk,
   embedGtQuebrada,
+  embedGtNaoTestado,
   embedGtCreditosInsuficientes,
 } from './embeds'
 import type { GtmetrixRodada } from './types'
@@ -107,11 +108,11 @@ export async function testarUrlAvulsa(
 ): Promise<{ embed: DiscordEmbed; ok: boolean }> {
   const status = await consultarCreditos()
   if (status && status.erro === 'auth') {
-    return { embed: embedGtQuebrada(url, 'Chave da API do GTmetrix recusada (401/403).'), ok: false }
+    return { embed: embedGtNaoTestado(url, 'Chave da API do GTmetrix recusada (401/403).'), ok: false }
   }
   if (status && status.creditos < CREDITO_POR_TESTE) {
     return {
-      embed: embedGtQuebrada(
+      embed: embedGtNaoTestado(
         url,
         `Sem crédito para o teste (disponível: ${status.creditos}, refill: ${status.refill}).`,
       ),
@@ -126,13 +127,13 @@ export async function testarUrlAvulsa(
 
   const inicio = await iniciarTestesLote([url])
   if (inicio.falhas.length) {
-    return { embed: embedGtQuebrada(url, inicio.falhas[0].motivo), ok: false }
+    return { embed: embedGtNaoTestado(url, inicio.falhas[0].motivo), ok: false }
   }
 
   const resultado = await aguardarLote(inicio.pendentes)
   if (resultado.erros.length || resultado.concluidos.length === 0) {
     const motivo = resultado.erros[0]?.motivo || 'Timeout aguardando o relatório'
-    return { embed: embedGtQuebrada(url, motivo), ok: false }
+    return { embed: embedGtNaoTestado(url, motivo), ok: false }
   }
 
   const r = resultado.concluidos[0]
