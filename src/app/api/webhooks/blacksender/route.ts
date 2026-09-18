@@ -22,12 +22,18 @@ function extrairEvento(request: NextRequest, body: unknown): string {
   return typeof doBody === 'string' && doBody ? doBody : 'desconhecido'
 }
 
+// A infra da própria Vercel injeta headers internos (token OIDC do projeto, assinatura de proxy
+// interna, etc.) em toda request — não vêm do Black Sender e não devem ficar guardados no banco.
+const HEADER_IGNORADO = /^(x-vercel-oidc-token|x-vercel-sc-headers|x-vercel-proxy-signature.*|forwarded|authorization|cookie)$/i
+
 async function registrar(request: NextRequest) {
   const textoBruto = await request.text().catch(() => '')
   const body = textoBruto ? JSON.parse(textoBruto.trim() || 'null') : null
 
   const headers: Record<string, string> = {}
-  request.headers.forEach((valor, chave) => { headers[chave] = valor })
+  request.headers.forEach((valor, chave) => {
+    if (!HEADER_IGNORADO.test(chave)) headers[chave] = valor
+  })
 
   const evento = extrairEvento(request, body)
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
