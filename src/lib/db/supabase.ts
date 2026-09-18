@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -90,6 +90,7 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   sendAt: 'send_at',
   criadoEmSendpulse: 'criado_em_sendpulse',
   importadoEm: 'importado_em',
+  recebidoEm: 'recebido_em',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -188,6 +189,7 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   send_at: 'sendAt',
   criado_em_sendpulse: 'criadoEmSendpulse',
   importado_em: 'importadoEm',
+  recebido_em: 'recebidoEm',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -880,4 +882,22 @@ export async function upsertCacheMetricas(metricas: CacheMetrica[]): Promise<Cac
     .select()
   if (error) throw new Error(`Erro ao upsert cache metricas: ${error.message}`)
   return rows<CacheMetrica>(data)
+}
+
+// --- Webhook Eventos Recebidos ---
+
+export async function registrarWebhookEvento(evento: WebhookEventoRecebido): Promise<void> {
+  const { error } = await tb('webhook_eventos_recebidos').insert(toSnakeCase(evento as any))
+  if (error) console.warn('[supabase] registrarWebhookEvento error:', error.message)
+}
+
+export async function listarWebhookEventosRecebidos(origem?: string, limite = 50): Promise<WebhookEventoRecebido[]> {
+  let query = tb('webhook_eventos_recebidos').select('*').order('recebido_em', { ascending: false }).limit(limite)
+  if (origem) query = query.eq('origem', origem)
+  const { data, error } = await query
+  if (error) {
+    console.warn('[supabase] listarWebhookEventosRecebidos error:', error.message)
+    return []
+  }
+  return rows<WebhookEventoRecebido>(data)
 }

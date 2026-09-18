@@ -207,3 +207,16 @@ export const usuariosResponsaveis = pgTable('usuarios_responsaveis', {
   cargo: text('cargo'),
   criadoEm: text('criado_em').notNull(),
 })
+
+// Eventos crus de webhooks externos (ex.: Black Sender) — sem parsing, só pra inspecionar o
+// formato real do payload antes de mapear pra dado estruturado.
+export const webhookEventosRecebidos = pgTable('webhook_eventos_recebidos', {
+  id: text('id').primaryKey(),
+  origem: text('origem').notNull(),
+  evento: text('evento').notNull(),
+  payload: jsonb('payload'),
+  headers: jsonb('headers'),
+  metodo: text('metodo').notNull(),
+  ip: text('ip'),
+  recebidoEm: text('recebido_em').notNull(),
+})

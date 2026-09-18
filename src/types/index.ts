@@ -429,6 +429,20 @@ export interface FunilMetricaDiaria {
 
 /** Campanha de broadcast criada direto no painel da SendPulse, importada pra aparecer em
  * Disparos/Calendário — ver CampanhaSendpulseReport pros números ao vivo (não persistidos). */
+/** Evento cru recebido de um webhook externo (ex.: Black Sender) — guardado sem parsing pra
+ * inspecionar o formato real assim que o sistema de origem disparar eventos de teste, antes de
+ * mapear pra dado estruturado. */
+export interface WebhookEventoRecebido {
+  id: string
+  origem: string
+  evento: string
+  payload: unknown
+  headers: Record<string, string>
+  metodo: string
+  ip: string | null
+  recebidoEm: string
+}
+
 export interface CampanhaSendpulseImportada {
   id: string
   contaId: string
