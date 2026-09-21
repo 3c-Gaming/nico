@@ -1110,3 +1110,27 @@ export async function contarBlacksenderLeadsPorFlowNoDia(flowIds: string[], data
   }
   return resultado
 }
+
+/** "Teste" de saúde de um número Black Sender não precisa do esquema de bot-test do SendPulse
+ * (mandar ping pra um contato de teste e esperar resposta) — já temos a última mensagem que o
+ * PRÓPRIO número mandou (outbound), então é só olhar quando foi isso: se está enviando de
+ * verdade agora, tá vivo. Duas consultas (conversas do canal -> mensagens outbound dessas
+ * conversas) porque nossas tabelas não têm FK declarada pro PostgREST juntar num embed só. */
+export async function buscarUltimaMensagemEnviadaPorCanal(channelId: string): Promise<{ conteudo: string | null; criadoEmOrigem: string } | null> {
+  const { data: conversas, error: erroConversas } = await tb('blacksender_conversas')
+    .select('id')
+    .eq('channel_id', channelId)
+  if (erroConversas || !conversas || conversas.length === 0) return null
+
+  const idsConversas = (conversas as { id: string }[]).map((c) => c.id)
+  const { data: mensagens, error: erroMensagens } = await tb('blacksender_mensagens')
+    .select('conteudo, criado_em_origem')
+    .in('conversation_id', idsConversas)
+    .eq('direcao', 'outbound')
+    .order('criado_em_origem', { ascending: false })
+    .limit(1)
+  if (erroMensagens || !mensagens || mensagens.length === 0) return null
+
+  const [m] = rows<{ conteudo: string | null; criadoEmOrigem: string }>(mensagens)
+  return m
+}
