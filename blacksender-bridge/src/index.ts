@@ -1,5 +1,5 @@
 import express from 'express'
-import { iniciar, parar, status } from './realtimeListener.js'
+import { iniciar, parar, status } from './poller.js'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3335', 10)
