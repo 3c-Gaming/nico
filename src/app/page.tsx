@@ -397,6 +397,11 @@ interface FunilRow {
   custoEntradaMeta: number | null
   custoRegMeta: number | null
   custoFtdMeta: number | null
+  // Lucro (R$) = FTDs × lucro/FTD configurado por casa (Detalhes do funil) − o gasto que gerou
+  // esse Custo/FTD (Meta pra tráfego, DAXX interno pra disparo). null quando o grupo não tem
+  // exatamente uma casa com lucro/FTD configurado — mesma limitação do ROI em BlocoLucroELinks:
+  // sem saber quantos FTDs vieram de qual casa, não dá pra separar com mais de uma configurada.
+  lucroFtd: number | null
   utm: string
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
@@ -1016,7 +1021,21 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
+      // Só olha lucro/FTD das casas ATUALMENTE vinculadas ao funil (c.casas) — lucroFtdPorCasa é
+      // um Record que acumula entradas de qualquer casa já selecionada alguma vez (trocar a casa
+      // no editor não limpa a antiga), mesma filtragem que BlocoLucroELinks já faz no painel de
+      // Detalhes, senão uma casa antiga sobrando ali derruba a condição de "só uma configurada".
+      const lucroCandidatos = new Map<string, number>()
+      for (const [, c] of flows) {
+        for (const casaId of c.casas ?? []) {
+          const valor = c.lucroFtdPorCasa?.[casaId]
+          if (valor !== undefined) lucroCandidatos.set(casaId, valor)
+        }
+      }
+      const gastoParaLucro = tipo === 'traffic' ? gastoMeta : baseCusto
+      const lucroFtd = lucroCandidatos.size === 1 ? ftds * [...lucroCandidatos.values()][0] - gastoParaLucro : null
+
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, lucroFtd, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo, leadsBlacksenderHoje, ultimoLeadBlacksender])
 
@@ -1088,11 +1107,13 @@ export default function HomePage() {
     )
     // Recalculado a partir das somas agregadas (não é média/soma dos custos já calculados por
     // linha) — matematicamente correto mesmo com denominadores diferentes por funil.
+    const linhasComLucro = trafficRows.filter((r) => r.lucroFtd !== null)
     return {
       ...somas,
       custoEntradaMeta: somas.gastoMeta > 0 && somas.leadsHoje > 0 ? somas.gastoMeta / somas.leadsHoje : null,
       custoRegMeta: somas.gastoMeta > 0 && somas.registros > 0 ? somas.gastoMeta / somas.registros : null,
       custoFtdMeta: somas.gastoMeta > 0 && somas.ftds > 0 ? somas.gastoMeta / somas.ftds : null,
+      lucroFtd: linhasComLucro.length > 0 ? linhasComLucro.reduce((acc, r) => acc + (r.lucroFtd ?? 0), 0) : null,
     }
   }, [trafficRows])
 
@@ -1327,6 +1348,11 @@ export default function HomePage() {
               </td>
             </>
           )}
+          <td className="py-3 px-3 text-right">
+            <span className={`text-xs font-mono font-semibold ${row.lucroFtd === null ? 'text-[var(--text-muted)]' : row.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+              {row.lucroFtd === null ? '—' : `R$ ${row.lucroFtd.toFixed(2).replace('.', ',')}`}
+            </span>
+          </td>
           <td className="py-3 px-3">
             <span className={`text-xs font-mono ${formatarTempoRelativo(row.ultimoLeadAt).cor}`}>
               {formatarTempoRelativo(row.ultimoLeadAt).texto}
@@ -1769,6 +1795,7 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs × lucro/FTD configurado (Detalhes do funil) − o custo que gerou o Custo/FTD">Lucro</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1809,6 +1836,7 @@ export default function HomePage() {
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Leads hoje">Custo/Entrada</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros">Custo/Reg</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs">Custo/FTD</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs × lucro/FTD configurado (Detalhes do funil) − Gasto em Ads (Meta)">Lucro</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
                       </tr>
@@ -1816,6 +1844,7 @@ export default function HomePage() {
                     <tbody>
                       {renderFunilRows(trafficRows, 'traffic')}
                     </tbody>
+                    {trafficRows.length > 1 && (
                     <tfoot>
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
                         <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={4}>Total</td>
@@ -1872,10 +1901,16 @@ export default function HomePage() {
                             {totalTraffic.custoFtdMeta === null ? '—' : `R$ ${totalTraffic.custoFtdMeta.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-bold font-mono ${totalTraffic.lucroFtd === null ? 'text-[var(--text-muted)]' : totalTraffic.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+                            {totalTraffic.lucroFtd === null ? '—' : `R$ ${totalTraffic.lucroFtd.toFixed(2).replace('.', ',')}`}
+                          </span>
+                        </td>
                         <td className="py-3 px-3" />
                         <td className="py-3 px-3" />
                       </tr>
                     </tfoot>
+                    )}
                   </table>
                 </div>
               </section>
