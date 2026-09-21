@@ -20,7 +20,7 @@ import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisP
 import { CardNumeroBlacksender, type CanalBlacksenderComAtividade } from '@/components/numeros/CardNumeroBlacksender'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx, FlowTagConfig } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import { PainelAnaliseFunilBlacksender, type SnapshotHoje } from '@/components/funis/PainelAnaliseFunilBlacksender'
 import { hojeBrasilISO } from '@/lib/datas'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
@@ -1152,29 +1152,34 @@ export default function HomePage() {
                 </button>
               )}
               {row.casas.length > 0 && (
-                <div className="flex -space-x-0.5">
+                <div className="flex -space-x-1">
                   {row.casas.slice(0, 3).map((casaId) => {
                     const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
-                    return casa ? (
+                    if (!casa) return null
+                    return casa.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- mesmo padrão de src/app/casas/page.tsx
+                      <img
+                        key={casaId}
+                        src={casa.logo}
+                        alt={casa.nome}
+                        title={casa.nome}
+                        className="w-4 h-4 rounded-full object-cover ring-1 ring-[var(--bg-base)] bg-white shrink-0"
+                      />
+                    ) : (
                       <span
                         key={casaId}
                         className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
                         style={{ backgroundColor: casa.cor }}
                         title={casa.nome}
                       />
-                    ) : null
+                    )
                   })}
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => setPainelFunilNome(row.funilNome)}
-                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono hover:opacity-75 transition-opacity"
-                style={{
-                  backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
-                  border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
-                  color: row.corBadge ?? 'var(--d1)',
-                }}
+                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono text-[var(--text-primary)] hover:opacity-75 transition-opacity"
                 title="Ver detalhes e conversas ao vivo"
               >
                 {row.funilNome}
@@ -1186,31 +1191,6 @@ export default function HomePage() {
               >
                 <Pin size={11} className="text-amber-400" />
               </button>
-            </div>
-          </td>
-          <td className="py-3 px-3">
-            <div className="flex flex-wrap gap-1">
-              {row.casas.length === 0 ? (
-                <span className="text-xs text-[var(--text-muted)]/40">—</span>
-              ) : (
-                row.casas.map((casaId) => {
-                  const casa = (getState().casasAposta as Record<string, CasaAposta>)[casaId]
-                  return casa ? (
-                    <span
-                      key={casaId}
-                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold font-mono max-w-[140px]"
-                      style={{
-                        backgroundColor: `${row.corBadge ?? 'var(--d1)'}20`,
-                        border: `1px solid ${row.corBadge ?? 'var(--d1)'}30`,
-                        color: row.corBadge ?? 'var(--d1)',
-                      }}
-                      title={casa.nome}
-                    >
-                      <span className="line-clamp-1">{casa.nome}</span>
-                    </span>
-                  ) : null
-                })
-              )}
             </div>
           </td>
           <td className="py-3 px-3">
@@ -1780,7 +1760,6 @@ export default function HomePage() {
                     <thead>
                       <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
-                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
@@ -1824,7 +1803,6 @@ export default function HomePage() {
                     <thead>
                       <tr className="border-b border-[var(--glass-border)]">
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
-                        <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Casa</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Bots</th>
                         <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
                         <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
@@ -1847,7 +1825,7 @@ export default function HomePage() {
                     {trafficRows.length > 1 && (
                     <tfoot>
                       <tr className="border-t-2 border-[var(--glass-border)] bg-[var(--bg-elevated)]">
-                        <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={4}>Total</td>
+                        <td className="py-3 px-3 text-xs font-semibold text-[var(--text-primary)]" colSpan={3}>Total</td>
                         <td className="py-3 px-3 text-right">
                           {totalTraffic.leadsHojeCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
