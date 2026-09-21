@@ -22,7 +22,13 @@ export async function POST(request: NextRequest) {
     const configs = await listarFlowTagConfigs()
     const config = configs.find((c) => c.flowId === body.flowId)
     if (!config) return NextResponse.json({ error: `Funil ${body.flowId} não configurado` }, { status: 404 })
-    if (!config.tags || config.tags.length === 0) {
+    // Funil Black Sender nunca tem tags (não existe esse conceito lá — ver FlowTagConfig.origem) e
+    // isso é normal, não falta de configuração; só bloqueia quem é SendPulse de verdade e ainda não
+    // configurou tag nenhuma. gerarSnapshotDoFunil já lida com tags vazias sem quebrar (só
+    // registros/FTDs/gasto ficam certos pra Black Sender por enquanto — leads fica 0 aqui até esse
+    // snapshot histórico também aprender a origem, ver PainelFunisBlacksender.tsx pro "leads hoje"
+    // ao vivo, que já está correto).
+    if (config.origem !== 'blacksender' && (!config.tags || config.tags.length === 0)) {
       return NextResponse.json({ error: 'Funil sem tags configuradas — nada pra medir ainda' }, { status: 400 })
     }
 

@@ -4,21 +4,38 @@
 // separado da tabela gigante de src/app/funis/page.tsx (que é 100% acoplada ao pipeline de
 // bots/fluxos/tags da SendPulse) em vez de tentar encaixar aqui dentro. Reaproveita o que já é
 // agnóstico de origem em src/lib/funis.ts (UTM, gasto por campanha Meta, ROI) — só "leads" tem
-// um caminho próprio (ver FlowTagConfig.origem e contarBlacksenderLeadsPorFlowNoDia).
+// um caminho próprio (ver FlowTagConfig.origem e contarBlacksenderLeadsPorFlowNoDia). Edição e
+// colunas espelham o mesmo padrão visual da tabela de funis SendPulse (accordion inline, casas,
+// Conv./Custo por coluna) — ver src/app/funis/page.tsx.
 
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
-import { Plus, Pin, Trash2, Save, Layers } from 'lucide-react'
+import { useState, useEffect, useMemo, useSyncExternalStore, Fragment } from 'react'
+import { Plus, Pin, Trash2, Save, Layers, Eye, Pen } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
+import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, updateFlowTagConfig, deleteFlowTagConfig, togglePinFunil } from '@/lib/store'
 import { buscarResultadosDoDia, calcularSnapshotDoFunil, contarFunisPorCampanha, contarFunisPorUtm, gastoDoFunil } from '@/lib/funis'
 import { hojeBrasilISO } from '@/lib/datas'
-import type { FlowTagConfig, BlacksenderFlow } from '@/types'
+import { PainelAnaliseFunilBlacksender } from './PainelAnaliseFunilBlacksender'
+import type { FlowTagConfig, BlacksenderFlow, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 function formatMoeda(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/** "16/09 19:09" — pedido explicitamente nesse formato absoluto (não relativo tipo "há 2h") pra
+ * bater exatamente com a coluna equivalente da tabela SendPulse... só que lá é relativo. Aqui o
+ * pedido foi por data/hora fixa, então é isso que formata. */
+function formatarUltimoLead(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${dia}/${mes} ${hh}:${mm}`
 }
 
 /** buscarCampanhasMeta devolve uma linha por (campanha, dia) — e às vezes mais de uma linha pro
@@ -38,6 +55,8 @@ interface SnapshotHoje {
   ftds: number
   gasto: number
   custoEntrada: number | null
+  custoRegistro: number | null
+  custoFtd: number | null
 }
 
 function useConfigsBlacksender(): FlowTagConfig[] {
@@ -58,6 +77,7 @@ function EditorFunilBlacksender({
   fluxosDisponiveis,
   configsExistentes,
   campanhas,
+  casasList,
   onSave,
   onClose,
 }: {
@@ -65,6 +85,7 @@ function EditorFunilBlacksender({
   fluxosDisponiveis: BlacksenderFlow[]
   configsExistentes: FlowTagConfig[]
   campanhas: CampanhaMeta[] | null
+  casasList: CasaAposta[]
   onSave: () => void
   onClose: () => void
 }) {
@@ -72,6 +93,7 @@ function EditorFunilBlacksender({
   const [flowId, setFlowId] = useState(config?.flowId ?? '')
   const [funil, setFunil] = useState(config?.funil ?? '')
   const [utm, setUtm] = useState(config?.utm ?? '')
+  const [casas, setCasas] = useState<string[]>(config?.casas ?? [])
   const [campanhasMeta, setCampanhasMeta] = useState<string[]>(config?.campanhasMeta ?? [])
   const [saving, setSaving] = useState(false)
   const [buscaCampanha, setBuscaCampanha] = useState('')
@@ -86,6 +108,10 @@ function EditorFunilBlacksender({
 
   function toggleCampanha(nome: string) {
     setCampanhasMeta((prev) => (prev.includes(nome) ? prev.filter((n) => n !== nome) : [...prev, nome]))
+  }
+
+  function toggleCasa(casaId: string) {
+    setCasas((prev) => (prev.includes(casaId) ? prev.filter((id) => id !== casaId) : [...prev, casaId]))
   }
 
   function handleSelecionarFluxo(id: string) {
@@ -106,6 +132,7 @@ function EditorFunilBlacksender({
       funil: funil || null,
       utm: utm || null,
       tags: [],
+      casas,
       campanhasMeta,
     })
     await new Promise((r) => setTimeout(r, 150))
@@ -114,7 +141,7 @@ function EditorFunilBlacksender({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-4 rounded bg-[var(--bg-elevated)] border border-[var(--border)]">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0">Fluxo:</span>
         <select
@@ -144,6 +171,34 @@ function EditorFunilBlacksender({
         <UtmComboBox value={utm} onChange={setUtm} placeholder="selecione ou digite e Enter para cadastrar" />
       </div>
       <div className="flex items-start gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0 pt-1">Casas:</span>
+        <div className="flex-1 flex flex-wrap gap-1.5">
+          {casasList.length === 0 ? (
+            <span className="text-xs text-[var(--text-muted)]/40 italic">Nenhuma casa cadastrada</span>
+          ) : (
+            casasList.map((casa) => {
+              const selected = casas.includes(casa.id)
+              return (
+                <button
+                  key={casa.id}
+                  type="button"
+                  onClick={() => toggleCasa(casa.id)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: selected ? `${casa.cor}20` : 'var(--bg-elevated)',
+                    border: `1px solid ${selected ? `${casa.cor}40` : 'var(--border)'}`,
+                    color: selected ? casa.cor : 'var(--text-muted)',
+                  }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: casa.cor }} />
+                  {casa.nome}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0 pt-1">
           Campanhas{campanhasMeta.length > 0 ? ` (${campanhasMeta.length})` : ''}:
         </span>
@@ -157,7 +212,7 @@ function EditorFunilBlacksender({
               className="w-full h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
             />
           )}
-          <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+          <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-base)]">
             {campanhas === null ? (
               <span className="text-xs text-[var(--text-muted)]/50 italic">Carregando campanhas do Meta...</span>
             ) : agregadas.length === 0 ? (
@@ -213,12 +268,21 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [todosConfigs, somentePinados],
   )
+  const { list: casasList } = useCasasAposta()
   const [fluxosDisponiveis, setFluxosDisponiveis] = useState<BlacksenderFlow[]>([])
   const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, SnapshotHoje>>({})
+  const [ultimosLeads, setUltimosLeads] = useState<Record<string, string | null>>({})
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
-  const [editando, setEditando] = useState<FlowTagConfig | null>(null)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [analiseFlowId, setAnaliseFlowId] = useState<string | null>(null)
+  // Guarda a última config vista mesmo depois de analiseFlowId virar null — sem isso o painel de
+  // análise perderia o conteúdo (e a animação de saída) no instante em que o usuário fecha, já que
+  // a config correspondente some antes do <AnimatePresence> ter a chance de tocar o exit. Setado
+  // direto no onClick que abre o painel (não num effect derivado) — evita tanto reler ref durante
+  // o render quanto setState síncrono dentro de effect (ambos proibidos pelas regras do projeto).
+  const [analiseConfigAtivo, setAnaliseConfigAtivo] = useState<FlowTagConfig | null>(null)
   const [saveVersion, setSaveVersion] = useState(0)
 
   const hoje = hojeBrasilISO()
@@ -253,7 +317,15 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
       for (const cfg of configs) {
         const gasto = campanhas ? gastoDoFunil(cfg.campanhasMeta, campanhas, funisPorCampanha) : 0
         const snap = calcularSnapshotDoFunil(cfg, dia, [], gasto, funisPorUtm)
-        next[cfg.flowId] = { leads: snap.leads, registros: snap.registros, ftds: snap.ftds, gasto, custoEntrada: snap.custoEntrada ?? null }
+        next[cfg.flowId] = {
+          leads: snap.leads,
+          registros: snap.registros,
+          ftds: snap.ftds,
+          gasto,
+          custoEntrada: snap.custoEntrada ?? null,
+          custoRegistro: snap.custoRegistro ?? null,
+          custoFtd: snap.custoFtd ?? null,
+        }
       }
       setSnapshots(next)
       setCarregando(false)
@@ -262,9 +334,27 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configs, hoje, campanhas, saveVersion])
 
+  // Último lead por flow — reaproveita /api/blacksender/fluxos/[flowId] (já ordena por
+  // criadoEmOrigem desc), não precisa de endpoint novo só pra isso.
+  useEffect(() => {
+    let cancelado = false
+    Promise.all(
+      configs.map((cfg) =>
+        fetch(`/api/blacksender/fluxos/${cfg.flowId}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => [cfg.flowId, d?.ultimoLeadEm ?? null] as const)
+          .catch(() => [cfg.flowId, null] as const),
+      ),
+    ).then((pares) => {
+      if (cancelado) return
+      setUltimosLeads(Object.fromEntries(pares))
+    })
+    return () => { cancelado = true }
+  }, [configs, saveVersion])
+
   function handleSalvo() {
     setModalAberto(false)
-    setEditando(null)
+    setEditingKey(null)
     setSaveVersion((v) => v + 1)
   }
 
@@ -287,7 +377,7 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
         </h2>
         {!somentePinados && (
           <button
-            onClick={() => { setEditando(null); setModalAberto(true) }}
+            onClick={() => { setEditingKey(null); setModalAberto(true) }}
             className="flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: 'var(--d1)' }}
           >
@@ -306,11 +396,16 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
               <tr className="border-b border-[var(--glass-border)]">
                 <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="FTDs de hoje ÷ Leads hoje">Conv. FTD</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Registros de hoje ÷ Leads hoje">Conv. Reg</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em campanhas do Meta atribuídas">Gasto</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Leads hoje">Custo/Entrada</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Registros">Custo/Reg</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ FTDs">Custo/FTD</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
               </tr>
             </thead>
@@ -319,69 +414,141 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
                 const snap = snapshots[cfg.flowId]
                 const pinado = pinnedFunis.includes(cfg.funil ?? '')
                 const nomeFluxo = fluxosDisponiveis.find((f) => f.id === cfg.flowId)?.nome ?? cfg.flowId
+                const isEditing = editingKey === cfg.flowId
+                const convFtd = snap && snap.leads > 0 ? (snap.ftds / snap.leads) * 100 : null
+                const convReg = snap && snap.leads > 0 ? (snap.registros / snap.leads) * 100 : null
                 return (
-                  <tr key={cfg.flowId} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => { setEditando(cfg); setModalAberto(true) }}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono hover:opacity-75 transition-opacity max-w-[160px]"
-                          style={{ backgroundColor: 'var(--d1)20', border: '1px solid var(--d1)30', color: 'var(--d1)' }}
-                          title={nomeFluxo}
-                        >
-                          <span className="truncate">{cfg.funil || nomeFluxo}</span>
-                        </button>
-                        <button
-                          onClick={() => cfg.funil && togglePinFunil(cfg.funil)}
-                          disabled={!cfg.funil}
-                          className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-30"
-                          title={pinado ? 'Desafixar da Home' : 'Fixar na Home'}
-                        >
-                          <Pin size={11} className={pinado ? 'text-amber-400' : 'text-[var(--text-muted)]'} fill={pinado ? 'currentColor' : 'none'} />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-left">
-                      {cfg.utm ? (
-                        <span className="inline-flex items-center max-w-[220px] text-xs rounded px-2 py-1 border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-primary)]">
-                          <span className="truncate" title={cfg.utm}>{cfg.utm}</span>
+                  <Fragment key={cfg.flowId}>
+                    <tr className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5">
+                          {(cfg.casas ?? []).length > 0 && (
+                            <div className="flex -space-x-0.5">
+                              {(cfg.casas ?? []).slice(0, 3).map((casaId) => {
+                                const casa = casasList.find((c) => c.id === casaId)
+                                return casa ? (
+                                  <span
+                                    key={casaId}
+                                    className="w-2 h-2 rounded-full ring-1 ring-[var(--bg-base)]"
+                                    style={{ backgroundColor: casa.cor }}
+                                    title={casa.nome}
+                                  />
+                                ) : null
+                              })}
+                            </div>
+                          )}
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono max-w-[160px]"
+                            style={{ backgroundColor: 'var(--d1)20', border: '1px solid var(--d1)30', color: 'var(--d1)' }}
+                            title={nomeFluxo}
+                          >
+                            <span className="truncate">{cfg.funil || nomeFluxo}</span>
+                          </span>
+                          <button
+                            onClick={() => cfg.funil && togglePinFunil(cfg.funil)}
+                            disabled={!cfg.funil}
+                            className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-30"
+                            title={pinado ? 'Desafixar da Home' : 'Fixar na Home'}
+                          >
+                            <Pin size={11} className={pinado ? 'text-amber-400' : 'text-[var(--text-muted)]'} fill={pinado ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-left">
+                        {cfg.utm ? (
+                          <span className="inline-flex items-center max-w-[220px] text-xs rounded px-2 py-1 border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-primary)]">
+                            <span className="truncate" title={cfg.utm}>{cfg.utm}</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="text-xs font-mono text-[var(--text-muted)]">
+                          {ultimosLeads[cfg.flowId] === undefined ? <Spinner size={12} /> : formatarUltimoLead(ultimosLeads[cfg.flowId])}
                         </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]/40">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      {carregando ? <Spinner size={12} /> : (
-                        <span className={`font-semibold ${(snap?.leads ?? 0) > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{snap?.leads ?? 0}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className={`font-semibold font-mono ${(snap?.registros ?? 0) > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{snap?.registros ?? 0}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className={`font-semibold font-mono ${(snap?.ftds ?? 0) > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{snap?.ftds ?? 0}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className={`font-semibold font-mono ${(snap?.gasto ?? 0) > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
-                        {snap?.gasto ? formatMoeda(snap.gasto) : '—'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className={`font-semibold font-mono ${snap?.custoEntrada ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
-                        {snap?.custoEntrada ? formatMoeda(snap.custoEntrada) : '—'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <button
-                        onClick={() => handleRemover(cfg)}
-                        title="Desvincular"
-                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {carregando ? <Spinner size={12} /> : (
+                          <span className={`font-semibold ${(snap?.leads ?? 0) > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{snap?.leads ?? 0}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-semibold font-mono ${(snap?.registros ?? 0) > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{snap?.registros ?? 0}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-semibold font-mono ${(snap?.ftds ?? 0) > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{snap?.ftds ?? 0}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className="text-xs font-mono text-[var(--text-muted)]">{convFtd === null ? '—' : `${convFtd.toFixed(1)}%`}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className="text-xs font-mono text-[var(--text-muted)]">{convReg === null ? '—' : `${convReg.toFixed(1)}%`}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-semibold font-mono ${(snap?.gasto ?? 0) > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                          {snap?.gasto ? formatMoeda(snap.gasto) : '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-semibold font-mono ${snap?.custoEntrada ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                          {snap?.custoEntrada ? formatMoeda(snap.custoEntrada) : '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`text-xs font-mono ${snap?.custoRegistro ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                          {snap?.custoRegistro ? formatMoeda(snap.custoRegistro) : '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`text-xs font-mono ${snap?.custoFtd ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                          {snap?.custoFtd ? formatMoeda(snap.custoFtd) : '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <button
+                            onClick={() => { setAnaliseConfigAtivo(cfg); setAnaliseFlowId(cfg.flowId) }}
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title="Ver análise e conversas"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            onClick={() => setEditingKey(isEditing ? null : cfg.flowId)}
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                            title="Editar funil"
+                          >
+                            <Pen size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleRemover(cfg)}
+                            title="Desvincular"
+                            className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isEditing && (
+                      <tr>
+                        <td colSpan={13} className="p-0 border-b border-[var(--glass-border)]">
+                          <div className="px-3 py-3">
+                            <EditorFunilBlacksender
+                              config={cfg}
+                              fluxosDisponiveis={fluxosDisponiveis}
+                              configsExistentes={configs}
+                              campanhas={campanhas}
+                              casasList={casasList}
+                              onSave={handleSalvo}
+                              onClose={() => setEditingKey(null)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -389,16 +556,25 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
         </div>
       )}
 
-      <Modal open={modalAberto} onClose={() => { setModalAberto(false); setEditando(null) }} title={editando ? 'Editar funil Black Sender' : 'Vincular fluxo da Black Sender'}>
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title="Vincular fluxo da Black Sender">
         <EditorFunilBlacksender
-          config={editando}
+          config={null}
           fluxosDisponiveis={fluxosDisponiveis}
           configsExistentes={configs}
           campanhas={campanhas}
+          casasList={casasList}
           onSave={handleSalvo}
-          onClose={() => { setModalAberto(false); setEditando(null) }}
+          onClose={() => setModalAberto(false)}
         />
       </Modal>
+
+      <PainelAnaliseFunilBlacksender
+        aberto={!!analiseFlowId}
+        config={analiseConfigAtivo}
+        nomeFluxo={analiseConfigAtivo ? fluxosDisponiveis.find((f) => f.id === analiseConfigAtivo.flowId)?.nome ?? analiseConfigAtivo.flowId : ''}
+        snapshot={analiseConfigAtivo ? snapshots[analiseConfigAtivo.flowId] ?? null : null}
+        onClose={() => setAnaliseFlowId(null)}
+      />
     </section>
   )
 }

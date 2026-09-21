@@ -987,6 +987,16 @@ export async function getBlacksenderLead(id: string): Promise<BlacksenderLead | 
   return row<BlacksenderLead>(data)
 }
 
+export async function listarBlacksenderLeadsPorIds(ids: string[]): Promise<BlacksenderLead[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await tb('blacksender_leads').select('*').in('id', ids)
+  if (error) {
+    console.warn('[supabase] listarBlacksenderLeadsPorIds error:', error.message)
+    return []
+  }
+  return rows<BlacksenderLead>(data)
+}
+
 export async function listarBlacksenderFlowRunsPorContato(contactId: string): Promise<BlacksenderFlowRun[]> {
   const { data, error } = await tb('blacksender_flow_runs')
     .select('*')

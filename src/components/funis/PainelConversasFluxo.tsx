@@ -109,11 +109,11 @@ interface PainelConversasFluxoProps {
   utmsExtras: string[]
 }
 
-function formatInt(n: number): string {
+export function formatInt(n: number): string {
   return n.toLocaleString('pt-BR')
 }
 
-function MetricaTile({ label, value }: { label: string; value: string }) {
+export function MetricaTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2.5 text-center">
       <div className="text-lg font-bold text-[var(--text-primary)]">{value}</div>
@@ -122,7 +122,7 @@ function MetricaTile({ label, value }: { label: string; value: string }) {
   )
 }
 
-function BlocoMetricas({ leads, registros, ftds, total }: { leads: number; registros: number; ftds: number; total: number }) {
+export function BlocoMetricas({ leads, registros, ftds, total }: { leads: number; registros: number; ftds: number; total: number }) {
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   const convFtd = registros > 0 ? (ftds / registros) * 100 : null
   return (
@@ -137,7 +137,7 @@ function BlocoMetricas({ leads, registros, ftds, total }: { leads: number; regis
   )
 }
 
-function BlocoFunilChart({ estagios, cor }: { estagios: EstagioFunil[]; cor?: string }) {
+export function BlocoFunilChart({ estagios, cor }: { estagios: EstagioFunil[]; cor?: string }) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -246,7 +246,7 @@ function agregarCampanhasPorNome(campanhas: CampanhaMeta[]): { nome: string; gas
   return [...mapa.entries()].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.gasto - a.gasto)
 }
 
-function formatMoeda(n: number): string {
+export function formatMoeda(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
@@ -255,7 +255,7 @@ function formatMoeda(n: number): string {
  * manual: busca todas as campanhas do período e deixa marcar quais pertencem a esse funil,
  * somando o gasto só das marcadas. A partir do gasto total, deriva Custo/Registro e Custo/FTD
  * automaticamente, e permite criar KPIs de custo por tag (ex: custo por CTA). */
-function BlocoGastoMeta({
+export function BlocoGastoMeta({
   flowId,
   dataInicio,
   dataFim,
@@ -485,7 +485,7 @@ function BlocoGastoMeta({
  * tem lucro configurado (não dá pra separar `ftds` por casa nesse ponto da árvore de props sem
  * replicar o cálculo pesado que já roda mais acima) — o valor por-casa correto e histórico fica
  * gravado em funil_metricas_diarias (ver src/lib/funilSnapshot.ts, calcularSnapshotDoFunil). */
-function BlocoLucroELinks({
+export function BlocoLucroELinks({
   flowId,
   dataInicio,
   dataFim,
@@ -656,7 +656,7 @@ function BlocoLucroELinks({
 /** Combobox pesquisável pra escolher um funil na comparação — o app tem dezenas de funis
  * configurados, um <select> nativo fica ruim de usar (lista gigante sem busca). Mesmo padrão
  * de interação do TagComboBox (ui/TagComboBox.tsx). */
-function FunilComboBox({ opcoes, onSelect }: { opcoes: FlowTagConfig[]; onSelect: (flowId: string) => void }) {
+export function FunilComboBox({ opcoes, onSelect }: { opcoes: FlowTagConfig[]; onSelect: (flowId: string) => void }) {
   const [busca, setBusca] = useState('')
   const [aberto, setAberto] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
