@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, upsertBlacksenderCanal, getBlacksenderLead } from '@/lib/db/supabase'
-import { notificarNovoLead, notificarTagsAplicadas } from '@/lib/discord/notify-blacksender'
+import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, upsertBlacksenderCanal } from '@/lib/db/supabase'
 import type { BlacksenderLead } from '@/types'
 
 // Webhook público que o Black Sender (CRM receptivo de WhatsApp) chama pros eventos configurados
@@ -45,18 +44,8 @@ async function estruturar(evento: string, body: unknown) {
   const recebidoEm = new Date().toISOString()
 
   if (evento === 'leads_realtime' && alvo?.tabela === 'contacts') {
-    const id = String(registro.id)
-    // Compara com o que JÁ está salvo aqui (não com registroAnterior/old_record do Realtime —
-    // esse costuma vir incompleto quando a tabela de origem não tem REPLICA IDENTITY FULL, e não
-    // controlamos o schema da Black Sender pra garantir isso). Sem linha anterior = lead novo de
-    // verdade; com linha anterior, compara os arrays de tag pra achar só as que entraram agora.
-    const existente = await getBlacksenderLead(id)
-    const tagsAntigas = new Set(Array.isArray(existente?.tags) ? (existente.tags as string[]) : [])
-    const tagsNovasRegistro = Array.isArray(registro.tags) ? (registro.tags as string[]) : []
-    const tagsNovas = tagsNovasRegistro.filter((t) => !tagsAntigas.has(t))
-
     const lead: BlacksenderLead = {
-      id,
+      id: String(registro.id),
       nome: (registro.name as string) ?? null,
       telefone: (registro.phone as string) ?? null,
       tags: registro.tags ?? null,
@@ -67,9 +56,6 @@ async function estruturar(evento: string, body: unknown) {
       bruto: registro,
     }
     await upsertBlacksenderLead(lead)
-
-    if (!existente) await notificarNovoLead(lead)
-    else if (tagsNovas.length > 0) await notificarTagsAplicadas(lead, tagsNovas)
     return
   }
 

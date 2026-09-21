@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sendChannelMessage } from '@/lib/discord/verify'
-import { listarNumerosTodasContas, listarFluxos } from '@/lib/integrações/sendpulse'
-import { apiKeyParaBot } from '@/lib/integrações/contasSendpulse'
-import { getPreferencias } from '@/lib/db/supabase'
-import { embedRelatorio } from '@/lib/discord/embeds'
+import { montarRelatorioNumeros, montarRelatoriosFunisPinados } from '@/lib/discord/relatorios'
 
 export const maxDuration = 60
 
@@ -30,28 +27,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [todosNumeros, { pinnedNumeros }] = await Promise.all([
-      listarNumerosTodasContas(AbortSignal.timeout(30_000)),
-      getPreferencias(),
+    // Dois relatórios por rodada, num único post: números pinados (SendPulse + Black Sender) e um
+    // embed por funil Black Sender pinado — nada de avisar lead a lead/tag a tag em tempo real
+    // (removido do webhook, ver src/app/api/webhooks/blacksender/route.ts), só esse resumo horário.
+    const [numerosEmbed, funisEmbeds] = await Promise.all([
+      montarRelatorioNumeros(),
+      montarRelatoriosFunisPinados(),
     ])
-    const numeros = todosNumeros.filter(n => pinnedNumeros.includes(n.id))
-    const fluxosPorBot = new Map()
-
-    await Promise.all(numeros.map(async num => {
-      try {
-        const fluxos = await listarFluxos(num.id, apiKeyParaBot(num.id), AbortSignal.timeout(10_000))
-        fluxosPorBot.set(num.id, fluxos)
-      } catch {
-        fluxosPorBot.set(num.id, [])
-      }
-    }))
-
-    const embed = embedRelatorio(numeros, fluxosPorBot)
-    await sendChannelMessage(channelId, { embeds: [embed] })
+    await sendChannelMessage(channelId, { embeds: [numerosEmbed, ...funisEmbeds] })
 
     return NextResponse.json({
       ok: true,
-      bots: numeros.length,
+      funis: funisEmbeds.length,
       timestamp: new Date().toISOString(),
     })
   } catch (err) {

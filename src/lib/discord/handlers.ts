@@ -2,7 +2,6 @@ import type { DiscordEmbed } from './embeds'
 import {
   embedStatusBots,
   embedFluxosBot,
-  embedRelatorio,
   embedErro,
   embedSucesso,
   embedAjuda,
@@ -184,39 +183,8 @@ export async function handleGtmetrixLista(reply: ReplyFn, channelId?: string) {
 
 export async function handleRelatorio(reply: ReplyFn) {
   try {
-    const { listarNumerosTodasContas, listarFluxos } = await import('@/lib/integrações/sendpulse')
-    const { apiKeyParaBot } = await import('@/lib/integrações/contasSendpulse')
-    const { getPreferencias, listarBlacksenderCanais, verificarRespostaUltimaMensagemCanal } = await import('@/lib/db/supabase')
-    const [numeros, { pinnedNumeros, numerosNaoMonitorados }, canaisBS] = await Promise.all([
-      listarNumerosTodasContas(AbortSignal.timeout(30_000)),
-      getPreferencias(),
-      listarBlacksenderCanais(),
-    ])
-    // Só números pinados na home entram no relatório — pinnedNumeros é compartilhado entre bots
-    // SendPulse e canais Black Sender (mesmo array, ver src/app/page.tsx), por isso os dois
-    // conjuntos abaixo filtram pelo mesmo pinnedNumeros.
-    const ativos = numeros.filter(n => !numerosNaoMonitorados.includes(n.id) && pinnedNumeros.includes(n.id))
-    const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
-
-    await Promise.all(ativos.map(async num => {
-      try {
-        const fluxos = await listarFluxos(num.id, apiKeyParaBot(num.id), AbortSignal.timeout(10_000))
-        fluxosPorBot.set(num.id, fluxos)
-      } catch {
-        fluxosPorBot.set(num.id, [])
-      }
-    }))
-
-    // Black Sender não tem o esquema de bot-test do SendPulse (ping num contact_id de teste) — a
-    // saúde combina o status "Ativo/Inativo" que a própria Black Sender expõe pro número (cai
-    // quando desconecta/a Meta derruba) com se o fluxo respondeu à última mensagem real recebida.
-    const canaisPinados = canaisBS.filter(c => pinnedNumeros.includes(c.id))
-    const canaisComSaude = await Promise.all(canaisPinados.map(async (c) => {
-      const resultado = await verificarRespostaUltimaMensagemCanal(c.id).catch(() => null)
-      return { nome: c.nome ?? '', telefone: c.telefone ?? '', statusOficial: c.status, respondeu: resultado?.respondeu ?? null }
-    }))
-
-    await reply({ embeds: [embedRelatorio(ativos, fluxosPorBot, canaisComSaude)] })
+    const { montarRelatorioNumeros } = await import('./relatorios')
+    await reply({ embeds: [await montarRelatorioNumeros()] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao gerar relatório: ${(err as Error).message}`)] })
   }
@@ -286,39 +254,10 @@ export async function handleLeads(reply: ReplyFn, options: { name: string; value
     const cfgAlvo = configs.find((c) => c.flowId === alvoInput || (c.funil ?? '').toLowerCase().includes(alvoLower))
 
     if (cfgAlvo) {
-      const [leadsNovos, execucoes] = await Promise.all([
-        listarBlacksenderLeadsNovosDoFlowNoDia(cfgAlvo.flowId, data),
-        listarBlacksenderFlowRuns(cfgAlvo.flowId),
-      ])
-      const idsDoDia = new Set(leadsNovos.map((l) => l.id))
-      const estagios = calcularEstagiosTag(execucoes, idsDoDia)
-      const ultimoLeadEm = leadsNovos.reduce<string | null>(
-        (max, l) => (l.criadoEmOrigem && (!max || l.criadoEmOrigem > max) ? l.criadoEmOrigem : max), null,
-      )
-      const canal = canalDoFluxo(execucoes)
-
-      let totalEntradas = leadsNovos.length
-      if (canal) {
-        const outrosDoCanal = await Promise.all(
-          configs.filter((c) => c.flowId !== cfgAlvo.flowId).map(async (c) => ({
-            c, canal: canalDoFluxo(await listarBlacksenderFlowRuns(c.flowId)),
-          })),
-        )
-        const irmaos = outrosDoCanal.filter((x) => x.canal === canal).map((x) => x.c)
-        const contagens = await Promise.all(irmaos.map((c) => listarBlacksenderLeadsNovosDoFlowNoDia(c.flowId, data)))
-        totalEntradas += contagens.reduce((soma, arr) => soma + arr.length, 0)
-      }
-
+      const { calcularRelatorioFunilBlacksender } = await import('@/lib/blacksender/relatorio')
+      const relatorio = await calcularRelatorioFunilBlacksender(cfgAlvo, data, configs)
       await reply({
-        embeds: [embedLeadsBlacksender({
-          nome: cfgAlvo.funil || cfgAlvo.flowId,
-          tipo: 'funil',
-          data,
-          totalLeads: leadsNovos.length,
-          estagios,
-          ultimoLeadEm,
-          totalEntradasNoNumero: totalEntradas,
-        })],
+        embeds: [embedLeadsBlacksender({ nome: cfgAlvo.funil || cfgAlvo.flowId, tipo: 'funil', data, ...relatorio })],
       })
       return
     }
