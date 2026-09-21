@@ -16,9 +16,10 @@ import { Spinner } from '@/components/ui/Spinner'
 import { adicionarDias, formatarData, parsearDataISO, hojeBrasilISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, contarFunisPorUtm } from '@/lib/funis'
 import { getState } from '@/lib/store'
-import type { FlowTagConfig, BlacksenderMensagem } from '@/types'
-import { BlocoMetricas, BlocoGastoMeta, BlocoLucroELinks, FunilComboBox } from './PainelConversasFluxo'
+import type { FlowTagConfig, CasaAposta, BlacksenderMensagem } from '@/types'
+import { BlocoMetricas, BlocoGastoMeta, BlocoLucroELinks, BlocoFunilChart, FunilComboBox } from './PainelConversasFluxo'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from './LeadConversaCard'
+import type { EstagioFunil } from './FunilConversaoChart'
 
 const LARGURA_METRICAS = 420
 const LARGURA_COLUNA_COMPARACAO = 380
@@ -57,6 +58,7 @@ interface Execucao {
 interface DadosFluxo {
   total: number
   porStatus: Record<string, number>
+  estagiosTag: EstagioFunil[]
   execucoes: Execucao[]
 }
 
@@ -254,6 +256,8 @@ export function PainelAnaliseFunilBlacksender({
   const dataSemanaPassada = formatarData(adicionarDias(parsearDataISO(dataReferencia), -7), 'YYYY-MM-DD')
   const funisDisponiveisParaComparar = todosFunis.filter((f) => f.flowId !== flowId && !funisComparados.includes(f.flowId))
 
+  const corDoFunil = config?.casas?.[0] ? (getState().casasAposta as Record<string, CasaAposta>)[config.casas[0]]?.cor : undefined
+
   const totalColunas = 1 + (dataComparacao ? 1 : 0) + funisComparados.length
   const larguraMetricas = totalColunas > 1 ? LARGURA_COLUNA_COMPARACAO * totalColunas : LARGURA_METRICAS
   const offsetMetricas = LARGURA_LISTA + (leadSelecionado ? LARGURA_LEAD_DETALHE : 0)
@@ -415,6 +419,8 @@ export function PainelAnaliseFunilBlacksender({
                     editavel
                   />
                   <BlocoLucroELinks flowId={flowId} dataInicio={dataReferencia} dataFim={dataReferencia} ftds={snapshot?.ftds ?? 0} editavel />
+
+                  <BlocoFunilChart estagios={dados?.estagiosTag ?? []} cor={corDoFunil} />
 
                   <div>
                     <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Execuções por status</p>
