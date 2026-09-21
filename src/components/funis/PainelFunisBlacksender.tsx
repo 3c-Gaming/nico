@@ -7,8 +7,9 @@
 // um caminho próprio (ver FlowTagConfig.origem e contarBlacksenderLeadsPorFlowNoDia).
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
-import { Plus, Pin, Pen, Trash2, Save, MessageCircle } from 'lucide-react'
+import { Plus, Pin, Trash2, Save, Layers } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
+import { Spinner } from '@/components/ui/Spinner'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
 import { getState, updateFlowTagConfig, deleteFlowTagConfig, togglePinFunil } from '@/lib/store'
 import { buscarResultadosDoDia, calcularSnapshotDoFunil, contarFunisPorCampanha, contarFunisPorUtm, gastoDoFunil } from '@/lib/funis'
@@ -22,6 +23,8 @@ function formatMoeda(n: number): string {
 
 interface SnapshotHoje {
   leads: number
+  registros: number
+  ftds: number
   gasto: number
   custoEntrada: number | null
 }
@@ -224,7 +227,7 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
       for (const cfg of configs) {
         const gasto = campanhas ? gastoDoFunil(cfg.campanhasMeta, campanhas, funisPorCampanha) : 0
         const snap = calcularSnapshotDoFunil(cfg, dia, [], gasto, funisPorUtm)
-        next[cfg.flowId] = { leads: snap.leads, gasto, custoEntrada: snap.custoEntrada ?? null }
+        next[cfg.flowId] = { leads: snap.leads, registros: snap.registros, ftds: snap.ftds, gasto, custoEntrada: snap.custoEntrada ?? null }
       }
       setSnapshots(next)
       setCarregando(false)
@@ -249,12 +252,13 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
   if (!somentePinados && configs.length === 0 && fluxosDisponiveis.length === 0) return null
 
   return (
-    <div className="space-y-3 p-4 glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] rounded">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageCircle size={16} style={{ color: 'var(--d1)' }} />
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">Funis — Black Sender{somentePinados ? ' (fixados)' : ''}</h3>
-        </div>
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <Layers size={16} className="text-[var(--d1)]" />
+          Funis — Black Sender{somentePinados ? ' (fixados)' : ''}
+          <span className="text-xs font-normal text-[var(--text-muted)]">{configs.length}</span>
+        </h2>
         {!somentePinados && (
           <button
             onClick={() => { setEditando(null); setModalAberto(true) }}
@@ -270,62 +274,92 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
       {configs.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]/60 italic">Nenhum fluxo Black Sender vinculado ainda.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {configs.map((cfg) => {
-            const snap = snapshots[cfg.flowId]
-            const pinado = pinnedFunis.includes(cfg.funil ?? '')
-            const nomeFluxo = fluxosDisponiveis.find((f) => f.id === cfg.flowId)?.nome ?? cfg.flowId
-            return (
-              <div key={cfg.flowId} className="p-3 rounded bg-[var(--bg-elevated)] border border-[var(--border)] space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold font-mono text-[var(--text-primary)] truncate">{cfg.funil || nomeFluxo}</p>
-                    <p className="text-[10px] text-[var(--text-muted)]/60 truncate">{nomeFluxo}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => cfg.funil && togglePinFunil(cfg.funil)}
-                      disabled={!cfg.funil}
-                      title={pinado ? 'Desafixar da home' : 'Fixar na home'}
-                      className="p-1 rounded transition-colors disabled:opacity-30"
-                      style={{ color: pinado ? 'var(--d1)' : 'var(--text-muted)' }}
-                    >
-                      <Pin size={12} fill={pinado ? 'currentColor' : 'none'} />
-                    </button>
-                    <button
-                      onClick={() => { setEditando(cfg); setModalAberto(true) }}
-                      title="Editar"
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                    >
-                      <Pen size={12} />
-                    </button>
-                    <button
-                      onClick={() => handleRemover(cfg)}
-                      title="Desvincular"
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">{carregando ? '—' : (snap?.leads ?? 0)}</p>
-                    <p className="text-[9px] text-[var(--text-muted)]/60 uppercase">Leads hoje</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">{carregando ? '—' : formatMoeda(snap?.gasto ?? 0)}</p>
-                    <p className="text-[9px] text-[var(--text-muted)]/60 uppercase">Gasto hoje</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">{carregando || !snap?.custoEntrada ? '—' : formatMoeda(snap.custoEntrada)}</p>
-                    <p className="text-[9px] text-[var(--text-muted)]/60 uppercase">Custo/lead</p>
-                  </div>
-                </div>
-                {cfg.utm && <p className="text-[10px] font-mono text-[var(--text-muted)]/50">UTM: {cfg.utm}</p>}
-              </div>
-            )
-          })}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--glass-border)]">
+                <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funil</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">UTM</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads hoje</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Reg</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">FTDs</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em campanhas do Meta atribuídas">Gasto</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Gasto em Ads (Meta) ÷ Leads hoje">Custo/Entrada</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {configs.map((cfg) => {
+                const snap = snapshots[cfg.flowId]
+                const pinado = pinnedFunis.includes(cfg.funil ?? '')
+                const nomeFluxo = fluxosDisponiveis.find((f) => f.id === cfg.flowId)?.nome ?? cfg.flowId
+                return (
+                  <tr key={cfg.flowId} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => { setEditando(cfg); setModalAberto(true) }}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold font-mono hover:opacity-75 transition-opacity max-w-[160px]"
+                          style={{ backgroundColor: 'var(--d1)20', border: '1px solid var(--d1)30', color: 'var(--d1)' }}
+                          title={nomeFluxo}
+                        >
+                          <span className="truncate">{cfg.funil || nomeFluxo}</span>
+                        </button>
+                        <button
+                          onClick={() => cfg.funil && togglePinFunil(cfg.funil)}
+                          disabled={!cfg.funil}
+                          className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-elevated)] transition-colors disabled:opacity-30"
+                          title={pinado ? 'Desafixar da Home' : 'Fixar na Home'}
+                        >
+                          <Pin size={11} className={pinado ? 'text-amber-400' : 'text-[var(--text-muted)]'} fill={pinado ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-left">
+                      {cfg.utm ? (
+                        <span className="inline-flex items-center max-w-[220px] text-xs rounded px-2 py-1 border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-primary)]">
+                          <span className="truncate" title={cfg.utm}>{cfg.utm}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]/40">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {carregando ? <Spinner size={12} /> : (
+                        <span className={`font-semibold ${(snap?.leads ?? 0) > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>{snap?.leads ?? 0}</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`font-semibold font-mono ${(snap?.registros ?? 0) > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{snap?.registros ?? 0}</span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`font-semibold font-mono ${(snap?.ftds ?? 0) > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{snap?.ftds ?? 0}</span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`font-semibold font-mono ${(snap?.gasto ?? 0) > 0 ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                        {snap?.gasto ? formatMoeda(snap.gasto) : '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`font-semibold font-mono ${snap?.custoEntrada ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                        {snap?.custoEntrada ? formatMoeda(snap.custoEntrada) : '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <button
+                        onClick={() => handleRemover(cfg)}
+                        title="Desvincular"
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -339,6 +373,6 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
           onClose={() => { setModalAberto(false); setEditando(null) }}
         />
       </Modal>
-    </div>
+    </section>
   )
 }
