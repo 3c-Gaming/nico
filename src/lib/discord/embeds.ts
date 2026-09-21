@@ -263,6 +263,8 @@ export function embedLeadsBlacksender(info: {
   tipo: 'funil' | 'numero'
   data: string
   totalLeads: number
+  registros: number
+  ftds: number
   estagios: { tag: string; contagem: number }[]
   ultimoLeadEm: string | null
   totalEntradasNoNumero: number
@@ -275,6 +277,7 @@ export function embedLeadsBlacksender(info: {
   const linhas = [`**Total de Leads:** ${info.totalLeads}`]
   const grafico = barraProporcionalTags(info.estagios)
   if (grafico) linhas.push(grafico)
+  linhas.push(`**REG:** ${info.registros} · **FTD:** ${info.ftds}`)
   linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
   linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
 

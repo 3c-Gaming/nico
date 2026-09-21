@@ -4,15 +4,31 @@
 // soma dos funis irmãos no mesmo número" nos dois lugares.
 
 import { listarBlacksenderFlowRuns, listarBlacksenderLeadsNovosDoFlowNoDia } from '@/lib/db/supabase'
+import { buscarEventosTrackingDoDia } from '@/lib/tracking'
+import { calcularResultadoLinhaNoDia } from '@/lib/funis'
 import { calcularEstagiosTag, canalDoFluxo } from './jornada'
 import type { FlowTagConfig } from '@/types'
 import type { EstagioFunil } from '@/components/funis/FunilConversaoChart'
 
 export interface RelatorioFunilBlacksender {
   totalLeads: number
+  registros: number
+  ftds: number
   estagios: EstagioFunil[]
   ultimoLeadEm: string | null
   totalEntradasNoNumero: number
+}
+
+/** Registros/FTDs vêm do tracking 3CGG matched por UTM (mesmo mecanismo do painel web — ver
+ * calcularResultadoLinhaNoDia/calcularSnapshotDoFunil em src/lib/funis.ts), independente da
+ * origem do funil. buscarResultadosDoDia (usado no painel) faz fetch de URL relativa, o que não
+ * funciona rodando fora do browser (comando Discord/cron) — direto na função server-side aqui. */
+export async function buscarEventosTrackingDoDiaServidor(data: string) {
+  const [superbetEvents, betmgmEvents] = await Promise.all([
+    buscarEventosTrackingDoDia('superbet', data).catch(() => []),
+    buscarEventosTrackingDoDia('betmgm', data).catch(() => []),
+  ])
+  return { superbetEvents, betmgmEvents, leadsPorTag: {} }
 }
 
 /** `todosConfigsBS`, se passado, evita relistar flow_tag_configs a cada funil quando o chamador
@@ -27,10 +43,12 @@ export async function calcularRelatorioFunilBlacksender(
     return (await listarFlowTagConfigs()).filter((c) => c.origem === 'blacksender')
   })())
 
-  const [leadsNovos, execucoes] = await Promise.all([
+  const [leadsNovos, execucoes, dia] = await Promise.all([
     listarBlacksenderLeadsNovosDoFlowNoDia(cfg.flowId, data),
     listarBlacksenderFlowRuns(cfg.flowId),
+    buscarEventosTrackingDoDiaServidor(data),
   ])
+  const { registros, ftds } = calcularResultadoLinhaNoDia({ ...cfg, origem: 'blacksender' }, dia)
   const idsDoDia = new Set(leadsNovos.map((l) => l.id))
   const estagios = calcularEstagiosTag(execucoes, idsDoDia)
   const ultimoLeadEm = leadsNovos.reduce<string | null>(
@@ -52,5 +70,12 @@ export async function calcularRelatorioFunilBlacksender(
     totalEntradas += contagens.reduce((soma, arr) => soma + arr.length, 0)
   }
 
-  return { totalLeads: leadsNovos.length, estagios, ultimoLeadEm, totalEntradasNoNumero: totalEntradas }
+  return {
+    totalLeads: leadsNovos.length,
+    registros: Math.round(registros),
+    ftds: Math.round(ftds),
+    estagios,
+    ultimoLeadEm,
+    totalEntradasNoNumero: totalEntradas,
+  }
 }

@@ -281,9 +281,20 @@ export async function handleLeads(reply: ReplyFn, options: { name: string; value
 
     if (doNumero.length === 0) {
       await reply({
-        embeds: [embedLeadsBlacksender({ nome: nomeCanal, tipo: 'numero', data, totalLeads: 0, estagios: [], ultimoLeadEm: null, totalEntradasNoNumero: 0 })],
+        embeds: [embedLeadsBlacksender({ nome: nomeCanal, tipo: 'numero', data, totalLeads: 0, registros: 0, ftds: 0, estagios: [], ultimoLeadEm: null, totalEntradasNoNumero: 0 })],
       })
       return
+    }
+
+    const { buscarEventosTrackingDoDiaServidor } = await import('@/lib/blacksender/relatorio')
+    const { calcularResultadoLinhaNoDia } = await import('@/lib/funis')
+    const diaTracking = await buscarEventosTrackingDoDiaServidor(data)
+    let registrosTotal = 0
+    let ftdsTotal = 0
+    for (const x of doNumero) {
+      const r = calcularResultadoLinhaNoDia({ ...x.c, origem: 'blacksender' }, diaTracking)
+      registrosTotal += r.registros
+      ftdsTotal += r.ftds
     }
 
     const leadsPorFuncao = await Promise.all(doNumero.map((x) => listarBlacksenderLeadsNovosDoFlowNoDia(x.c.flowId, data)))
@@ -311,6 +322,8 @@ export async function handleLeads(reply: ReplyFn, options: { name: string; value
         tipo: 'numero',
         data,
         totalLeads: todosLeadsIds.size,
+        registros: Math.round(registrosTotal),
+        ftds: Math.round(ftdsTotal),
         estagios,
         ultimoLeadEm,
         totalEntradasNoNumero: somaBrutaEntradas,
