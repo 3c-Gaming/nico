@@ -44,6 +44,10 @@
     {
       "path": "/api/cron/funil-metricas-snapshot",
       "schedule": "10 3 * * *"
+    },
+    {
+      "path": "/api/cron/blacksender-keepalive",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
