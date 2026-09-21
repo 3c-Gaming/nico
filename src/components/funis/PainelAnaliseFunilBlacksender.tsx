@@ -17,6 +17,7 @@ import { adicionarDias, formatarData, parsearDataISO, hojeBrasilISO } from '@/li
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, contarFunisPorUtm } from '@/lib/funis'
 import { getState } from '@/lib/store'
 import type { FlowTagConfig, CasaAposta, BlacksenderMensagem } from '@/types'
+import { extrairVariaveisDaJornada } from '@/lib/blacksender/jornada'
 import { BlocoMetricas, BlocoGastoMeta, BlocoLucroELinks, BlocoFunilChart, FunilComboBox } from './PainelConversasFluxo'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from './LeadConversaCard'
 import type { EstagioFunil } from './FunilConversaoChart'
@@ -53,6 +54,7 @@ interface Execucao {
   criadoEmOrigem: string | null
   leadNome: string | null
   leadTelefone: string | null
+  bruto: unknown
 }
 
 interface DadosFluxo {
@@ -70,6 +72,20 @@ interface SnapshotHoje {
   custoEntrada: number | null
   custoRegistro: number | null
   custoFtd: number | null
+}
+
+// Campos internos do node builder da Black Sender (ids de nó, rastreamento de anúncio, tags já
+// mostradas em outro lugar) que não ajudam num resumo rápido — o resto (email, lead_id de
+// origem, último botão clicado etc.) é o que aparece no cabeçalho da conversa.
+const VARIAVEIS_RESUMO_EXCLUIR = new Set([
+  'nome', 'telefone', 'tag', 'tags', 'url_fbc', 'url_fbp', 'url_fbclid', 'etapa', 'stage_id', 'channel_id',
+])
+
+function formatarVariaveisResumo(variaveis: Record<string, unknown>): string {
+  return Object.entries(variaveis)
+    .filter(([chave, valor]) => !chave.startsWith('__') && !VARIAVEIS_RESUMO_EXCLUIR.has(chave) && valor != null && valor !== '')
+    .map(([chave, valor]) => `${chave}: ${valor}`)
+    .join(' · ')
 }
 
 function mapMensagemBS(m: BlacksenderMensagem): MensagemFluxo {
@@ -237,6 +253,20 @@ export function PainelAnaliseFunilBlacksender({
       }
     }
     return [...porContato.values()].sort((a, b) => b.ultimaAtividade.localeCompare(a.ultimaAtividade))
+  }, [dados])
+
+  // Resumo compacto das variáveis (email, lead_id de origem, último botão clicado...) pro
+  // cabeçalho da conversa — da execução mais recente de cada contato, mesma ideia do `leads` acima.
+  const resumoVariaveisPorContato = useMemo(() => {
+    const mapa = new Map<string, string>()
+    if (!dados) return mapa
+    const vistos = new Set<string>()
+    for (const e of dados.execucoes) {
+      if (!e.contactId || vistos.has(e.contactId)) continue
+      vistos.add(e.contactId)
+      mapa.set(e.contactId, formatarVariaveisResumo(extrairVariaveisDaJornada(e.bruto)))
+    }
+    return mapa
   }, [dados])
 
   const buscaNormalizada = buscaLead.trim().toLowerCase()
@@ -491,6 +521,14 @@ export function PainelAnaliseFunilBlacksender({
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{leadSelecionado.nome || leadSelecionado.telefone}</h2>
                   <p className="text-md text-[var(--text-muted)]">{formatarTempoRelativo(leadSelecionado.ultimaAtividade)}</p>
+                  {resumoVariaveisPorContato.get(leadSelecionado.contactId) && (
+                    <p
+                      className="text-[11px] text-[var(--text-muted)]/80 line-clamp-1 font-mono mt-0.5"
+                      title={resumoVariaveisPorContato.get(leadSelecionado.contactId)}
+                    >
+                      {resumoVariaveisPorContato.get(leadSelecionado.contactId)}
+                    </p>
+                  )}
                 </div>
                 <button onClick={() => setLeadSelecionadoId(null)} className="hover:text-[var(--text-primary)] cursor-pointer transition-colors shrink-0 px-4 py-2">
                   <ChevronRight size={20} className="shrink-0 text-text-primary" />

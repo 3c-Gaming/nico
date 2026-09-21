@@ -18,6 +18,15 @@ export function extrairTagsDaJornada(bruto: unknown): string[] {
   return Array.isArray(tags) ? tags.filter((t): t is string => typeof t === 'string') : []
 }
 
+/** Variáveis da execução (mesmo `variables` de onde vêm as tags, ver extrairTagsDaJornada) —
+ * email, último botão clicado, lead_id de origem etc. Usado pro resumo compacto que aparece no
+ * cabeçalho da conversa (ver PainelAnaliseFunilBlacksender.tsx). */
+export function extrairVariaveisDaJornada(bruto: unknown): Record<string, unknown> {
+  if (!bruto || typeof bruto !== 'object') return {}
+  const variables = (bruto as { variables?: unknown }).variables
+  return variables && typeof variables === 'object' ? (variables as Record<string, unknown>) : {}
+}
+
 /** channel_id (número WhatsApp) que rodou a execução — vem direto no JSON cru, não é uma coluna
  * mapeada em BlacksenderFlowRun (ver tb('blacksender_flow_runs').select('*') em
  * listarBlacksenderFlowRuns). */
