@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido, BlacksenderLead, BlacksenderFlowRun, BlacksenderConversa, BlacksenderMensagem, BlacksenderFlow } from '@/types'
+import { inicioDoDiaBrasilMs } from '@/lib/datas'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -91,6 +92,18 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   criadoEmSendpulse: 'criado_em_sendpulse',
   importadoEm: 'importado_em',
   recebidoEm: 'recebido_em',
+  etapaId: 'etapa_id',
+  aiDisabled: 'ai_disabled',
+  criadoEmOrigem: 'criado_em_origem',
+  atualizadoEmOrigem: 'atualizado_em_origem',
+  contactId: 'contact_id',
+  channelId: 'channel_id',
+  ultimaMensagemEmOrigem: 'ultima_mensagem_em_origem',
+  conversationId: 'conversation_id',
+  erroCodigo: 'erro_codigo',
+  erroMensagem: 'erro_mensagem',
+  midiaUrl: 'midia_url',
+  midiaTipo: 'midia_tipo',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -190,6 +203,18 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   criado_em_sendpulse: 'criadoEmSendpulse',
   importado_em: 'importadoEm',
   recebido_em: 'recebidoEm',
+  etapa_id: 'etapaId',
+  ai_disabled: 'aiDisabled',
+  criado_em_origem: 'criadoEmOrigem',
+  atualizado_em_origem: 'atualizadoEmOrigem',
+  contact_id: 'contactId',
+  channel_id: 'channelId',
+  ultima_mensagem_em_origem: 'ultimaMensagemEmOrigem',
+  conversation_id: 'conversationId',
+  erro_codigo: 'erroCodigo',
+  erro_mensagem: 'erroMensagem',
+  midia_url: 'midiaUrl',
+  midia_tipo: 'midiaTipo',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -900,4 +925,160 @@ export async function listarWebhookEventosRecebidos(origem?: string, limite = 50
     return []
   }
   return rows<WebhookEventoRecebido>(data)
+}
+
+// --- Black Sender (leads + flow_runs, via blacksender-bridge em tempo real) ---
+
+export async function upsertBlacksenderLead(lead: BlacksenderLead): Promise<void> {
+  const { error } = await tb('blacksender_leads').upsert(toSnakeCase(lead as any))
+  if (error) console.warn('[supabase] upsertBlacksenderLead error:', error.message)
+}
+
+export async function listarBlacksenderLeadsHoje(): Promise<BlacksenderLead[]> {
+  const inicioHoje = new Date(inicioDoDiaBrasilMs()).toISOString()
+  const { data, error } = await tb('blacksender_leads')
+    .select('*')
+    .gte('criado_em_origem', inicioHoje)
+    .order('criado_em_origem', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderLeadsHoje error:', error.message)
+    return []
+  }
+  return rows<BlacksenderLead>(data)
+}
+
+export async function upsertBlacksenderFlowRun(flowRun: BlacksenderFlowRun): Promise<void> {
+  const { error } = await tb('blacksender_flow_runs').upsert(toSnakeCase(flowRun as any))
+  if (error) console.warn('[supabase] upsertBlacksenderFlowRun error:', error.message)
+}
+
+export async function listarBlacksenderFlowRuns(flowId: string): Promise<BlacksenderFlowRun[]> {
+  const { data, error } = await tb('blacksender_flow_runs')
+    .select('*')
+    .eq('flow_id', flowId)
+    .order('criado_em_origem', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderFlowRuns error:', error.message)
+    return []
+  }
+  return rows<BlacksenderFlowRun>(data)
+}
+
+export async function getBlacksenderLead(id: string): Promise<BlacksenderLead | null> {
+  const { data, error } = await tb('blacksender_leads').select('*').eq('id', id).maybeSingle()
+  if (error) {
+    console.warn('[supabase] getBlacksenderLead error:', error.message)
+    return null
+  }
+  return row<BlacksenderLead>(data)
+}
+
+export async function listarBlacksenderFlowRunsPorContato(contactId: string): Promise<BlacksenderFlowRun[]> {
+  const { data, error } = await tb('blacksender_flow_runs')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('criado_em_origem', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderFlowRunsPorContato error:', error.message)
+    return []
+  }
+  return rows<BlacksenderFlowRun>(data)
+}
+
+export async function upsertBlacksenderConversa(conversa: BlacksenderConversa): Promise<void> {
+  const { error } = await tb('blacksender_conversas').upsert(toSnakeCase(conversa as any))
+  if (error) console.warn('[supabase] upsertBlacksenderConversa error:', error.message)
+}
+
+export async function listarBlacksenderConversasPorContato(contactId: string): Promise<BlacksenderConversa[]> {
+  const { data, error } = await tb('blacksender_conversas')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('criado_em_origem', { ascending: false })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderConversasPorContato error:', error.message)
+    return []
+  }
+  return rows<BlacksenderConversa>(data)
+}
+
+export async function upsertBlacksenderMensagem(mensagem: BlacksenderMensagem): Promise<void> {
+  const { error } = await tb('blacksender_mensagens').upsert(toSnakeCase(mensagem as any))
+  if (error) console.warn('[supabase] upsertBlacksenderMensagem error:', error.message)
+}
+
+export async function listarBlacksenderMensagens(conversationId: string): Promise<BlacksenderMensagem[]> {
+  const { data, error } = await tb('blacksender_mensagens')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('criado_em_origem', { ascending: true })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderMensagens error:', error.message)
+    return []
+  }
+  return rows<BlacksenderMensagem>(data)
+}
+
+export async function upsertBlacksenderFlow(flow: BlacksenderFlow): Promise<void> {
+  const { error } = await tb('blacksender_flows').upsert(toSnakeCase(flow as any))
+  if (error) console.warn('[supabase] upsertBlacksenderFlow error:', error.message)
+}
+
+export async function listarBlacksenderFlows(): Promise<BlacksenderFlow[]> {
+  const { data, error } = await tb('blacksender_flows').select('*').order('nome', { ascending: true })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderFlows error:', error.message)
+    return []
+  }
+  return rows<BlacksenderFlow>(data)
+}
+
+/** "Leads" de um funil vindo de um fluxo Black Sender, pra um dia específico — quantos contatos
+ * distintos que passaram por aquele flowId (em qualquer execução) foram CRIADOS (contacts.created_at)
+ * naquele dia, não quantas execuções de fluxo houve (mesmo contato pode reentrar no fluxo mais de
+ * uma vez sem ser um lead novo). Mesmo papel que a contagem por tag do SendPulse faz pros funis
+ * SendPulse (ver contarLeadsIntervalo em sendpulseLeads.ts) — usado em src/lib/funis.ts. */
+export async function contarBlacksenderLeadsPorFlowNoDia(flowIds: string[], data: string): Promise<Record<string, number>> {
+  const resultado: Record<string, number> = {}
+  if (flowIds.length === 0) return resultado
+
+  const { data: execucoes, error: erroExecucoes } = await tb('blacksender_flow_runs')
+    .select('flow_id, contact_id')
+    .in('flow_id', flowIds)
+  if (erroExecucoes) {
+    console.warn('[supabase] contarBlacksenderLeadsPorFlowNoDia (flow_runs) error:', erroExecucoes.message)
+    return resultado
+  }
+
+  const contatosPorFlow = new Map<string, Set<string>>()
+  const todosContatos = new Set<string>()
+  for (const row of (execucoes ?? []) as { flow_id: string; contact_id: string }[]) {
+    if (!row.contact_id) continue
+    if (!contatosPorFlow.has(row.flow_id)) contatosPorFlow.set(row.flow_id, new Set())
+    contatosPorFlow.get(row.flow_id)!.add(row.contact_id)
+    todosContatos.add(row.contact_id)
+  }
+  if (todosContatos.size === 0) return resultado
+
+  const inicio = new Date(inicioDoDiaBrasilMs(data)).toISOString()
+  const fim = new Date(inicioDoDiaBrasilMs(data) + 24 * 60 * 60 * 1000).toISOString()
+  const { data: leadsDoDia, error: erroLeads } = await tb('blacksender_leads')
+    .select('id')
+    .in('id', [...todosContatos])
+    .gte('criado_em_origem', inicio)
+    .lt('criado_em_origem', fim)
+  if (erroLeads) {
+    console.warn('[supabase] contarBlacksenderLeadsPorFlowNoDia (leads) error:', erroLeads.message)
+    return resultado
+  }
+
+  const leadsValidos = new Set(((leadsDoDia ?? []) as { id: string }[]).map((l) => l.id))
+  for (const flowId of flowIds) {
+    const contatos = contatosPorFlow.get(flowId)
+    if (!contatos) { resultado[flowId] = 0; continue }
+    let contagem = 0
+    for (const contactId of contatos) if (leadsValidos.has(contactId)) contagem++
+    resultado[flowId] = contagem
+  }
+  return resultado
 }

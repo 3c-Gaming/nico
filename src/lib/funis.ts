@@ -37,18 +37,39 @@ export interface ResultadoDia {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   betmgmEvents: any[]
   leadsPorTag: Record<string, number>
+  /** Leads de fluxos Black Sender nesse dia, por flowId direto (sem tag/bot — ver
+   * contarBlacksenderLeadsPorFlowNoDia). Opcional: quem monta um ResultadoDia manual pra telas
+   * 100% SendPulse (ex: funilSnapshot.ts, home) não precisa preencher — vira 0 igual antes desse
+   * campo existir. */
+  leadsBlacksender?: Record<string, number>
 }
 
-/** Resultado (registros/FTDs por casa + leads por tag) de um dia específico. Registros/FTDs vêm
- * do tracking 3CGG (rápido, ~1s). Leads por tag direto na SendPulse (getByTag paginado, agrupado
- * por bot) — cada dia dispara uma chamada por bot; dias diferentes rodam em paralelo entre si. */
-export async function buscarResultadosDoDia(data: string, gruposBotTags: GrupoBotTags[]): Promise<ResultadoDia> {
-  const [superbetRes, betmgmRes, leadsPorTag] = await Promise.all([
+/** Busca leads Black Sender pra um dia (mesmo papel que contarLeadsIntervalo faz pro SendPulse,
+ * mas por flowId direto e sempre um único dia — ver /api/blacksender/leads-contagem-dia). */
+async function contarLeadsBlacksenderNoDia(flowIds: string[], data: string): Promise<Record<string, number>> {
+  if (flowIds.length === 0) return {}
+  const res = await fetch('/api/blacksender/leads-contagem-dia', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flowIds, data }),
+  })
+  if (!res.ok) return {}
+  const body = await res.json()
+  return body.leads ?? {}
+}
+
+/** Resultado (registros/FTDs por casa + leads por tag/flow) de um dia específico. Registros/FTDs
+ * vêm do tracking 3CGG (rápido, ~1s). Leads SendPulse por tag (getByTag paginado, agrupado por
+ * bot) — cada dia dispara uma chamada por bot; dias diferentes rodam em paralelo entre si. Leads
+ * Black Sender por flowId direto (ver contarLeadsBlacksenderNoDia). */
+export async function buscarResultadosDoDia(data: string, gruposBotTags: GrupoBotTags[], flowIdsBlacksender: string[] = []): Promise<ResultadoDia> {
+  const [superbetRes, betmgmRes, leadsPorTag, leadsBlacksender] = await Promise.all([
     fetch(`/api/tracking/export?casa=superbet&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
     fetch(`/api/tracking/export?casa=betmgm&date=${data}`).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
     gruposBotTags.length === 0
       ? Promise.resolve({} as Record<string, number>)
       : contarLeadsIntervalo(gruposBotTags, data, data),
+    contarLeadsBlacksenderNoDia(flowIdsBlacksender, data),
   ])
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,6 +77,7 @@ export async function buscarResultadosDoDia(data: string, gruposBotTags: GrupoBo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     betmgmEvents: (betmgmRes as any)?.data ?? [],
     leadsPorTag,
+    leadsBlacksender,
   }
 }
 
@@ -88,7 +110,7 @@ function utmQueCasou(utms: string[], valor: string, exato: boolean): string | un
  * outro(s) funil(is)/config(s). Sem o parâmetro (undefined), divisor sempre 1 — comportamento
  * idêntico ao de antes dessa função existir. */
 export function calcularResultadoLinhaNoDia(
-  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string },
+  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; flowId?: string; origem?: 'sendpulse' | 'blacksender' },
   dia: ResultadoDia,
   funisPorUtm?: Map<string, number>,
   casasPorSlug?: Map<string, string>,
@@ -126,7 +148,12 @@ export function calcularResultadoLinhaNoDia(
     }
   }
   const tagEntrada = tagDeEntradaDoFluxo(cfg.tags)
-  const leads = tagEntrada && cfg.botId ? (dia.leadsPorTag[chaveTagBot(cfg.botId, tagEntrada)] ?? 0) : 0
+  const leads =
+    cfg.origem === 'blacksender'
+      ? (cfg.flowId ? (dia.leadsBlacksender?.[cfg.flowId] ?? 0) : 0)
+      : tagEntrada && cfg.botId
+        ? (dia.leadsPorTag[chaveTagBot(cfg.botId, tagEntrada)] ?? 0)
+        : 0
   const convFtd = leads > 0 ? (ftds / leads) * 100 : null
   const convReg = leads > 0 ? (registros / leads) * 100 : null
   return { leads, registros, ftds, convFtd, convReg, registrosPorCasa, ftdsPorCasa }
@@ -139,7 +166,7 @@ export function calcularResultadoLinhaNoDia(
  * `atualizadoEm`/`data`/`funil` — quem chama preenche isso (são metadados do registro, não do
  * cálculo em si). */
 export function calcularSnapshotDoFunil(
-  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; lucroFtdPorCasa?: Record<string, number> },
+  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; flowId?: string; origem?: 'sendpulse' | 'blacksender'; lucroFtdPorCasa?: Record<string, number> },
   dia: ResultadoDia,
   casasAposta: CasaAposta[],
   gasto: number,

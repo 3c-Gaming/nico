@@ -90,6 +90,7 @@ export const linkTemplates = pgTable('link_templates', {
 export const flowTagConfigs = pgTable('flow_tag_configs', {
   flowId: text('flow_id').primaryKey(),
   botId: text('bot_id').notNull(),
+  origem: text('origem'), // 'sendpulse' (config antiga, sem o campo) | 'blacksender'
   tags: jsonb('tags').notNull().default('[]'),
   funil: text('funil'),
   utm: text('utm'),
@@ -219,4 +220,72 @@ export const webhookEventosRecebidos = pgTable('webhook_eventos_recebidos', {
   metodo: text('metodo').notNull(),
   ip: text('ip'),
   recebidoEm: text('recebido_em').notNull(),
+})
+
+// Leads (contacts) do Black Sender, espelhados em tempo real pelo blacksender-bridge (listener
+// Realtime no Supabase deles) via webhooks/blacksender. `bruto` guarda o registro completo pra
+// não perder campo nenhum enquanto o formato exato não está 100% mapeado.
+export const blacksenderLeads = pgTable('blacksender_leads', {
+  id: text('id').primaryKey(),
+  nome: text('nome'),
+  telefone: text('telefone'),
+  tags: jsonb('tags'),
+  etapaId: text('etapa_id'),
+  aiDisabled: boolean('ai_disabled'),
+  criadoEmOrigem: text('criado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
+})
+
+// Execuções de fluxo (flow_runs) do Black Sender, mesmo princípio de blacksenderLeads.
+export const blacksenderFlowRuns = pgTable('blacksender_flow_runs', {
+  id: text('id').primaryKey(),
+  flowId: text('flow_id'),
+  contactId: text('contact_id'),
+  status: text('status'),
+  criadoEmOrigem: text('criado_em_origem'),
+  atualizadoEmOrigem: text('atualizado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
+})
+
+// Conversas (uma por contato+canal) do Black Sender — mesmo princípio de blacksenderLeads.
+export const blacksenderConversas = pgTable('blacksender_conversas', {
+  id: text('id').primaryKey(),
+  contactId: text('contact_id'),
+  channelId: text('channel_id'),
+  status: text('status'),
+  ultimaMensagemEmOrigem: text('ultima_mensagem_em_origem'),
+  criadoEmOrigem: text('criado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
+})
+
+// Fluxos (flows) do Black Sender — nome legível (ex: "F01.11 ODD ALTA") pra não precisar mostrar
+// UUID cru no seletor de "vincular fluxo a um Funil" (ver src/lib/funis.ts). Mesmo princípio de
+// blacksenderLeads.
+export const blacksenderFlows = pgTable('blacksender_flows', {
+  id: text('id').primaryKey(),
+  nome: text('nome'),
+  ativo: boolean('ativo'),
+  criadoEmOrigem: text('criado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
+})
+
+// Mensagens de uma conversa do Black Sender — mesmo princípio de blacksenderLeads.
+export const blacksenderMensagens = pgTable('blacksender_mensagens', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversation_id'),
+  conteudo: text('conteudo'),
+  direcao: text('direcao'),
+  remetente: text('remetente'),
+  status: text('status'),
+  erroCodigo: text('erro_codigo'),
+  erroMensagem: text('erro_mensagem'),
+  midiaUrl: text('midia_url'),
+  midiaTipo: text('midia_tipo'),
+  criadoEmOrigem: text('criado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
 })

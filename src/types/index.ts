@@ -378,6 +378,11 @@ export interface FlowTagConfig {
   flowId: string
   botId: string
   tags: string[]
+  /** De onde esse fluxo vem — SendPulse (padrão, config antiga sem o campo) ou Black Sender (CRM
+   * receptivo de WhatsApp). Pra origem 'blacksender', `flowId` é o UUID do fluxo lá (ver
+   * BlacksenderFlow) e `botId`/`tags` não se aplicam — "leads" vem de blacksender_leads/
+   * blacksender_flow_runs em vez da contagem por tag do SendPulse (ver src/lib/funis.ts). */
+  origem?: 'sendpulse' | 'blacksender'
   funil?: string | null
   utm?: string | null
   /** UTMs adicionais além de `utm` — resultados (registros/FTD) somam entre todas. */
@@ -441,6 +446,72 @@ export interface WebhookEventoRecebido {
   metodo: string
   ip: string | null
   recebidoEm: string
+}
+
+/** Lead (contact) do Black Sender, espelhado em tempo real pelo blacksender-bridge.
+ * `bruto` guarda o registro completo — os demais campos são melhor esforço de mapeamento. */
+export interface BlacksenderLead {
+  id: string
+  nome: string | null
+  telefone: string | null
+  tags: unknown
+  etapaId: string | null
+  aiDisabled: boolean | null
+  criadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
+}
+
+/** Execução de fluxo (flow_run) do Black Sender, mesmo princípio de BlacksenderLead. */
+export interface BlacksenderFlowRun {
+  id: string
+  flowId: string | null
+  contactId: string | null
+  status: string | null
+  criadoEmOrigem: string | null
+  atualizadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
+}
+
+/** Conversa (uma por contato+canal) do Black Sender, mesmo princípio de BlacksenderLead. */
+export interface BlacksenderConversa {
+  id: string
+  contactId: string | null
+  channelId: string | null
+  status: string | null
+  ultimaMensagemEmOrigem: string | null
+  criadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
+}
+
+/** Fluxo (flow) do Black Sender — nome legível pro seletor de "vincular fluxo a um Funil" (ver
+ * FlowTagConfig.origem e src/lib/funis.ts). Mesmo princípio de BlacksenderLead. */
+export interface BlacksenderFlow {
+  id: string
+  nome: string | null
+  ativo: boolean | null
+  criadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
+}
+
+/** Mensagem de uma conversa do Black Sender, mesmo princípio de BlacksenderLead. */
+export interface BlacksenderMensagem {
+  id: string
+  conversationId: string | null
+  conteudo: string | null
+  direcao: string | null
+  remetente: string | null
+  status: string | null
+  erroCodigo: string | null
+  erroMensagem: string | null
+  midiaUrl: string | null
+  midiaTipo: string | null
+  criadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
 }
 
 export interface CampanhaSendpulseImportada {

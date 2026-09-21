@@ -12,6 +12,7 @@ import { TagComboBox } from '@/components/ui/TagComboBox'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { PainelApresentacoes } from '@/components/funis/PainelApresentacoes'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
+import { PainelFunisBlacksender } from '@/components/funis/PainelFunisBlacksender'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
 import { getState, setState, updateFlowTagConfig, deleteFlowTagConfig, togglePinFunil, updateCacheMetricas } from '@/lib/store'
 import { agruparTagsPorBot, chaveTagBot, contarLeadsIntervalo } from '@/lib/sendpulseLeads'
@@ -1160,6 +1161,7 @@ function FunisPageInner() {
       <BarraProgresso ativa={loading || refreshing || carregandoFlows.size > 0 || carregandoIntervaloBots.size > 0} />
 
       <div className="p-6 space-y-4">
+        <PainelFunisBlacksender />
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
             <AlertTriangle size={14} />

@@ -17,6 +17,7 @@ import { nomeCurto } from '@/lib/resultadoDisparo'
 import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
+import { PainelFunisBlacksender } from '@/components/funis/PainelFunisBlacksender'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
@@ -1779,6 +1780,8 @@ export default function HomePage() {
             )}
           </>
         )}
+
+        <PainelFunisBlacksender somentePinados />
       </div>
 
       <ModalLinkDaxx

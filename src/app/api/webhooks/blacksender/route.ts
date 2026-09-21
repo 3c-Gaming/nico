@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registrarWebhookEvento } from '@/lib/db/supabase'
+import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, getBlacksenderLead } from '@/lib/db/supabase'
+import { notificarNovoLead, notificarTagsAplicadas } from '@/lib/discord/notify-blacksender'
+import type { BlacksenderLead } from '@/types'
 
 // Webhook público que o Black Sender (CRM receptivo de WhatsApp) chama pros eventos configurados
 // no painel dele: Leads criados, Conversas, Kanban, Tags, Erros. Não temos a doc do payload
@@ -13,6 +15,11 @@ import { registrarWebhookEvento } from '@/lib/db/supabase'
 // Uma URL por tipo de evento no painel do Black Sender — usar o mesmo endpoint com
 // ?evento=<nome> em cada campo (leads_criados, conversas, kanban, tags, erros), já que o
 // payload em si pode não indicar o tipo.
+//
+// Além disso recebe `leads_realtime`/`flow_runs_realtime` do blacksender-bridge (serviço
+// standalone que assina Realtime no Supabase do Black Sender e encaminha pra cá — ver
+// blacksender-bridge/src/realtimeListener.ts). Esses dois eventos têm formato conhecido e são
+// estruturados em blacksender_leads / blacksender_flow_runs além do log cru.
 
 function extrairEvento(request: NextRequest, body: unknown): string {
   const daQuery = request.nextUrl.searchParams.get('evento')
@@ -25,6 +32,105 @@ function extrairEvento(request: NextRequest, body: unknown): string {
 // A infra da própria Vercel injeta headers internos (token OIDC do projeto, assinatura de proxy
 // interna, etc.) em toda request — não vêm do Black Sender e não devem ficar guardados no banco.
 const HEADER_IGNORADO = /^(x-vercel-oidc-token|x-vercel-sc-headers|x-vercel-proxy-signature.*|forwarded|authorization|cookie)$/i
+
+// Eventos que o blacksender-bridge encaminha a partir da assinatura Realtime no Supabase do
+// Black Sender (ver blacksender-bridge/src/realtimeListener.ts) — já vêm com o nome de campo
+// original deles, então o mapeamento aqui é melhor-esforço: campo que não bate com nada
+// esperado ainda está preservado inteiro em `bruto`.
+async function estruturar(evento: string, body: unknown) {
+  const alvo = body as { tabela?: string; operacao?: string; registro?: Record<string, unknown> } | null
+  const registro = alvo?.registro
+  if (!registro || alvo?.operacao === 'DELETE') return
+
+  const recebidoEm = new Date().toISOString()
+
+  if (evento === 'leads_realtime' && alvo?.tabela === 'contacts') {
+    const id = String(registro.id)
+    // Compara com o que JÁ está salvo aqui (não com registroAnterior/old_record do Realtime —
+    // esse costuma vir incompleto quando a tabela de origem não tem REPLICA IDENTITY FULL, e não
+    // controlamos o schema da Black Sender pra garantir isso). Sem linha anterior = lead novo de
+    // verdade; com linha anterior, compara os arrays de tag pra achar só as que entraram agora.
+    const existente = await getBlacksenderLead(id)
+    const tagsAntigas = new Set(Array.isArray(existente?.tags) ? (existente.tags as string[]) : [])
+    const tagsNovasRegistro = Array.isArray(registro.tags) ? (registro.tags as string[]) : []
+    const tagsNovas = tagsNovasRegistro.filter((t) => !tagsAntigas.has(t))
+
+    const lead: BlacksenderLead = {
+      id,
+      nome: (registro.name as string) ?? null,
+      telefone: (registro.phone as string) ?? null,
+      tags: registro.tags ?? null,
+      etapaId: (registro.stage_id as string) ?? null,
+      aiDisabled: (registro.ai_disabled as boolean) ?? null,
+      criadoEmOrigem: (registro.created_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    }
+    await upsertBlacksenderLead(lead)
+
+    if (!existente) await notificarNovoLead(lead)
+    else if (tagsNovas.length > 0) await notificarTagsAplicadas(lead, tagsNovas)
+    return
+  }
+
+  if (evento === 'flow_runs_realtime' && alvo?.tabela === 'flow_runs') {
+    await upsertBlacksenderFlowRun({
+      id: String(registro.id),
+      flowId: (registro.flow_id as string) ?? null,
+      contactId: (registro.contact_id as string) ?? null,
+      status: (registro.status as string) ?? null,
+      criadoEmOrigem: (registro.started_at as string) ?? null,
+      atualizadoEmOrigem: (registro.updated_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    })
+    return
+  }
+
+  if (evento === 'conversas_realtime' && alvo?.tabela === 'conversations') {
+    await upsertBlacksenderConversa({
+      id: String(registro.id),
+      contactId: (registro.contact_id as string) ?? null,
+      channelId: (registro.channel_id as string) ?? null,
+      status: (registro.status as string) ?? null,
+      ultimaMensagemEmOrigem: (registro.last_message_at as string) ?? null,
+      criadoEmOrigem: (registro.created_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    })
+    return
+  }
+
+  if (evento === 'mensagens_realtime' && alvo?.tabela === 'messages') {
+    await upsertBlacksenderMensagem({
+      id: String(registro.id),
+      conversationId: (registro.conversation_id as string) ?? null,
+      conteudo: (registro.content as string) ?? null,
+      direcao: (registro.direction as string) ?? null,
+      remetente: (registro.sender_name as string) ?? null,
+      status: (registro.status as string) ?? null,
+      erroCodigo: (registro.delivery_error_code as string) ?? null,
+      erroMensagem: (registro.delivery_error_message as string) ?? null,
+      midiaUrl: (registro.media_url as string) ?? null,
+      midiaTipo: (registro.media_type as string) ?? null,
+      criadoEmOrigem: (registro.created_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    })
+    return
+  }
+
+  if (evento === 'flows_realtime' && alvo?.tabela === 'flows') {
+    await upsertBlacksenderFlow({
+      id: String(registro.id),
+      nome: (registro.name as string) ?? null,
+      ativo: (registro.is_active as boolean) ?? null,
+      criadoEmOrigem: (registro.created_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    })
+  }
+}
 
 async function registrar(request: NextRequest) {
   const textoBruto = await request.text().catch(() => '')
@@ -48,6 +154,8 @@ async function registrar(request: NextRequest) {
     ip,
     recebidoEm: new Date().toISOString(),
   })
+
+  await estruturar(evento, body)
 
   return evento
 }
