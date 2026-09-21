@@ -194,6 +194,38 @@ export function embedRelatorio(numeros: { id: string; nome: string; numero: stri
   return embed
 }
 
+/** Resposta do /leads — formato fixo pedido: Total de Leads, uma linha por tag da jornada,
+ * horário do último lead e o total de entradas somando todos os funis que rodam nesse mesmo
+ * número (ver handleLeads pra como cada campo é calculado). */
+export function embedLeadsBlacksender(info: {
+  nome: string
+  tipo: 'funil' | 'numero'
+  data: string
+  totalLeads: number
+  estagios: { tag: string; contagem: number }[]
+  ultimoLeadEm: string | null
+  totalEntradasNoNumero: number
+}): DiscordEmbed {
+  const dataFmt = new Date(`${info.data}T12:00:00`).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  const ultimoLeadFmt = info.ultimoLeadEm
+    ? new Date(info.ultimoLeadEm).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+    : null
+
+  const linhas = [`**Total de Leads:** ${info.totalLeads}`]
+  for (const e of info.estagios) linhas.push(`**LEADS ${e.tag}:** ${e.contagem}`)
+  linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
+  linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
+
+  return {
+    title: `📈 Leads — ${info.nome}`,
+    description: `${info.tipo === 'funil' ? 'Funil' : 'Número'} · ${dataFmt}`,
+    color: info.totalLeads > 0 ? 0x22c55e : 0x64748b,
+    fields: [{ name: '​', value: linhas.join('\n'), inline: false }],
+    footer: { text: 'Nico Bot · Black Sender' },
+    timestamp: new Date().toISOString(),
+  }
+}
+
 export function embedErro(mensagem: string): DiscordEmbed {
   return {
     title: '❌ Erro',
@@ -224,6 +256,7 @@ export function embedAjuda(): DiscordEmbed {
       { name: '/testartodos', value: 'Testa todos os bots ativos de uma vez', inline: false },
       { name: '/gtmetrix `url`', value: 'Roda um teste GTmetrix numa página específica agora', inline: false },
       { name: '/gtmetrix-lista', value: 'Roda o GTmetrix em todas as páginas monitoradas agora', inline: false },
+      { name: '/leads `alvo` `[data]`', value: 'Quantos leads um funil ou número Black Sender teve num dia (padrão: hoje)', inline: false },
       { name: '/relatorio', value: 'Gera um relatório completo de todos os bots', inline: false },
       { name: '/fatura', value: 'Mostra quando os planos da SendPulse vão expirar', inline: false },
       { name: '/ajuda', value: 'Lista todos os comandos disponíveis', inline: false },

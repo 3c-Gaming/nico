@@ -59,4 +59,22 @@ export const DISCORD_COMMANDS = [
     name: 'gtmetrix-lista',
     description: 'Roda o GTmetrix em todas as páginas monitoradas agora',
   },
+  {
+    name: 'leads',
+    description: 'Quantos leads um funil ou número Black Sender teve num dia',
+    options: [
+      {
+        type: 3,
+        name: 'alvo',
+        description: 'Nome do funil, flowId, nome ou telefone do número',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'data',
+        description: 'DD/MM ou DD/MM/AAAA (padrão: hoje)',
+        required: false,
+      },
+    ],
+  },
 ]

@@ -9,8 +9,10 @@ import {
   embedResultadoTeste,
   embedResumoTestes,
   embedStatusPlanosSendpulse,
+  embedLeadsBlacksender,
 } from './embeds'
 import { sendChannelMessage } from './verify'
+import { hojeBrasilISO } from '@/lib/datas'
 
 function getOption(options: { name: string; value: string }[] | undefined, name: string): string | null {
   if (!options) return null
@@ -221,6 +223,152 @@ export async function handleFatura(reply: ReplyFn) {
   }
 }
 
+/** Aceita "DD/MM" ou "DD/MM/AAAA" (ano de 2 ou 4 dígitos) — formato livre digitado no Discord,
+ * não o seletor de data de um form. null de volta é "não informado" (default hoje); undefined
+ * (nunca devolvido) não existe aqui — string vazia/não reconhecida é erro explícito, não default. */
+function parseDataBR(input: string | null): string | null {
+  if (!input || !input.trim()) return hojeBrasilISO()
+  const m = input.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/)
+  if (!m) return null
+  const dia = m[1].padStart(2, '0')
+  const mes = m[2].padStart(2, '0')
+  let ano = m[3] ?? String(new Date().getFullYear())
+  if (ano.length === 2) ano = `20${ano}`
+  const iso = `${ano}-${mes}-${dia}`
+  const data = new Date(`${iso}T12:00:00`)
+  if (isNaN(data.getTime()) || data.getUTCDate() !== Number(dia)) return null
+  return iso
+}
+
+/** /leads alvo:<funil ou número> [data] — quantos leads um funil ou número Black Sender teve num
+ * dia. `alvo` casa primeiro contra funis configurados (FlowTagConfig.funil/flowId); se não achar,
+ * tenta como número (nome ou telefone do canal). "Total de Entradas no Número" soma o total de
+ * leads do dia de TODOS os funis Black Sender que rodam no mesmo canal (ver canalDoFluxo) — no
+ * caso de consulta por número, essa soma pode contar a mesma pessoa duas vezes se ela tiver
+ * entrado em mais de um funil daquele número no mesmo dia (aproximação aceita pelo pedido
+ * original: "soma das tags de entrada de todos os funis vinculados a esse número"). */
+export async function handleLeads(reply: ReplyFn, options: { name: string; value: string }[] | undefined) {
+  const alvoInput = getOption(options, 'alvo')
+  if (!alvoInput) {
+    await reply({ embeds: [embedErro('Parâmetro `alvo` é obrigatório — nome do funil ou do número.')] })
+    return
+  }
+  const data = parseDataBR(getOption(options, 'data'))
+  if (!data) {
+    await reply({ embeds: [embedErro('Data inválida. Use o formato `DD/MM` ou `DD/MM/AAAA`.')] })
+    return
+  }
+
+  try {
+    const {
+      listarFlowTagConfigs,
+      listarBlacksenderCanais,
+      listarBlacksenderFlowRuns,
+      listarBlacksenderLeadsNovosDoFlowNoDia,
+    } = await import('@/lib/db/supabase')
+    const { calcularEstagiosTag, canalDoFluxo } = await import('@/lib/blacksender/jornada')
+
+    const configs = (await listarFlowTagConfigs()).filter((c) => c.origem === 'blacksender')
+    const alvoLower = alvoInput.toLowerCase()
+    const cfgAlvo = configs.find((c) => c.flowId === alvoInput || (c.funil ?? '').toLowerCase().includes(alvoLower))
+
+    if (cfgAlvo) {
+      const [leadsNovos, execucoes] = await Promise.all([
+        listarBlacksenderLeadsNovosDoFlowNoDia(cfgAlvo.flowId, data),
+        listarBlacksenderFlowRuns(cfgAlvo.flowId),
+      ])
+      const idsDoDia = new Set(leadsNovos.map((l) => l.id))
+      const estagios = calcularEstagiosTag(execucoes, idsDoDia)
+      const ultimoLeadEm = leadsNovos.reduce<string | null>(
+        (max, l) => (l.criadoEmOrigem && (!max || l.criadoEmOrigem > max) ? l.criadoEmOrigem : max), null,
+      )
+      const canal = canalDoFluxo(execucoes)
+
+      let totalEntradas = leadsNovos.length
+      if (canal) {
+        const outrosDoCanal = await Promise.all(
+          configs.filter((c) => c.flowId !== cfgAlvo.flowId).map(async (c) => ({
+            c, canal: canalDoFluxo(await listarBlacksenderFlowRuns(c.flowId)),
+          })),
+        )
+        const irmaos = outrosDoCanal.filter((x) => x.canal === canal).map((x) => x.c)
+        const contagens = await Promise.all(irmaos.map((c) => listarBlacksenderLeadsNovosDoFlowNoDia(c.flowId, data)))
+        totalEntradas += contagens.reduce((soma, arr) => soma + arr.length, 0)
+      }
+
+      await reply({
+        embeds: [embedLeadsBlacksender({
+          nome: cfgAlvo.funil || cfgAlvo.flowId,
+          tipo: 'funil',
+          data,
+          totalLeads: leadsNovos.length,
+          estagios,
+          ultimoLeadEm,
+          totalEntradasNoNumero: totalEntradas,
+        })],
+      })
+      return
+    }
+
+    const canais = await listarBlacksenderCanais()
+    const soDigitos = alvoInput.replace(/\D/g, '')
+    const canalAlvo = canais.find((c) =>
+      (c.nome ?? '').toLowerCase().includes(alvoLower) || (!!soDigitos && (c.telefone ?? '').replace(/\D/g, '').includes(soDigitos)),
+    )
+
+    if (!canalAlvo) {
+      await reply({ embeds: [embedErro(`Não encontrei nenhum funil ou número Black Sender chamado \`${alvoInput}\`.`)] })
+      return
+    }
+
+    const configsComCanal = await Promise.all(
+      configs.map(async (c) => ({ c, execucoes: await listarBlacksenderFlowRuns(c.flowId) })),
+    )
+    const doNumero = configsComCanal.filter((x) => canalDoFluxo(x.execucoes) === canalAlvo.id)
+    const nomeCanal = canalAlvo.nome || canalAlvo.telefone || canalAlvo.id
+
+    if (doNumero.length === 0) {
+      await reply({
+        embeds: [embedLeadsBlacksender({ nome: nomeCanal, tipo: 'numero', data, totalLeads: 0, estagios: [], ultimoLeadEm: null, totalEntradasNoNumero: 0 })],
+      })
+      return
+    }
+
+    const leadsPorFuncao = await Promise.all(doNumero.map((x) => listarBlacksenderLeadsNovosDoFlowNoDia(x.c.flowId, data)))
+    const todosLeadsIds = new Set<string>()
+    let ultimoLeadEm: string | null = null
+    for (const arr of leadsPorFuncao) {
+      for (const l of arr) {
+        todosLeadsIds.add(l.id)
+        if (l.criadoEmOrigem && (!ultimoLeadEm || l.criadoEmOrigem > ultimoLeadEm)) ultimoLeadEm = l.criadoEmOrigem
+      }
+    }
+    const estagiosPorTag = new Map<string, number>()
+    doNumero.forEach((x, i) => {
+      const idsDoDia = new Set(leadsPorFuncao[i].map((l) => l.id))
+      for (const est of calcularEstagiosTag(x.execucoes, idsDoDia)) {
+        estagiosPorTag.set(est.tag, (estagiosPorTag.get(est.tag) ?? 0) + est.contagem)
+      }
+    })
+    const estagios = [...estagiosPorTag.entries()].map(([tag, contagem]) => ({ tag, contagem })).sort((a, b) => b.contagem - a.contagem)
+    const somaBrutaEntradas = leadsPorFuncao.reduce((soma, arr) => soma + arr.length, 0)
+
+    await reply({
+      embeds: [embedLeadsBlacksender({
+        nome: nomeCanal,
+        tipo: 'numero',
+        data,
+        totalLeads: todosLeadsIds.size,
+        estagios,
+        ultimoLeadEm,
+        totalEntradasNoNumero: somaBrutaEntradas,
+      })],
+    })
+  } catch (err) {
+    await reply({ embeds: [embedErro(`Falha ao buscar leads: ${(err as Error).message}`)] })
+  }
+}
+
 export function dispatchCommand(
   name: string,
   options: { name: string; value: string }[] | undefined,
@@ -248,6 +396,8 @@ export function dispatchCommand(
           return await handleAjuda(reply)
         case 'fatura':
           return await handleFatura(reply)
+        case 'leads':
+          return await handleLeads(reply, options)
         default:
           return await reply({ embeds: [embedErro(`Comando desconhecido: \`${name}\``)] })
       }

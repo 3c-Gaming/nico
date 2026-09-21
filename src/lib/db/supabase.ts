@@ -1121,6 +1121,29 @@ export async function contarBlacksenderLeadsPorFlowNoDia(flowIds: string[], data
   return resultado
 }
 
+/** Como contarBlacksenderLeadsPorFlowNoDia, mas devolve os leads inteiros (não só a contagem) de
+ * UM fluxo — usado pelo comando /leads do Discord, que além do total também precisa saber quem
+ * são esses leads (pra achar o horário do último) e quais tags cada um acumulou (calcularEstagiosTag
+ * filtra por esse conjunto de contactIds). */
+export async function listarBlacksenderLeadsNovosDoFlowNoDia(flowId: string, data: string): Promise<BlacksenderLead[]> {
+  const execucoes = await listarBlacksenderFlowRuns(flowId)
+  const contactIds = [...new Set(execucoes.map((e) => e.contactId).filter((id): id is string => !!id))]
+  if (contactIds.length === 0) return []
+
+  const inicio = new Date(inicioDoDiaBrasilMs(data)).toISOString()
+  const fim = new Date(inicioDoDiaBrasilMs(data) + 24 * 60 * 60 * 1000).toISOString()
+  const { data: leadsDoDia, error } = await tb('blacksender_leads')
+    .select('*')
+    .in('id', contactIds)
+    .gte('criado_em_origem', inicio)
+    .lt('criado_em_origem', fim)
+  if (error) {
+    console.warn('[supabase] listarBlacksenderLeadsNovosDoFlowNoDia error:', error.message)
+    return []
+  }
+  return rows<BlacksenderLead>(leadsDoDia)
+}
+
 /** "Teste" de saúde de um número Black Sender não precisa do esquema de bot-test do SendPulse
  * (mandar ping pra um contato de teste e esperar resposta) — já temos a última mensagem que o
  * PRÓPRIO número mandou (outbound), então é só olhar quando foi isso: se está enviando de
