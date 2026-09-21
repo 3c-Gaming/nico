@@ -178,11 +178,11 @@ export function PainelAnaliseFunilBlacksender({
   useEffect(() => {
     if (!aberto || !flowId) return
     setDados(null)
-    fetch(`/api/blacksender/fluxos/${flowId}`)
+    fetch(`/api/blacksender/fluxos/${flowId}?data=${dataReferencia}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setDados(d))
       .catch(() => setDados(null))
-  }, [aberto, flowId])
+  }, [aberto, flowId, dataReferencia])
 
   useEffect(() => {
     if (!aberto) return
