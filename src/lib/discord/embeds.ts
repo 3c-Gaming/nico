@@ -156,13 +156,16 @@ export function embedRelatorio(
   numeros: { id: string; nome: string; numero: string; status: string; inboxTotal: number; inboxNaoLidas: number }[],
   fluxosPorBot: Map<string, { id: string; nome: string; status: string; triggers: { id: string; nome: string; tipo: number }[] }[]>,
   // Números Black Sender pinados — sem o esquema de bot-test do SendPulse (ping num contact_id de
-  // teste), a saúde é "o fluxo respondeu à última mensagem que alguém mandou pra esse número?"
-  // (ver verificarRespostaUltimaMensagemCanal). respondeu null = nunca recebeu mensagem, não dá
-  // pra avaliar ainda.
-  canaisBlacksender: { nome: string; telefone: string; respondeu: boolean | null }[] = [],
+  // teste), a saúde combina duas checagens: statusOficial (o "ATIVO/INATIVO" que a própria Black
+  // Sender expõe pro número — cai quando o WhatsApp desconecta/a Meta derruba o canal) e respondeu
+  // (se o fluxo automático respondeu à última mensagem real recebida, ver
+  // verificarRespostaUltimaMensagemCanal). respondeu null = nunca recebeu mensagem, não dá pra
+  // avaliar ainda essa segunda parte.
+  canaisBlacksender: { nome: string; telefone: string; statusOficial: string | null; respondeu: boolean | null }[] = [],
 ): DiscordEmbed {
-  const ativos = numeros.filter(n => n.status === 'ativo').length + canaisBlacksender.filter(c => c.respondeu === true).length
-  const inativos = numeros.filter(n => n.status === 'inativo').length + canaisBlacksender.filter(c => c.respondeu !== true).length
+  const canalSaudavel = (c: { statusOficial: string | null; respondeu: boolean | null }) => c.statusOficial === 'active' && c.respondeu !== false
+  const ativos = numeros.filter(n => n.status === 'ativo').length + canaisBlacksender.filter(canalSaudavel).length
+  const inativos = numeros.filter(n => n.status === 'inativo').length + canaisBlacksender.filter(c => !canalSaudavel(c)).length
   const total = numeros.length + canaisBlacksender.length
   const agora = new Date()
   const horarioBrasilia = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
@@ -206,8 +209,13 @@ export function embedRelatorio(
   }
 
   for (const canal of canaisBlacksender) {
-    const icone = canal.respondeu === true ? '🟢' : canal.respondeu === false ? '🔴' : '⚪'
-    const linhaSaude = canal.respondeu === null
+    const statusOk = canal.statusOficial === 'active'
+    // 🔴 número caiu/desconectou na própria Black Sender (não adianta olhar resposta — não tem
+    // como responder desconectado). 🟡 conectado mas o fluxo não respondeu (problema no automação,
+    // não no número). 🟢 os dois ok (ou sem mensagem ainda pra testar resposta).
+    const icone = !statusOk ? '🔴' : canal.respondeu === false ? '🟡' : '🟢'
+    const linhaStatus = `📡 Status Black Sender: **${statusOk ? 'Ativo' : (canal.statusOficial ?? 'desconhecido')}**`
+    const linhaResposta = canal.respondeu === null
       ? '💬 Sem mensagens recebidas ainda'
       : canal.respondeu
         ? '💬 Respondeu à última mensagem recebida'
@@ -217,7 +225,8 @@ export function embedRelatorio(
       name: '​',
       value: [
         `${icone} **${canal.nome || 'Sem nome'}** — \`${canal.telefone || '?'}\` (Black Sender)`,
-        linhaSaude,
+        linhaStatus,
+        linhaResposta,
       ].join('\n'),
       inline: true,
     })

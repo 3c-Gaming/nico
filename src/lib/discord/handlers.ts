@@ -208,11 +208,12 @@ export async function handleRelatorio(reply: ReplyFn) {
     }))
 
     // Black Sender não tem o esquema de bot-test do SendPulse (ping num contact_id de teste) — a
-    // saúde vem de olhar se o fluxo respondeu à última mensagem real que alguém mandou pro número.
+    // saúde combina o status "Ativo/Inativo" que a própria Black Sender expõe pro número (cai
+    // quando desconecta/a Meta derruba) com se o fluxo respondeu à última mensagem real recebida.
     const canaisPinados = canaisBS.filter(c => pinnedNumeros.includes(c.id))
     const canaisComSaude = await Promise.all(canaisPinados.map(async (c) => {
       const resultado = await verificarRespostaUltimaMensagemCanal(c.id).catch(() => null)
-      return { nome: c.nome ?? '', telefone: c.telefone ?? '', respondeu: resultado?.respondeu ?? null }
+      return { nome: c.nome ?? '', telefone: c.telefone ?? '', statusOficial: c.status, respondeu: resultado?.respondeu ?? null }
     }))
 
     await reply({ embeds: [embedRelatorio(ativos, fluxosPorBot, canaisComSaude)] })
