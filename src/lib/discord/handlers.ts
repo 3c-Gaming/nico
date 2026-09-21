@@ -186,11 +186,15 @@ export async function handleRelatorio(reply: ReplyFn) {
   try {
     const { listarNumerosTodasContas, listarFluxos } = await import('@/lib/integrações/sendpulse')
     const { apiKeyParaBot } = await import('@/lib/integrações/contasSendpulse')
-    const { getPreferencias } = await import('@/lib/db/supabase')
-    const [numeros, { pinnedNumeros, numerosNaoMonitorados }] = await Promise.all([
+    const { getPreferencias, listarBlacksenderCanais, verificarRespostaUltimaMensagemCanal } = await import('@/lib/db/supabase')
+    const [numeros, { pinnedNumeros, numerosNaoMonitorados }, canaisBS] = await Promise.all([
       listarNumerosTodasContas(AbortSignal.timeout(30_000)),
       getPreferencias(),
+      listarBlacksenderCanais(),
     ])
+    // Só números pinados na home entram no relatório — pinnedNumeros é compartilhado entre bots
+    // SendPulse e canais Black Sender (mesmo array, ver src/app/page.tsx), por isso os dois
+    // conjuntos abaixo filtram pelo mesmo pinnedNumeros.
     const ativos = numeros.filter(n => !numerosNaoMonitorados.includes(n.id) && pinnedNumeros.includes(n.id))
     const fluxosPorBot = new Map<string, Awaited<ReturnType<typeof listarFluxos>>>()
 
@@ -203,7 +207,15 @@ export async function handleRelatorio(reply: ReplyFn) {
       }
     }))
 
-    await reply({ embeds: [embedRelatorio(ativos, fluxosPorBot)] })
+    // Black Sender não tem o esquema de bot-test do SendPulse (ping num contact_id de teste) — a
+    // saúde vem de olhar se o fluxo respondeu à última mensagem real que alguém mandou pro número.
+    const canaisPinados = canaisBS.filter(c => pinnedNumeros.includes(c.id))
+    const canaisComSaude = await Promise.all(canaisPinados.map(async (c) => {
+      const resultado = await verificarRespostaUltimaMensagemCanal(c.id).catch(() => null)
+      return { nome: c.nome ?? '', telefone: c.telefone ?? '', respondeu: resultado?.respondeu ?? null }
+    }))
+
+    await reply({ embeds: [embedRelatorio(ativos, fluxosPorBot, canaisComSaude)] })
   } catch (err) {
     await reply({ embeds: [embedErro(`Falha ao gerar relatório: ${(err as Error).message}`)] })
   }

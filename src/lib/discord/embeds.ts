@@ -152,9 +152,18 @@ export function embedFluxosBot(botNome: string, fluxos: { id: string; nome: stri
   return embed
 }
 
-export function embedRelatorio(numeros: { id: string; nome: string; numero: string; status: string; inboxTotal: number; inboxNaoLidas: number }[], fluxosPorBot: Map<string, { id: string; nome: string; status: string; triggers: { id: string; nome: string; tipo: number }[] }[]>): DiscordEmbed {
-  const ativos = numeros.filter(n => n.status === 'ativo').length
-  const inativos = numeros.filter(n => n.status === 'inativo').length
+export function embedRelatorio(
+  numeros: { id: string; nome: string; numero: string; status: string; inboxTotal: number; inboxNaoLidas: number }[],
+  fluxosPorBot: Map<string, { id: string; nome: string; status: string; triggers: { id: string; nome: string; tipo: number }[] }[]>,
+  // Números Black Sender pinados — sem o esquema de bot-test do SendPulse (ping num contact_id de
+  // teste), a saúde é "o fluxo respondeu à última mensagem que alguém mandou pra esse número?"
+  // (ver verificarRespostaUltimaMensagemCanal). respondeu null = nunca recebeu mensagem, não dá
+  // pra avaliar ainda.
+  canaisBlacksender: { nome: string; telefone: string; respondeu: boolean | null }[] = [],
+): DiscordEmbed {
+  const ativos = numeros.filter(n => n.status === 'ativo').length + canaisBlacksender.filter(c => c.respondeu === true).length
+  const inativos = numeros.filter(n => n.status === 'inativo').length + canaisBlacksender.filter(c => c.respondeu !== true).length
+  const total = numeros.length + canaisBlacksender.length
   const agora = new Date()
   const horarioBrasilia = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
   const horas = horarioBrasilia.getHours().toString().padStart(2, '0')
@@ -163,15 +172,20 @@ export function embedRelatorio(numeros: { id: string; nome: string; numero: stri
   const embed: DiscordEmbed = {
     title: `📋 Relatório Geral — ${horas}:${minutos}`,
     color: ativos > 0 ? 0x22c55e : 0xef4444,
-    description: 'Status consolidado de todos os bots e fluxos.',
+    description: 'Status consolidado dos números pinados.',
     timestamp: agora.toISOString(),
     fields: [
       {
         name: 'Resumo',
-        value: `🟢 **Ativos:** ${ativos} · 🔴 **Inativos:** ${inativos} · 📞 **Total:** ${numeros.length}`,
+        value: `🟢 **Ativos:** ${ativos} · 🔴 **Inativos:** ${inativos} · 📞 **Total:** ${total}`,
       },
     ],
     footer: { text: 'Gerado automaticamente · Nico Bot' },
+  }
+
+  if (total === 0) {
+    embed.fields!.push({ name: '​', value: 'Nenhum número pinado. Pine números na home pra eles aparecerem aqui.' })
+    return embed
   }
 
   for (const num of numeros) {
@@ -186,6 +200,24 @@ export function embedRelatorio(numeros: { id: string; nome: string; numero: stri
         `${icone} **${num.nome || 'Sem nome'}** — \`${num.numero || '?'}\``,
         `📥 Inbox: ${num.inboxTotal} (${num.inboxNaoLidas} não lidas)`,
         `🔀 Fluxos: ${fluxosAtivos} ativo(s), ${fluxosInativos} inativo(s)`,
+      ].join('\n'),
+      inline: true,
+    })
+  }
+
+  for (const canal of canaisBlacksender) {
+    const icone = canal.respondeu === true ? '🟢' : canal.respondeu === false ? '🔴' : '⚪'
+    const linhaSaude = canal.respondeu === null
+      ? '💬 Sem mensagens recebidas ainda'
+      : canal.respondeu
+        ? '💬 Respondeu à última mensagem recebida'
+        : '💬 NÃO respondeu à última mensagem recebida'
+
+    embed.fields!.push({
+      name: '​',
+      value: [
+        `${icone} **${canal.nome || 'Sem nome'}** — \`${canal.telefone || '?'}\` (Black Sender)`,
+        linhaSaude,
       ].join('\n'),
       inline: true,
     })

@@ -1167,3 +1167,46 @@ export async function buscarUltimaMensagemEnviadaPorCanal(channelId: string): Pr
   const [m] = rows<{ conteudo: string | null; criadoEmOrigem: string }>(mensagens)
   return m
 }
+
+/** Checagem de saúde mais forte que buscarUltimaMensagemEnviadaPorCanal (que só olha se o número
+ * mandou algo recentemente): pega a última mensagem RECEBIDA (inbound) no canal e olha se existe
+ * uma mensagem enviada (outbound) depois dela, na mesma conversa — ou seja, se o fluxo automático
+ * respondeu de verdade a última coisa que alguém mandou. Usado no /relatorio do Discord pros
+ * números Black Sender pinados, que não têm o esquema de bot-test (ping num contact_id de teste)
+ * do SendPulse. null = canal sem nenhuma mensagem recebida ainda (não dá pra avaliar). */
+export async function verificarRespostaUltimaMensagemCanal(channelId: string): Promise<{
+  respondeu: boolean
+  ultimaMensagemRecebidaEm: string
+  ultimaRespostaEm: string | null
+} | null> {
+  const { data: conversas, error: erroConversas } = await tb('blacksender_conversas').select('id').eq('channel_id', channelId)
+  if (erroConversas || !conversas || conversas.length === 0) return null
+  const idsConversas = (conversas as { id: string }[]).map((c) => c.id)
+
+  const { data: ultimasInbound, error: erroInbound } = await tb('blacksender_mensagens')
+    .select('conversation_id, criado_em_origem')
+    .in('conversation_id', idsConversas)
+    .eq('direcao', 'inbound')
+    .order('criado_em_origem', { ascending: false })
+    .limit(1)
+  if (erroInbound || !ultimasInbound || ultimasInbound.length === 0) return null
+  const [inbound] = rows<{ conversationId: string; criadoEmOrigem: string }>(ultimasInbound)
+
+  const { data: respostas, error: erroResposta } = await tb('blacksender_mensagens')
+    .select('criado_em_origem')
+    .eq('conversation_id', inbound.conversationId)
+    .eq('direcao', 'outbound')
+    .gt('criado_em_origem', inbound.criadoEmOrigem)
+    .order('criado_em_origem', { ascending: true })
+    .limit(1)
+  if (erroResposta) {
+    console.warn('[supabase] verificarRespostaUltimaMensagemCanal error:', erroResposta.message)
+    return { respondeu: false, ultimaMensagemRecebidaEm: inbound.criadoEmOrigem, ultimaRespostaEm: null }
+  }
+  const [resposta] = rows<{ criadoEmOrigem: string }>(respostas ?? [])
+  return {
+    respondeu: !!resposta,
+    ultimaMensagemRecebidaEm: inbound.criadoEmOrigem,
+    ultimaRespostaEm: resposta?.criadoEmOrigem ?? null,
+  }
+}
