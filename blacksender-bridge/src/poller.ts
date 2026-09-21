@@ -114,9 +114,13 @@ let ultimoPollFlowRuns = new Date().toISOString()
 let ultimoPollConversas = new Date().toISOString()
 let ultimoPollMensagens = new Date().toISOString()
 let ultimoPollFlows = new Date().toISOString()
-let ultimoPollCanais = new Date().toISOString()
 // contactId -> assinatura (JSON) do estado observado no ciclo anterior, só pra detectar mudança
 const contatosConhecidos = new Map<string, string>()
+// canalId -> assinatura, mesmo princípio de contatosConhecidos. Canal muda pouco (status de
+// saúde/quality rating) e o filtro "updated_at > desde que o bridge subiu" perde qualquer
+// atualização anterior ao boot do processo — como são poucos canais por workspace (não centenas,
+// como flow_runs/mensagens), reler tudo inteiro a cada ciclo e comparar é barato.
+const canaisConhecidos = new Map<string, string>()
 
 async function pollContatos() {
   const desde = new Date(Date.now() - CONTATOS_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString()
@@ -184,12 +188,17 @@ const CANAIS_COLUNAS = [
 ].join(',')
 
 async function pollCanais() {
-  const agora = new Date().toISOString()
   const canais = await rest<Record<string, unknown>>(
-    `whatsapp_channels?select=${CANAIS_COLUNAS}&updated_at=gt.${ultimoPollCanais}&order=updated_at.asc&limit=100`,
+    `whatsapp_channels?select=${CANAIS_COLUNAS}&order=updated_at.asc&limit=100`,
   )
-  await encaminharEmLotes(canais, 'canais_realtime', 'whatsapp_channels', () => 'UPDATE')
-  ultimoPollCanais = agora
+  const mudaram = canais.filter((c) => {
+    const id = String(c.id)
+    const assinatura = JSON.stringify(c)
+    if (canaisConhecidos.get(id) === assinatura) return false
+    canaisConhecidos.set(id, assinatura)
+    return true
+  })
+  await encaminharEmLotes(mudaram, 'canais_realtime', 'whatsapp_channels', () => 'UPDATE')
 }
 
 async function ciclo() {
