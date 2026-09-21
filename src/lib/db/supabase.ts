@@ -1071,6 +1071,15 @@ export async function listarBlacksenderCanais(): Promise<BlacksenderCanal[]> {
   return rows<BlacksenderCanal>(data)
 }
 
+export async function getBlacksenderCanal(id: string): Promise<BlacksenderCanal | null> {
+  const { data, error } = await tb('blacksender_canais').select('*').eq('id', id).maybeSingle()
+  if (error) {
+    console.warn('[supabase] getBlacksenderCanal error:', error.message)
+    return null
+  }
+  return row<BlacksenderCanal>(data)
+}
+
 /** "Leads" de um funil vindo de um fluxo Black Sender, pra um dia específico — quantos contatos
  * distintos que passaram por aquele flowId (em qualquer execução) foram CRIADOS (contacts.created_at)
  * naquele dia, não quantas execuções de fluxo houve (mesmo contato pode reentrar no fluxo mais de

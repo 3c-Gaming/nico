@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, upsertBlacksenderCanal } from '@/lib/db/supabase'
+import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, upsertBlacksenderCanal, getBlacksenderCanal } from '@/lib/db/supabase'
+import { canalEstaBanido, notificarCanalBanido } from '@/lib/discord/notify-canal-banido'
 import type { BlacksenderLead } from '@/types'
 
 // Webhook público que o Black Sender (CRM receptivo de WhatsApp) chama pros eventos configurados
@@ -122,8 +123,9 @@ async function estruturar(evento: string, body: unknown) {
   // colunas na origem (ver blacksender-bridge/src/poller.ts, CANAIS_COLUNAS). `bruto` abaixo é
   // seguro de guardar.
   if (evento === 'canais_realtime' && alvo?.tabela === 'whatsapp_channels') {
-    await upsertBlacksenderCanal({
-      id: String(registro.id),
+    const id = String(registro.id)
+    const canal = {
+      id,
       nome: (registro.channel_name as string) ?? null,
       telefone: (registro.business_phone_number as string) ?? null,
       provedor: (registro.provider as string) ?? null,
@@ -138,7 +140,17 @@ async function estruturar(evento: string, body: unknown) {
       criadoEmOrigem: (registro.created_at as string) ?? null,
       recebidoEm,
       bruto: registro,
-    })
+    }
+
+    // Só notifica na TRANSIÇÃO pra banido/bloqueado (existia e não estava banido, ou é a primeira
+    // vez que vemos esse canal e já chega banido) — comparar com o estado salvo ANTES do upsert
+    // evita avisar de novo a cada poll enquanto o número continuar banido.
+    const existente = await getBlacksenderCanal(id)
+    const jaEstavaBanido = existente ? canalEstaBanido(existente) : false
+    await upsertBlacksenderCanal(canal)
+    if (!jaEstavaBanido && canalEstaBanido(canal)) {
+      await notificarCanalBanido(canal)
+    }
   }
 }
 

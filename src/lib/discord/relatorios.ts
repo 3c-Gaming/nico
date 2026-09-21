@@ -4,6 +4,7 @@
 
 import { hojeBrasilISO } from '@/lib/datas'
 import { calcularRelatorioFunilBlacksender } from '@/lib/blacksender/relatorio'
+import { canalEstaBanido } from './notify-canal-banido'
 import { embedRelatorio, embedLeadsBlacksender, type DiscordEmbed } from './embeds'
 
 export async function montarRelatorioNumeros(): Promise<DiscordEmbed> {
@@ -30,7 +31,7 @@ export async function montarRelatorioNumeros(): Promise<DiscordEmbed> {
   const canaisPinados = canaisBS.filter((c) => pinnedNumeros.includes(c.id))
   const canaisComSaude = await Promise.all(canaisPinados.map(async (c) => {
     const resultado = await verificarRespostaUltimaMensagemCanal(c.id).catch(() => null)
-    return { nome: c.nome ?? '', telefone: c.telefone ?? '', statusOficial: c.status, respondeu: resultado?.respondeu ?? null }
+    return { nome: c.nome ?? '', telefone: c.telefone ?? '', banido: canalEstaBanido(c), metaPhoneStatus: c.metaPhoneStatus, respondeu: resultado?.respondeu ?? null }
   }))
 
   return embedRelatorio(numeros, fluxosPorBot, canaisComSaude)

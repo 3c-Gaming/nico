@@ -156,14 +156,14 @@ export function embedRelatorio(
   numeros: { id: string; nome: string; numero: string; status: string; inboxTotal: number; inboxNaoLidas: number }[],
   fluxosPorBot: Map<string, { id: string; nome: string; status: string; triggers: { id: string; nome: string; tipo: number }[] }[]>,
   // Números Black Sender pinados — sem o esquema de bot-test do SendPulse (ping num contact_id de
-  // teste), a saúde combina duas checagens: statusOficial (o "ATIVO/INATIVO" que a própria Black
-  // Sender expõe pro número — cai quando o WhatsApp desconecta/a Meta derruba o canal) e respondeu
-  // (se o fluxo automático respondeu à última mensagem real recebida, ver
-  // verificarRespostaUltimaMensagemCanal). respondeu null = nunca recebeu mensagem, não dá pra
-  // avaliar ainda essa segunda parte.
-  canaisBlacksender: { nome: string; telefone: string; statusOficial: string | null; respondeu: boolean | null }[] = [],
+  // teste), a saúde combina duas checagens: banido (metaPhoneStatus/healthStatus — o campo
+  // genérico `status` do canal continua "active" mesmo com o número banido pela Meta, não serve
+  // pra isso, ver canalEstaBanido) e respondeu (se o fluxo automático respondeu à última
+  // mensagem real recebida, ver verificarRespostaUltimaMensagemCanal). respondeu null = nunca
+  // recebeu mensagem, não dá pra avaliar ainda essa segunda parte.
+  canaisBlacksender: { nome: string; telefone: string; banido: boolean; metaPhoneStatus: string | null; respondeu: boolean | null }[] = [],
 ): DiscordEmbed {
-  const canalSaudavel = (c: { statusOficial: string | null; respondeu: boolean | null }) => c.statusOficial === 'active' && c.respondeu !== false
+  const canalSaudavel = (c: { banido: boolean; respondeu: boolean | null }) => !c.banido && c.respondeu !== false
   const ativos = numeros.filter(n => n.status === 'ativo').length + canaisBlacksender.filter(canalSaudavel).length
   const inativos = numeros.filter(n => n.status === 'inativo').length + canaisBlacksender.filter(c => !canalSaudavel(c)).length
   const total = numeros.length + canaisBlacksender.length
@@ -209,12 +209,11 @@ export function embedRelatorio(
   }
 
   for (const canal of canaisBlacksender) {
-    const statusOk = canal.statusOficial === 'active'
-    // 🔴 número caiu/desconectou na própria Black Sender (não adianta olhar resposta — não tem
-    // como responder desconectado). 🟡 conectado mas o fluxo não respondeu (problema no automação,
-    // não no número). 🟢 os dois ok (ou sem mensagem ainda pra testar resposta).
-    const icone = !statusOk ? '🔴' : canal.respondeu === false ? '🟡' : '🟢'
-    const linhaStatus = `📡 Status Black Sender: **${statusOk ? 'Ativo' : (canal.statusOficial ?? 'desconhecido')}**`
+    // 🔴 número banido/bloqueado pela Meta (não adianta olhar resposta — não tem como responder
+    // banido). 🟡 ok pra Meta mas o fluxo não respondeu (problema na automação, não no número).
+    // 🟢 os dois ok (ou sem mensagem ainda pra testar resposta).
+    const icone = canal.banido ? '🔴' : canal.respondeu === false ? '🟡' : '🟢'
+    const linhaStatus = `📡 Status Black Sender: **${canal.banido ? `BANIDO/BLOQUEADO (${canal.metaPhoneStatus ?? '?'})` : 'Ativo'}**`
     const linhaResposta = canal.respondeu === null
       ? '💬 Sem mensagens recebidas ainda'
       : canal.respondeu
@@ -277,7 +276,7 @@ export function embedLeadsBlacksender(info: {
   const linhas = [`**Total de Leads:** ${info.totalLeads}`]
   const grafico = barraProporcionalTags(info.estagios)
   if (grafico) linhas.push(grafico)
-  linhas.push(`🧑‍🧒‍🧒**REG:** **${info.registros}** · ✅**FTD:** **${info.ftds}**`)
+  linhas.push(`🧑‍🧒‍🧒 **REG:** **${info.registros}** · ✅ **FTD:** **${info.ftds}**`)
   linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
   linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
 
@@ -286,6 +285,23 @@ export function embedLeadsBlacksender(info: {
     description: `${info.tipo === 'funil' ? 'Funil' : 'Número'} · ${dataFmt}`,
     color: info.totalLeads > 0 ? 0x22c55e : 0x64748b,
     fields: [{ name: '​', value: linhas.join('\n'), inline: false }],
+    footer: { text: 'Nico Bot · Black Sender' },
+    timestamp: new Date().toISOString(),
+  }
+}
+
+/** Alerta de número Black Sender banido/bloqueado — disparado só na TRANSIÇÃO pra esse estado
+ * (ver checarBanimentoCanal no webhook), não a cada poll, senão viraria spam a cada sync do
+ * canal enquanto ele continuar banido. */
+export function embedCanalBanido(canal: { nome: string | null; telefone: string | null; metaPhoneStatus: string | null; healthReason: string | null }): DiscordEmbed {
+  return {
+    title: '🚨 Número Black Sender banido/bloqueado',
+    description: `**${canal.nome || 'Sem nome'}** — \`${canal.telefone || '?'}\``,
+    color: 0xef4444,
+    fields: [
+      { name: 'Status Meta', value: canal.metaPhoneStatus || 'desconhecido', inline: true },
+      { name: 'Motivo', value: canal.healthReason || '—', inline: true },
+    ],
     footer: { text: 'Nico Bot · Black Sender' },
     timestamp: new Date().toISOString(),
   }
