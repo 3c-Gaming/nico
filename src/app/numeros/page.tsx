@@ -5,6 +5,7 @@ import { ChevronRight, ChevronDown, RefreshCw, AlertTriangle, Play, ExternalLink
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { PainelNumerosBlacksender } from '@/components/numeros/PainelNumerosBlacksender'
 import { useMonitoramento, POLL_INTERVAL } from '@/hooks/useMonitoramento'
 import { getState, togglePinNumero, toggleMonitorarNumero } from '@/lib/store'
 import type { NumeroMonitorado, NumeroSendpulse, FluxoSendpulse, AquecimentoNumero } from '@/types'
@@ -512,6 +513,7 @@ export default function NumerosPage() {
       />
 
       <div className="p-6 space-y-6">
+        <PainelNumerosBlacksender />
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md text-xs" style={{ backgroundColor: 'var(--error)15', border: '1px solid var(--error)30', color: 'var(--error)' }}>
             <AlertTriangle size={14} />

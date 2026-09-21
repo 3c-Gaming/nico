@@ -273,6 +273,28 @@ export const blacksenderFlows = pgTable('blacksender_flows', {
   bruto: jsonb('bruto'),
 })
 
+// Números (whatsapp_channels) do Black Sender — pra tela de Números junto com os bots SendPulse.
+// IMPORTANTE: o bridge já filtra as colunas na origem (nunca select=*) — access_token e
+// meta_app_secret (credencial viva da API do WhatsApp Business) nunca chegam aqui, nem em
+// `bruto`. Ver blacksender-bridge/src/poller.ts, CANAIS_COLUNAS.
+export const blacksenderCanais = pgTable('blacksender_canais', {
+  id: text('id').primaryKey(),
+  nome: text('nome'),
+  telefone: text('telefone'),
+  provedor: text('provedor'),
+  status: text('status'),
+  healthStatus: text('health_status'),
+  healthReason: text('health_reason'),
+  healthCheckedEm: text('health_checked_em'),
+  metaPhoneStatus: text('meta_phone_status'),
+  metaNameStatus: text('meta_name_status'),
+  qualityRating: text('quality_rating'),
+  fotoUrl: text('foto_url'),
+  criadoEmOrigem: text('criado_em_origem'),
+  recebidoEm: text('recebido_em').notNull(),
+  bruto: jsonb('bruto'),
+})
+
 // Mensagens de uma conversa do Black Sender — mesmo princípio de blacksenderLeads.
 export const blacksenderMensagens = pgTable('blacksender_mensagens', {
   id: text('id').primaryKey(),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, getBlacksenderLead } from '@/lib/db/supabase'
+import { registrarWebhookEvento, upsertBlacksenderLead, upsertBlacksenderFlowRun, upsertBlacksenderConversa, upsertBlacksenderMensagem, upsertBlacksenderFlow, upsertBlacksenderCanal, getBlacksenderLead } from '@/lib/db/supabase'
 import { notificarNovoLead, notificarTagsAplicadas } from '@/lib/discord/notify-blacksender'
 import type { BlacksenderLead } from '@/types'
 
@@ -125,6 +125,30 @@ async function estruturar(evento: string, body: unknown) {
       id: String(registro.id),
       nome: (registro.name as string) ?? null,
       ativo: (registro.is_active as boolean) ?? null,
+      criadoEmOrigem: (registro.created_at as string) ?? null,
+      recebidoEm,
+      bruto: registro,
+    })
+    return
+  }
+
+  // `registro` aqui já vem sem access_token/meta_app_secret — o bridge nunca seleciona essas
+  // colunas na origem (ver blacksender-bridge/src/poller.ts, CANAIS_COLUNAS). `bruto` abaixo é
+  // seguro de guardar.
+  if (evento === 'canais_realtime' && alvo?.tabela === 'whatsapp_channels') {
+    await upsertBlacksenderCanal({
+      id: String(registro.id),
+      nome: (registro.channel_name as string) ?? null,
+      telefone: (registro.business_phone_number as string) ?? null,
+      provedor: (registro.provider as string) ?? null,
+      status: (registro.status as string) ?? null,
+      healthStatus: (registro.health_status as string) ?? null,
+      healthReason: (registro.health_reason as string) ?? null,
+      healthCheckedEm: (registro.health_checked_at as string) ?? null,
+      metaPhoneStatus: (registro.meta_phone_status as string) ?? null,
+      metaNameStatus: (registro.meta_name_status as string) ?? null,
+      qualityRating: (registro.meta_quality_rating as string) ?? null,
+      fotoUrl: (registro.profile_picture_url as string) ?? null,
       criadoEmOrigem: (registro.created_at as string) ?? null,
       recebidoEm,
       bruto: registro,

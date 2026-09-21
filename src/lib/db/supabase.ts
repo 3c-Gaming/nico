@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido, BlacksenderLead, BlacksenderFlowRun, BlacksenderConversa, BlacksenderMensagem, BlacksenderFlow } from '@/types'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido, BlacksenderLead, BlacksenderFlowRun, BlacksenderConversa, BlacksenderMensagem, BlacksenderFlow, BlacksenderCanal } from '@/types'
 import { inicioDoDiaBrasilMs } from '@/lib/datas'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
@@ -104,6 +104,13 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   erroMensagem: 'erro_mensagem',
   midiaUrl: 'midia_url',
   midiaTipo: 'midia_tipo',
+  healthStatus: 'health_status',
+  healthReason: 'health_reason',
+  healthCheckedEm: 'health_checked_em',
+  metaPhoneStatus: 'meta_phone_status',
+  metaNameStatus: 'meta_name_status',
+  qualityRating: 'quality_rating',
+  fotoUrl: 'foto_url',
 }
 
 function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -215,6 +222,13 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   erro_mensagem: 'erroMensagem',
   midia_url: 'midiaUrl',
   midia_tipo: 'midiaTipo',
+  health_status: 'healthStatus',
+  health_reason: 'healthReason',
+  health_checked_em: 'healthCheckedEm',
+  meta_phone_status: 'metaPhoneStatus',
+  meta_name_status: 'metaNameStatus',
+  quality_rating: 'qualityRating',
+  foto_url: 'fotoUrl',
 }
 
 function fromSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
@@ -1031,6 +1045,20 @@ export async function listarBlacksenderFlows(): Promise<BlacksenderFlow[]> {
     return []
   }
   return rows<BlacksenderFlow>(data)
+}
+
+export async function upsertBlacksenderCanal(canal: BlacksenderCanal): Promise<void> {
+  const { error } = await tb('blacksender_canais').upsert(toSnakeCase(canal as any))
+  if (error) console.warn('[supabase] upsertBlacksenderCanal error:', error.message)
+}
+
+export async function listarBlacksenderCanais(): Promise<BlacksenderCanal[]> {
+  const { data, error } = await tb('blacksender_canais').select('*').order('nome', { ascending: true })
+  if (error) {
+    console.warn('[supabase] listarBlacksenderCanais error:', error.message)
+    return []
+  }
+  return rows<BlacksenderCanal>(data)
 }
 
 /** "Leads" de um funil vindo de um fluxo Black Sender, pra um dia específico — quantos contatos

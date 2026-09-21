@@ -114,6 +114,7 @@ let ultimoPollFlowRuns = new Date().toISOString()
 let ultimoPollConversas = new Date().toISOString()
 let ultimoPollMensagens = new Date().toISOString()
 let ultimoPollFlows = new Date().toISOString()
+let ultimoPollCanais = new Date().toISOString()
 // contactId -> assinatura (JSON) do estado observado no ciclo anterior, só pra detectar mudança
 const contatosConhecidos = new Map<string, string>()
 
@@ -171,10 +172,30 @@ async function pollFlows() {
   ultimoPollFlows = agora
 }
 
+// Colunas escolhidas a dedo (NUNCA select=*) — whatsapp_channels guarda access_token e
+// meta_app_secret de verdade (credencial viva da API do WhatsApp Business). Esses dois campos
+// não podem sair daqui: nem passam pelo webhook, nem ficam gravados em lugar nenhum do nosso
+// sistema. Só os campos operacionais (nome, telefone, status, saúde, quality rating) importam
+// pra tela de Números.
+const CANAIS_COLUNAS = [
+  'id', 'workspace_id', 'channel_name', 'business_phone_number', 'provider', 'status',
+  'health_status', 'health_reason', 'health_checked_at', 'meta_phone_status',
+  'meta_name_status', 'meta_quality_rating', 'profile_picture_url', 'created_at', 'updated_at',
+].join(',')
+
+async function pollCanais() {
+  const agora = new Date().toISOString()
+  const canais = await rest<Record<string, unknown>>(
+    `whatsapp_channels?select=${CANAIS_COLUNAS}&updated_at=gt.${ultimoPollCanais}&order=updated_at.asc&limit=100`,
+  )
+  await encaminharEmLotes(canais, 'canais_realtime', 'whatsapp_channels', () => 'UPDATE')
+  ultimoPollCanais = agora
+}
+
 async function ciclo() {
   status.eventosNoUltimoCiclo = 0
   try {
-    await Promise.all([pollContatos(), pollFlowRuns(), pollConversas(), pollMensagens(), pollFlows()])
+    await Promise.all([pollContatos(), pollFlowRuns(), pollConversas(), pollMensagens(), pollFlows(), pollCanais()])
     status.ultimoCiclo = new Date().toISOString()
     if (status.eventosNoUltimoCiclo > 0) {
       console.log(`[blacksender-bridge] ciclo concluído, ${status.eventosNoUltimoCiclo} evento(s) encaminhado(s)`)

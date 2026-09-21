@@ -497,6 +497,26 @@ export interface BlacksenderFlow {
   bruto: unknown
 }
 
+/** Número (whatsapp_channels) do Black Sender, mesmo princípio de BlacksenderLead. `bruto` nunca
+ * tem access_token/meta_app_secret — filtrado na origem (ver blacksender-bridge/src/poller.ts). */
+export interface BlacksenderCanal {
+  id: string
+  nome: string | null
+  telefone: string | null
+  provedor: string | null
+  status: string | null
+  healthStatus: string | null
+  healthReason: string | null
+  healthCheckedEm: string | null
+  metaPhoneStatus: string | null
+  metaNameStatus: string | null
+  qualityRating: string | null
+  fotoUrl: string | null
+  criadoEmOrigem: string | null
+  recebidoEm: string
+  bruto: unknown
+}
+
 /** Mensagem de uma conversa do Black Sender, mesmo princípio de BlacksenderLead. */
 export interface BlacksenderMensagem {
   id: string
