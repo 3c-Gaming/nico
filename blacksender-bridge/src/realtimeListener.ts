@@ -46,7 +46,17 @@ export const status = {
   conectado: false,
   ultimoEvento: null as string | null,
   ultimoErro: null as string | null,
+  ultimaReconexaoForcada: null as string | null,
 }
+
+// Confirmado em produção (21/09/2026): o canal fica preso em "conectado: true" (nunca dispara
+// CHANNEL_ERROR/TIMED_OUT/CLOSED) mas para de entregar postgres_changes de verdade — uma conexão
+// zumbi, provavelmente algum proxy/load balancer no caminho até o Supabase derrubando o
+// WebSocket sem mandar um close frame decente, então o cliente nunca percebe que morreu. Sem
+// jeito de detectar isso de dentro do processo com confiança (o heartbeat interno do
+// realtime-js não pegou), a defesa é derrubar e reconectar do zero por tempo, não por erro —
+// limita a janela cega a no máximo esse intervalo em vez de ficar surdo pro resto do dia.
+const RECONEXAO_FORCADA_INTERVALO_MS = 10 * 60 * 1000
 
 async function encaminhar(evento: string, payload: Record<string, unknown>) {
   if (!NICO_WEBHOOK_URL) {
@@ -119,6 +129,15 @@ function agendarReconexao(sb: SupabaseClient) {
   }, 10_000)
 }
 
+function agendarReconexaoForcada(sb: SupabaseClient) {
+  setInterval(() => {
+    console.log('[blacksender-bridge] reconexão forçada por tempo (proteção contra conexão zumbi)')
+    status.ultimaReconexaoForcada = new Date().toISOString()
+    channel?.unsubscribe()
+    subscrever(sb)
+  }, RECONEXAO_FORCADA_INTERVALO_MS)
+}
+
 export async function iniciar() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EMAIL || !PASSWORD) {
     throw new Error('BLACKSENDER_SUPABASE_URL, BLACKSENDER_SUPABASE_ANON_KEY, BLACKSENDER_EMAIL e BLACKSENDER_PASSWORD são obrigatórios')
@@ -130,6 +149,7 @@ export async function iniciar() {
 
   await autenticar(client)
   subscrever(client)
+  agendarReconexaoForcada(client)
 }
 
 export async function parar() {

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 
-// O blacksender-bridge (Render, plano free) hiberna depois de ~15min sem tráfego HTTP — e como
-// ele só recebe tráfego de entrada indiretamente (a conexão dele com o Supabase da Black Sender
-// é de SAÍDA, não gera hit nenhum no Render), sem esse ping ele passa a maior parte do tempo
-// dormindo com o WebSocket do Realtime morto, perdendo lead/tag/conversa que chegam nesse meio
-// tempo (foi exatamente o que aconteceu no primeiro dia no ar — 9 leads reais não foram
-// capturados). Ping a cada 5min, bem abaixo do limiar de 15min de hibernação.
+// Monitoramento externo do blacksender-bridge (Render, plano pago — não hiberna, então isso não
+// é keep-alive de verdade). O bug real que causou perda de leads no primeiro dia no ar foi uma
+// conexão Realtime "zumbi" (WebSocket morre sem avisar o cliente, ver
+// blacksender-bridge/src/realtimeListener.ts — mitigado lá com reconexão forçada periódica).
+// Esse ping aqui só serve pra aparecer nos logs de cron da Vercel caso o bridge fique
+// totalmente inacessível (crash, deploy quebrado).
 export const maxDuration = 30
 
 export async function GET(request: Request) {
