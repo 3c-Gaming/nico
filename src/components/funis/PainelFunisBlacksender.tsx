@@ -21,6 +21,17 @@ function formatMoeda(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+/** buscarCampanhasMeta devolve uma linha por (campanha, dia) — e às vezes mais de uma linha pro
+ * mesmo (campanha, dia) dependendo de como o relatório de origem quebra os dados. Sem agregar por
+ * nome antes de listar, a mesma campanha aparece repetida no seletor (e usar `nome` como key do
+ * React quebra, já que não é único). Mesmo princípio de agregarCampanhasPorNome em
+ * PainelConversasFluxo.tsx (não compartilhado — duplicado de propósito, igual o resto do arquivo). */
+function agregarCampanhasPorNome(campanhas: CampanhaMeta[]): { nome: string; gasto: number }[] {
+  const mapa = new Map<string, number>()
+  for (const c of campanhas) mapa.set(c.nome, (mapa.get(c.nome) ?? 0) + c.gasto)
+  return [...mapa.entries()].map(([nome, gasto]) => ({ nome, gasto })).sort((a, b) => b.gasto - a.gasto)
+}
+
 interface SnapshotHoje {
   leads: number
   registros: number
@@ -63,8 +74,15 @@ function EditorFunilBlacksender({
   const [utm, setUtm] = useState(config?.utm ?? '')
   const [campanhasMeta, setCampanhasMeta] = useState<string[]>(config?.campanhasMeta ?? [])
   const [saving, setSaving] = useState(false)
+  const [buscaCampanha, setBuscaCampanha] = useState('')
 
   const fluxosSelecionaveis = fluxosDisponiveis.filter((f) => !flowIdsJaConfigurados.has(f.id))
+
+  const agregadas = useMemo(() => (campanhas ? agregarCampanhasPorNome(campanhas) : []), [campanhas])
+  const buscaNormalizada = buscaCampanha.trim().toLowerCase()
+  const agregadasFiltradas = buscaNormalizada
+    ? agregadas.filter((c) => c.nome.toLowerCase().includes(buscaNormalizada))
+    : agregadas
 
   function toggleCampanha(nome: string) {
     setCampanhasMeta((prev) => (prev.includes(nome) ? prev.filter((n) => n !== nome) : [...prev, nome]))
@@ -126,33 +144,41 @@ function EditorFunilBlacksender({
         <UtmComboBox value={utm} onChange={setUtm} placeholder="selecione ou digite e Enter para cadastrar" />
       </div>
       <div className="flex items-start gap-2">
-        <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0 pt-1">Campanhas:</span>
-        <div className="flex-1 flex flex-wrap gap-1.5">
-          {!campanhas ? (
-            <span className="text-xs text-[var(--text-muted)]/50 italic">Carregando campanhas do Meta...</span>
-          ) : campanhas.length === 0 ? (
-            <span className="text-xs text-[var(--text-muted)]/50 italic">Nenhuma campanha do Meta hoje</span>
-          ) : (
-            campanhas.map((c) => {
-              const selected = campanhasMeta.includes(c.nome)
-              return (
-                <button
-                  key={c.nome}
-                  type="button"
-                  onClick={() => toggleCampanha(c.nome)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: selected ? 'var(--d1)' : 'var(--bg-elevated)',
-                    border: `1px solid ${selected ? 'var(--d1)' : 'var(--border)'}`,
-                    color: selected ? 'var(--bg-base)' : 'var(--text-muted)',
-                  }}
-                  title={formatMoeda(c.gasto)}
-                >
-                  {c.nome}
-                </button>
-              )
-            })
+        <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0 pt-1">
+          Campanhas{campanhasMeta.length > 0 ? ` (${campanhasMeta.length})` : ''}:
+        </span>
+        <div className="flex-1 space-y-1.5">
+          {campanhas !== null && agregadas.length > 0 && (
+            <input
+              type="text"
+              value={buscaCampanha}
+              onChange={(e) => setBuscaCampanha(e.target.value)}
+              placeholder="Buscar campanha por nome..."
+              className="w-full h-7 px-2 text-xs bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] transition-colors"
+            />
           )}
+          <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded border border-[var(--border)] bg-[var(--bg-elevated)]">
+            {campanhas === null ? (
+              <span className="text-xs text-[var(--text-muted)]/50 italic">Carregando campanhas do Meta...</span>
+            ) : agregadas.length === 0 ? (
+              <span className="text-xs text-[var(--text-muted)]/50 italic">Nenhuma campanha do Meta hoje</span>
+            ) : agregadasFiltradas.length === 0 ? (
+              <span className="text-xs text-[var(--text-muted)]/50 italic">Nenhuma campanha bate com essa busca</span>
+            ) : (
+              agregadasFiltradas.map((c) => (
+                <label key={c.nome} className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={campanhasMeta.includes(c.nome)}
+                    onChange={() => toggleCampanha(c.nome)}
+                    className="shrink-0"
+                  />
+                  <span className="flex-1 truncate text-[var(--text-primary)]" title={c.nome}>{c.nome}</span>
+                  <span className="font-mono text-[var(--text-muted)] shrink-0">{formatMoeda(c.gasto)}</span>
+                </label>
+              ))
+            )}
+          </div>
         </div>
       </div>
       <div className="flex justify-end gap-2 pt-1">
