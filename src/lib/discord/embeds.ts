@@ -277,12 +277,12 @@ export function embedLeadsBlacksender(info: {
   const linhas = [`**Total de Leads:** ${info.totalLeads}`]
   const grafico = barraProporcionalTags(info.estagios)
   if (grafico) linhas.push(grafico)
-  linhas.push(`**REG:** ${info.registros} · **FTD:** ${info.ftds}`)
+  linhas.push(`🧑‍🧒‍🧒**REG:** **${info.registros}** · ✅**FTD:** **${info.ftds}**`)
   linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
   linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
 
   return {
-    title: `📈 Leads — ${info.nome}`,
+    title: `📈 FUNIL — ${info.nome}`,
     description: `${info.tipo === 'funil' ? 'Funil' : 'Número'} · ${dataFmt}`,
     color: info.totalLeads > 0 ? 0x22c55e : 0x64748b,
     fields: [{ name: '​', value: linhas.join('\n'), inline: false }],
