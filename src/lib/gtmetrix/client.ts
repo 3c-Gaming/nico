@@ -110,6 +110,69 @@ export async function preCheckLote(urls: string[]): Promise<GtmetrixPreCheck[]> 
 
 /* ===================== GTMETRIX ===================== */
 
+// GTmetrix limita quantos testes a conta pode ter "pending" ao mesmo tempo — disparar o lote
+// inteiro de uma vez (Promise.all sem limite) estourava esse teto assim que a lista passou de
+// poucas urls, e as excedentes voltavam com "Too many tests pending" (rejeitadas na hora, não é
+// timeout). Duas defesas: submete em lotes pequenos (não todas simultâneas) e, se mesmo assim
+// vier esse erro específico, tenta de novo com espera — normalmente é só o slot enchendo por um
+// instante, não a url em si com problema.
+const SUBMISSAO_CONCORRENCIA = 3
+const SUBMISSAO_PAUSA_ENTRE_LOTES_MS = 4_000
+const SUBMISSAO_TENTATIVAS_MAX = 3
+const SUBMISSAO_PAUSA_RETRY_MS = 8_000
+
+function ehErroDeConcorrencia(motivo: string): boolean {
+  return /too many tests pending/i.test(motivo)
+}
+
+async function submeterTeste(url: string, tentativa = 1): Promise<
+  { ok: true; testId: string } | { ok: false; motivo: string }
+> {
+  try {
+    const resp = await fetch(`${API}/tests`, {
+      method: 'POST',
+      headers: {
+        Authorization: auth(),
+        'Content-Type': 'application/vnd.api+json',
+      },
+      body: JSON.stringify({
+        data: {
+          type: 'test',
+          attributes: {
+            url,
+            location: GTMETRIX_LOCATION,
+            browser: GTMETRIX_BROWSER,
+            simulate_device: GTMETRIX_DEVICE,
+            throttle: GTMETRIX_THROTTLE,
+            report: 'lighthouse',
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    const txt = await resp.text()
+    let json: Record<string, unknown> = {}
+    try {
+      json = JSON.parse(txt)
+    } catch {
+      /* noop */
+    }
+    const data = json.data as { id?: string } | undefined
+    if (data && data.id) return { ok: true, testId: data.id }
+
+    const errs = json.errors as { title?: string; detail?: string }[] | undefined
+    const motivo = (errs && errs[0] && (errs[0].title || errs[0].detail)) || `HTTP ${resp.status}`
+
+    if (ehErroDeConcorrencia(motivo) && tentativa < SUBMISSAO_TENTATIVAS_MAX) {
+      await sleep(SUBMISSAO_PAUSA_RETRY_MS)
+      return submeterTeste(url, tentativa + 1)
+    }
+    return { ok: false, motivo }
+  } catch (e) {
+    return { ok: false, motivo: (e as Error).message }
+  }
+}
+
 export async function iniciarTestesLote(urls: string[]): Promise<{
   pendentes: GtmetrixPendente[]
   falhas: GtmetrixFalha[]
@@ -117,51 +180,17 @@ export async function iniciarTestesLote(urls: string[]): Promise<{
   const pendentes: GtmetrixPendente[] = []
   const falhas: GtmetrixFalha[] = []
 
-  await Promise.all(
-    urls.map(async (url) => {
-      try {
-        const resp = await fetch(`${API}/tests`, {
-          method: 'POST',
-          headers: {
-            Authorization: auth(),
-            'Content-Type': 'application/vnd.api+json',
-          },
-          body: JSON.stringify({
-            data: {
-              type: 'test',
-              attributes: {
-                url,
-                location: GTMETRIX_LOCATION,
-                browser: GTMETRIX_BROWSER,
-                simulate_device: GTMETRIX_DEVICE,
-                throttle: GTMETRIX_THROTTLE,
-                report: 'lighthouse',
-              },
-            },
-          }),
-          signal: AbortSignal.timeout(30_000),
-        })
-        const txt = await resp.text()
-        let json: Record<string, unknown> = {}
-        try {
-          json = JSON.parse(txt)
-        } catch {
-          /* noop */
-        }
-        const data = json.data as { id?: string } | undefined
-        if (data && data.id) {
-          pendentes.push({ url, testId: data.id })
-        } else {
-          const errs = json.errors as { title?: string; detail?: string }[] | undefined
-          const erro =
-            (errs && errs[0] && (errs[0].title || errs[0].detail)) || `HTTP ${resp.status}`
-          falhas.push({ url, motivo: `Não foi possível iniciar o teste (${erro})` })
-        }
-      } catch (e) {
-        falhas.push({ url, motivo: `Falha ao iniciar o teste (${(e as Error).message})` })
-      }
-    }),
-  )
+  for (let i = 0; i < urls.length; i += SUBMISSAO_CONCORRENCIA) {
+    const lote = urls.slice(i, i + SUBMISSAO_CONCORRENCIA)
+    await Promise.all(
+      lote.map(async (url) => {
+        const r = await submeterTeste(url)
+        if (r.ok) pendentes.push({ url, testId: r.testId })
+        else falhas.push({ url, motivo: `Não foi possível iniciar o teste (${r.motivo})` })
+      }),
+    )
+    if (i + SUBMISSAO_CONCORRENCIA < urls.length) await sleep(SUBMISSAO_PAUSA_ENTRE_LOTES_MS)
+  }
 
   return { pendentes, falhas }
 }
