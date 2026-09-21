@@ -64,7 +64,7 @@ interface DadosFluxo {
   execucoes: Execucao[]
 }
 
-interface SnapshotHoje {
+export interface SnapshotHoje {
   leads: number
   registros: number
   ftds: number

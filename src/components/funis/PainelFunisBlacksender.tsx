@@ -281,17 +281,8 @@ function EditorFunilBlacksender({
   )
 }
 
-export function PainelFunisBlacksender({ somentePinados = false }: { somentePinados?: boolean } = {}) {
-  const todosConfigs = useConfigsBlacksender()
-  // Precisa de useMemo: sem isso, um novo array a cada render (quando somentePinados filtra)
-  // muda a identidade de `configs` toda vez, e como ele entra na dependência do efeito de
-  // snapshot abaixo, disparava um loop infinito de fetch (setSnapshots -> re-render -> novo
-  // array -> efeito de novo -> ...).
-  const configs = useMemo(
-    () => (somentePinados ? todosConfigs.filter((c) => c.funil && getState().pinnedFunis.includes(c.funil)) : todosConfigs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todosConfigs, somentePinados],
-  )
+export function PainelFunisBlacksender() {
+  const configs = useConfigsBlacksender()
   const { list: casasList } = useCasasAposta()
   const [fluxosDisponiveis, setFluxosDisponiveis] = useState<BlacksenderFlow[]>([])
   const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
@@ -388,27 +379,24 @@ export function PainelFunisBlacksender({ somentePinados = false }: { somentePina
     setSaveVersion((v) => v + 1)
   }
 
-  if (somentePinados && configs.length === 0) return null
-  if (!somentePinados && configs.length === 0 && fluxosDisponiveis.length === 0) return null
+  if (configs.length === 0 && fluxosDisponiveis.length === 0) return null
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Layers size={16} className="text-[var(--d1)]" />
-          Funis — Black Sender{somentePinados ? ' (fixados)' : ''}
+          Funis — Black Sender
           <span className="text-xs font-normal text-[var(--text-muted)]">{configs.length}</span>
         </h2>
-        {!somentePinados && (
-          <button
-            onClick={() => { setEditingKey(null); setModalAberto(true) }}
-            className="flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: 'var(--d1)' }}
-          >
-            <Plus size={12} />
-            Vincular fluxo
-          </button>
-        )}
+        <button
+          onClick={() => { setEditingKey(null); setModalAberto(true) }}
+          className="flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: 'var(--d1)' }}
+        >
+          <Plus size={12} />
+          Vincular fluxo
+        </button>
       </div>
 
       {configs.length === 0 ? (

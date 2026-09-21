@@ -17,11 +17,12 @@ import { nomeCurto } from '@/lib/resultadoDisparo'
 import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
-import { PainelFunisBlacksender } from '@/components/funis/PainelFunisBlacksender'
 import { CardNumeroBlacksender, type CanalBlacksenderComAtividade } from '@/components/numeros/CardNumeroBlacksender'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
-import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
+import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx, FlowTagConfig } from '@/types'
+import { PainelAnaliseFunilBlacksender, type SnapshotHoje } from '@/components/funis/PainelAnaliseFunilBlacksender'
+import { hojeBrasilISO } from '@/lib/datas'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 const POLL_FUNIL_MS = 30_000
@@ -400,6 +401,10 @@ interface FunilRow {
   bots: FunilBotDetail[]
   tipo: 'traffic' | 'disparo'
   flowsDetalhados: FlowDetalhado[]
+  origem: 'sendpulse' | 'blacksender'
+  // Só preenchido quando origem === 'blacksender' — flowId do fluxo pra buscar a FlowTagConfig
+  // completa na hora de abrir o painel de análise (ver painelBSConfigAtivo).
+  flowIdPrincipal: string | null
 }
 
 export default function HomePage() {
@@ -497,6 +502,40 @@ export default function HomePage() {
     () => canaisBlacksender.filter((c) => pinnedNumeros.includes(c.id)),
     [canaisBlacksender, pinnedNumeros, pinVersion],
   )
+
+  // "Leads hoje" e "Último lead" de funis Black Sender pinados na tabela genérica de
+  // Tráfego/Disparo (funilRows abaixo) — a Black Sender não usa tag/botId como o SendPulse, então
+  // não dá pra reaproveitar contagens/ultimoLeadMap (esses só têm dados de fluxos SendPulse). Um
+  // funil Black Sender nunca roda em mais de um bot (não existe "bot" lá), mas pode em teoria ter
+  // mais de um flowId configurado pro mesmo nome de funil — daí o Record por flowId, somado em
+  // funilRows igual o SendPulse já faz por tag.
+  const [leadsBlacksenderHoje, setLeadsBlacksenderHoje] = useState<Record<string, number>>({})
+  const [ultimoLeadBlacksender, setUltimoLeadBlacksender] = useState<Record<string, string | null>>({})
+  useEffect(() => {
+    const configs = getState().flowTagConfigs
+    const flowIdsBS = pinnedFunis.flatMap((nome) =>
+      Object.values(configs).filter((c) => c.funil === nome && c.origem === 'blacksender').map((c) => c.flowId),
+    )
+    if (flowIdsBS.length === 0) { setLeadsBlacksenderHoje({}); setUltimoLeadBlacksender({}); return }
+    let ativo = true
+    fetch('/api/blacksender/leads-contagem-dia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flowIds: flowIdsBS, data: hojeBrasilISO() }),
+    })
+      .then((r) => (r.ok ? r.json() : { leads: {} }))
+      .then((d) => { if (ativo) setLeadsBlacksenderHoje(d.leads ?? {}) })
+      .catch(() => { if (ativo) setLeadsBlacksenderHoje({}) })
+    Promise.all(
+      flowIdsBS.map((flowId) =>
+        fetch(`/api/blacksender/fluxos/${flowId}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => [flowId, d?.ultimoLeadEm ?? null] as const)
+          .catch(() => [flowId, null] as const),
+      ),
+    ).then((pares) => { if (ativo) setUltimoLeadBlacksender(Object.fromEntries(pares)) })
+    return () => { ativo = false }
+  }, [pinnedFunis, flowTagConfigsVersion])
 
   const disparosPinados = useMemo(() => {
     return pinnedDisparos
@@ -736,6 +775,10 @@ export default function HomePage() {
       const botIds = [...new Set(flows.map(([_, c]) => c.botId))]
       const cache = getState().cacheMetricas[funilNome]
 
+      // Um funil Black Sender nunca mistura com SendPulse (origens diferentes de dado, nem
+      // faria sentido) — se ALGUM flow do grupo é blacksender, todos são.
+      const origemBS = flows.length > 0 && flows.every(([, c]) => c.origem === 'blacksender')
+
       // Um fluxo acumula várias tags conforme o lead avança na jornada (ver FlowTagEditor) — só a
       // primeira (tagDeEntradaDoFluxo) representa leads únicos que ENTRARAM; as demais (FC_, CTA_,
       // COM_ etc.) são o MESMO lead progredindo, não gente nova. Somar todas as tags do funil (como
@@ -743,28 +786,41 @@ export default function HomePage() {
       // com poucos leads mas várias tags apareciam com números bem maiores que o real (e, por
       // coincidência de dados, até iguais entre funis diferentes). Soma só a tag de entrada de cada
       // fluxo do grupo (>1 fluxo quando o mesmo funil roda em mais de um bot).
-      const leadsHoje = liveLeadsLoaded
-        ? flows.reduce((acc, [, c]) => {
-            const tagEntrada = tagDeEntradaDoFluxo(c.tags)
-            return acc + (tagEntrada ? (contagens[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
-          }, 0)
-        : (cache?.leadsHoje ?? 0)
+      // Black Sender não tem tag/botId — leads vêm de leadsBlacksenderHoje/ultimoLeadBlacksender
+      // (contados por flowId direto, ver efeito acima), não desse mecanismo de tag do SendPulse.
+      const leadsHoje = origemBS
+        ? flows.reduce((acc, [flowId]) => acc + (leadsBlacksenderHoje[flowId] ?? 0), 0)
+        : liveLeadsLoaded
+          ? flows.reduce((acc, [, c]) => {
+              const tagEntrada = tagDeEntradaDoFluxo(c.tags)
+              return acc + (tagEntrada ? (contagens[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
+            }, 0)
+          : (cache?.leadsHoje ?? 0)
       // Sem dado ao vivo nem cache pra cair como fallback: mostrar "0" aqui daria a
       // impressão de que já sabemos que é zero, quando na verdade ainda não carregou.
-      const leadsHojeCarregando = !liveLeadsLoaded && cache?.leadsHoje == null && tags.length > 0
-      const leadsTotal = liveLeadsLoaded
-        ? flows.reduce((acc, [, c]) => {
-            const tagEntrada = tagDeEntradaDoFluxo(c.tags)
-            return acc + (tagEntrada ? (contagensTotal[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
-          }, 0)
-        : (cache?.totalLeads ?? 0)
-      const ultimoLeadAt = flows.reduce<string | null>((best, [, c]) => {
-        for (const t of c.tags ?? []) {
-          const ts = ultimoLeadMap[chaveTagBot(c.botId, t)] ?? null
-          if (ts && (!best || ts > best)) best = ts
-        }
-        return best
-      }, null)
+      const leadsHojeCarregando = !origemBS && !liveLeadsLoaded && cache?.leadsHoje == null && tags.length > 0
+      // Black Sender não tem um "total período" separado de hoje ainda (mesma limitação do painel
+      // de análise dedicado, ver PainelAnaliseFunilBlacksender) — usa o mesmo valor de leadsHoje.
+      const leadsTotal = origemBS
+        ? leadsHoje
+        : liveLeadsLoaded
+          ? flows.reduce((acc, [, c]) => {
+              const tagEntrada = tagDeEntradaDoFluxo(c.tags)
+              return acc + (tagEntrada ? (contagensTotal[chaveTagBot(c.botId, tagEntrada)] ?? 0) : 0)
+            }, 0)
+          : (cache?.totalLeads ?? 0)
+      const ultimoLeadAt = origemBS
+        ? flows.reduce<string | null>((best, [flowId]) => {
+            const ts = ultimoLeadBlacksender[flowId] ?? null
+            return ts && (!best || ts > best) ? ts : best
+          }, null)
+        : flows.reduce<string | null>((best, [, c]) => {
+            for (const t of c.tags ?? []) {
+              const ts = ultimoLeadMap[chaveTagBot(c.botId, t)] ?? null
+              if (ts && (!best || ts > best)) best = ts
+            }
+            return best
+          }, null)
       // Um flow por (botId, flowId) desse grupo de funil — usado pra abrir o painel de detalhes
       // (Conversas ao vivo) escolhendo o fluxo mais ativo quando o funil roda em mais de um bot.
       const flowsDetalhados: FlowDetalhado[] = flows.map(([flowId, c]) => {
@@ -775,7 +831,9 @@ export default function HomePage() {
           tags: c.tags ?? [],
           utm: c.utm ?? null,
           utmsExtras: c.utmsExtras ?? [],
-          leadsHoje: tagEntradaFluxo ? (contagens[chaveTagBot(c.botId, tagEntradaFluxo)] ?? 0) : 0,
+          leadsHoje: c.origem === 'blacksender'
+            ? (leadsBlacksenderHoje[flowId] ?? 0)
+            : (tagEntradaFluxo ? (contagens[chaveTagBot(c.botId, tagEntradaFluxo)] ?? 0) : 0),
         }
       })
 
@@ -958,9 +1016,9 @@ export default function HomePage() {
         }
       })
 
-      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo, flowsDetalhados }
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo, leadsBlacksenderHoje, ultimoLeadBlacksender])
 
   // Recalculado a cada render a partir do funilRows atual (não um snapshot capturado no clique) —
   // quando o funil roda em mais de um bot, escolhe o fluxo com mais leads hoje pra abrir o painel.
@@ -969,7 +1027,10 @@ export default function HomePage() {
     ? painelFunilRow.flowsDetalhados.reduce((a, b) => (b.leadsHoje > a.leadsHoje ? b : a))
     : null
   const painelTagEntrada = painelFlow ? tagDeEntradaDoFluxo(painelFlow.tags) ?? null : null
-  const painelProps = painelFunilRow && painelFlow ? {
+  // Funil Black Sender abre PainelAnaliseFunilBlacksender (ver mais abaixo), não esse painel —
+  // sem essa exclusão os dois tentariam abrir juntos (painelFlow/painelProps não distinguem
+  // origem, só flowsDetalhados, que Black Sender também preenche).
+  const painelProps = painelFunilRow && painelFunilRow.origem !== 'blacksender' && painelFlow ? {
     botId: painelFlow.botId,
     flowId: painelFlow.flowId,
     tag: painelTagEntrada,
@@ -988,6 +1049,24 @@ export default function HomePage() {
     dataInicio: trackingData,
     utm: painelFlow.utm,
     utmsExtras: painelFlow.utmsExtras,
+  } : null
+
+  // Mesmo padrão de painelProps acima (valor derivado direto, sem state/effect) — painelFunilRow
+  // já é recalculado a cada render a partir de funilRows, então não precisa de sincronização à
+  // parte. Painel some sem animação de saída quando fecha (painelFunilRow zera na mesma hora que
+  // aberto vira false) — troca aceitável por não introduzir outro efeito com setState.
+  const painelBSConfigAtivo = painelFunilRow?.origem === 'blacksender' && painelFunilRow.flowIdPrincipal
+    ? getState().flowTagConfigs[painelFunilRow.flowIdPrincipal] ?? null
+    : null
+  const painelBSNomeFluxoAtivo = painelFunilRow?.origem === 'blacksender' ? painelFunilRow.funilNome : ''
+  const painelBSSnapshotAtivo: SnapshotHoje | null = painelFunilRow?.origem === 'blacksender' ? {
+    leads: painelFunilRow.leadsHoje,
+    registros: painelFunilRow.registros,
+    ftds: painelFunilRow.ftds,
+    gasto: painelFunilRow.gastoMeta,
+    custoEntrada: painelFunilRow.custoEntradaMeta,
+    custoRegistro: painelFunilRow.custoRegMeta,
+    custoFtd: painelFunilRow.custoFtdMeta,
   } : null
 
   const temPinos = pinnedNumeros.length > 0 || pinnedFunis.length > 0 || disparosPinados.length > 0
@@ -1804,7 +1883,6 @@ export default function HomePage() {
           </>
         )}
 
-        <PainelFunisBlacksender somentePinados />
       </div>
 
       <ModalLinkDaxx
@@ -1835,6 +1913,14 @@ export default function HomePage() {
         dataInicio={painelProps?.dataInicio ?? trackingData}
         utm={painelProps?.utm ?? null}
         utmsExtras={painelProps?.utmsExtras ?? []}
+      />
+
+      <PainelAnaliseFunilBlacksender
+        aberto={painelFunilRow?.origem === 'blacksender'}
+        config={painelBSConfigAtivo}
+        nomeFluxo={painelBSNomeFluxoAtivo}
+        snapshot={painelBSSnapshotAtivo}
+        onClose={() => setPainelFunilNome(null)}
       />
     </>
   )
