@@ -22,7 +22,9 @@ const SUPABASE_URL = process.env.BLACKSENDER_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = process.env.BLACKSENDER_SUPABASE_ANON_KEY || ''
 const EMAIL = process.env.BLACKSENDER_EMAIL || ''
 const PASSWORD = process.env.BLACKSENDER_PASSWORD || ''
-const NICO_WEBHOOK_URL = process.env.NICO_WEBHOOK_URL || ''
+// Sem isso, uma barra no final (bem fácil de colar sem querer no dashboard do Render) vira
+// URL duplicada ("...app//api/webhooks/...") na hora de montar o fetch abaixo.
+const NICO_WEBHOOK_URL = (process.env.NICO_WEBHOOK_URL || '').replace(/\/+$/, '')
 
 // Tabelas do Supabase do Black Sender que a gente espelha, e o nome de evento que cada uma vira
 // no nosso webhook (ver estruturar() em src/app/api/webhooks/blacksender/route.ts, no repo
@@ -71,6 +73,8 @@ async function encaminhar(evento: string, payload: Record<string, unknown>) {
     })
     if (!res.ok) {
       console.error(`[blacksender-bridge] webhook respondeu ${res.status} pro evento ${evento}`)
+    } else {
+      console.log(`[blacksender-bridge] encaminhado com sucesso: ${evento}`)
     }
     status.ultimoEvento = new Date().toISOString()
   } catch (err) {
@@ -97,6 +101,7 @@ function subscrever(sb: SupabaseClient) {
       { event: '*', schema: 'public', table: tabela },
       (payload) => {
         const evento = EVENTO_POR_TABELA[tabela]
+        console.log(`[blacksender-bridge] evento recebido do Realtime: ${tabela} ${payload.eventType} id=${(payload.new as { id?: string } | null)?.id ?? (payload.old as { id?: string } | null)?.id}`)
         void encaminhar(evento, {
           tabela,
           operacao: payload.eventType,
