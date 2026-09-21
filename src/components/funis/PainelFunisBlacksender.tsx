@@ -93,6 +93,10 @@ function EditorFunilBlacksender({
   const [flowId, setFlowId] = useState(config?.flowId ?? '')
   const [funil, setFunil] = useState(config?.funil ?? '')
   const [utm, setUtm] = useState(config?.utm ?? '')
+  // Sem essa escolha, FlowTagConfig.tipo fica undefined e cai no default 'disparo' (ver
+  // src/app/page.tsx) — todo funil Black Sender ia parar na seção "Disparo" da home, mesmo sendo
+  // tráfego de verdade (fluxo disparado por keyword/clique em anúncio, não blast em massa).
+  const [tipo, setTipo] = useState<'traffic' | 'disparo'>(config?.tipo ?? 'traffic')
   const [casas, setCasas] = useState<string[]>(config?.casas ?? [])
   const [campanhasMeta, setCampanhasMeta] = useState<string[]>(config?.campanhasMeta ?? [])
   const [saving, setSaving] = useState(false)
@@ -132,6 +136,7 @@ function EditorFunilBlacksender({
       funil: funil || null,
       utm: utm || null,
       tags: [],
+      tipo,
       casas,
       campanhasMeta,
     })
@@ -169,6 +174,25 @@ function EditorFunilBlacksender({
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0">UTM/PID:</span>
         <UtmComboBox value={utm} onChange={setUtm} placeholder="selecione ou digite e Enter para cadastrar" />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0">Tipo:</span>
+        <div className="flex items-center gap-1 bg-[var(--bg-base)] border border-[var(--border)] rounded p-0.5">
+          <button
+            type="button"
+            onClick={() => setTipo('disparo')}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${tipo === 'disparo' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            Disparo
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipo('traffic')}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${tipo === 'traffic' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            Tráfego
+          </button>
+        </div>
       </div>
       <div className="flex items-start gap-2">
         <span className="text-xs font-medium text-[var(--text-muted)] w-20 shrink-0 pt-1">Casas:</span>

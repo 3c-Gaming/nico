@@ -726,8 +726,12 @@ export default function HomePage() {
     const funisPorCampanha = contarFunisPorCampanha(Object.values(configs))
 
     return pinnedFunis.map((funilNome) => {
+      // flowIdsValidos só cobre fluxos do SendPulse (fluxosMap vem da API deles) — sem a exceção
+      // pra origem 'blacksender', todo funil Black Sender ficava de fora daqui (flowId nunca bate
+      // com um id do SendPulse), `flows` vinha vazio e `tipo` caía sempre em 'disparo' por
+      // default (ver abaixo), ignorando o que o usuário configurou em FlowTagConfig.tipo.
       const flowIdsValidos = new Set(Object.values(fluxosMap).flat().map(f => f.id))
-      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome && flowIdsValidos.has(c.flowId))
+      const flows = Object.entries(configs).filter(([_, c]) => c.funil === funilNome && (c.origem === 'blacksender' || flowIdsValidos.has(c.flowId)))
       const tags = [...new Set(flows.flatMap(([_, c]) => c.tags ?? []))]
       const botIds = [...new Set(flows.map(([_, c]) => c.botId))]
       const cache = getState().cacheMetricas[funilNome]
