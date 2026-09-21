@@ -88,7 +88,31 @@ function formatarVariaveisResumo(variaveis: Record<string, unknown>): string {
     .join(' · ')
 }
 
-function mapMensagemBS(m: BlacksenderMensagem): MensagemFluxo {
+// A Black Sender não marca a mensagem de resposta como "clique de botão" — o que ela expõe é os
+// botões OFERECIDOS na mensagem outbound (bruto.interactive.buttons, ou .cta.label pra botão de
+// link único). O clique em si só se manifesta de dois jeitos indiretos: o conteúdo da próxima
+// mensagem inbound é exatamente o texto do botão, e a tag correspondente àquele botão é aplicada
+// no lead (ver estagiosTag/calcularEstagiosTag — tags só entram assim, nunca por texto livre).
+// Sem timeline por tag (flow_run guarda só o snapshot atual, não quando cada uma foi aplicada),
+// o sinal confiável e verificável é o primeiro: compara o texto da resposta com os botões
+// pendentes da última outbound. A tag aplicada é o que confirma, no funil de conversão da
+// jornada, que esse clique realmente avançou o lead — não dá pra amarrar a tag exata a essa
+// mensagem específica sem essa timeline.
+function extrairBotoesOferecidos(bruto: unknown): string[] {
+  if (!bruto || typeof bruto !== 'object') return []
+  const interactive = (bruto as { interactive?: unknown }).interactive
+  if (!interactive || typeof interactive !== 'object') return []
+  const botoes = (interactive as { buttons?: unknown }).buttons
+  if (Array.isArray(botoes)) return botoes.filter((b): b is string => typeof b === 'string')
+  const cta = (interactive as { cta?: unknown }).cta
+  const label = cta && typeof cta === 'object' ? (cta as { label?: unknown }).label : undefined
+  return typeof label === 'string' ? [label] : []
+}
+
+function mapMensagemBS(m: BlacksenderMensagem, botoesOferecidos?: string[], botaoClicado?: string): MensagemFluxo {
+  if (botaoClicado) {
+    return { id: m.id, direcao: 'entrada', criadoEm: m.criadoEmOrigem ?? m.recebidoEm, tipo: 'botao_clicado', botaoTitulo: botaoClicado }
+  }
   const tipo: MensagemFluxo['tipo'] =
     m.midiaTipo === 'image' ? 'imagem'
       : m.midiaTipo === 'document' ? 'documento'
@@ -102,7 +126,25 @@ function mapMensagemBS(m: BlacksenderMensagem): MensagemFluxo {
     tipo,
     texto: m.conteudo ?? undefined,
     imagemUrl: tipo === 'imagem' ? (m.midiaUrl ?? undefined) : undefined,
+    botoesOferecidos: botoesOferecidos && botoesOferecidos.length > 0 ? botoesOferecidos : undefined,
   }
+}
+
+/** Percorre a conversa inteira (não mensagem a mensagem) porque decidir se um inbound foi clique
+ * de botão depende do que a mensagem outbound ANTERIOR ofereceu. */
+function mapMensagensBS(mensagens: BlacksenderMensagem[]): MensagemFluxo[] {
+  let botoesPendentes: string[] = []
+  return mensagens.map((m) => {
+    if (m.direcao === 'outbound') {
+      const botoesOferecidos = extrairBotoesOferecidos(m.bruto)
+      botoesPendentes = botoesOferecidos
+      return mapMensagemBS(m, botoesOferecidos)
+    }
+    const conteudoNormalizado = (m.conteudo ?? '').trim().toLowerCase()
+    const botaoClicado = botoesPendentes.find((b) => b.trim().toLowerCase() === conteudoNormalizado)
+    botoesPendentes = []
+    return mapMensagemBS(m, undefined, botaoClicado)
+  })
 }
 
 export function PainelAnaliseFunilBlacksender({
@@ -224,7 +266,7 @@ export function PainelAnaliseFunilBlacksender({
     fetch(`/api/blacksender/leads/${contactId}/conversa`)
       .then((r) => (r.ok ? r.json() : { mensagens: [] }))
       .then((d) => {
-        const mensagens = ((d.mensagens ?? []) as BlacksenderMensagem[]).map(mapMensagemBS)
+        const mensagens = mapMensagensBS((d.mensagens ?? []) as BlacksenderMensagem[])
         setMensagensPorLead((prev) => ({ ...prev, [contactId]: mensagens }))
       })
       .catch(() => setMensagensPorLead((prev) => ({ ...prev, [contactId]: [] })))
