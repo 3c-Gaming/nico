@@ -194,9 +194,29 @@ export function embedRelatorio(numeros: { id: string; nome: string; numero: stri
   return embed
 }
 
-/** Resposta do /leads — formato fixo pedido: Total de Leads, uma linha por tag da jornada,
- * horário do último lead e o total de entradas somando todos os funis que rodam nesse mesmo
- * número (ver handleLeads pra como cada campo é calculado). */
+/** Mini gráfico de barras proporcional das tags, em texto monoespaçado (bloco de código) — Discord
+ * não aceita gerar imagem dentro de um embed sem subir arquivo (multipart, que sendChannelMessage/
+ * replyToInteraction não fazem hoje), então usa blocos Unicode (█/░) alinhados num ```code block```,
+ * mesma ideia visual das barras de "Execuções por status" do painel web (largura proporcional ao
+ * maior valor), só que em texto puro. */
+function barraProporcionalTags(estagios: { tag: string; contagem: number }[]): string {
+  if (estagios.length === 0) return ''
+  const LARGURA_BARRA = 14
+  const max = Math.max(...estagios.map((e) => e.contagem), 1)
+  const maiorNome = Math.max(...estagios.map((e) => e.tag.length))
+  const linhas = estagios.map((e) => {
+    // Pelo menos 1 bloco preenchido quando contagem > 0 — igual TAMANHO_MINIMO_PCT do
+    // FunilConversaoChart, deixa claro que a etapa teve gente mesmo quando é bem menor que o pico.
+    const preenchido = e.contagem > 0 ? Math.max(1, Math.round((e.contagem / max) * LARGURA_BARRA)) : 0
+    const barra = '█'.repeat(preenchido) + '░'.repeat(LARGURA_BARRA - preenchido)
+    return `${e.tag.padEnd(maiorNome, ' ')} ${barra} ${String(e.contagem).padStart(3, ' ')}`
+  })
+  return '```\n' + linhas.join('\n') + '\n```'
+}
+
+/** Resposta do /leads — Total de Leads, mini gráfico de barras por tag da jornada, horário do
+ * último lead e o total de entradas somando todos os funis que rodam nesse mesmo número (ver
+ * handleLeads pra como cada campo é calculado). */
 export function embedLeadsBlacksender(info: {
   nome: string
   tipo: 'funil' | 'numero'
@@ -212,7 +232,8 @@ export function embedLeadsBlacksender(info: {
     : null
 
   const linhas = [`**Total de Leads:** ${info.totalLeads}`]
-  for (const e of info.estagios) linhas.push(`**LEADS ${e.tag}:** ${e.contagem}`)
+  const grafico = barraProporcionalTags(info.estagios)
+  if (grafico) linhas.push(grafico)
   linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
   linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
 
