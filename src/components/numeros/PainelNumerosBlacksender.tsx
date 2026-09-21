@@ -6,17 +6,19 @@
 // SendPulse. "Teste" de saúde aqui não precisa do esquema de bot-test (mandar ping e esperar
 // resposta) — já temos a última mensagem que o PRÓPRIO número mandou (outbound), então "tá vivo"
 // = mandou mensagem recentemente. Editar o número em si continua sendo no painel da Black Sender.
+//
+// Fixar/desafixar mostra o número no grid "Números Em Atividade" da home, junto com os bots
+// SendPulse (ver CardNumeroBlacksender) — não numa seção própria aqui.
 
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import { Layers, Pin } from 'lucide-react'
 import { getState, togglePinNumero } from '@/lib/store'
 import type { BlacksenderCanal } from '@/types'
 
 // getState().pinnedNumeros é mutado in-place (push/splice, ver togglePinNumero) — a referência do
-// array nunca muda, só o conteúdo. Snapshot do useSyncExternalStore precisa ser um valor
-// primitivo (aqui, a string junta) pra React detectar a mudança via Object.is; devolver o array
-// cru nunca dispara re-render nenhum, mesmo com o conteúdo diferente (mesmo princípio já usado
-// pro pinnedFunis em PainelFunisBlacksender.tsx).
+// array nunca muda, só o conteúdo, então o snapshot do useSyncExternalStore precisa ser um valor
+// primitivo (aqui, a string junta) pra React notar a mudança e atualizar a cor do ícone do pin
+// assim que clica, sem precisar de reload.
 function usePinnedNumerosChave(): string {
   return useSyncExternalStore(
     (cb) => { window.addEventListener('nico:state-changed', cb); return () => window.removeEventListener('nico:state-changed', cb) },
@@ -79,10 +81,8 @@ function UltimaMensagemEnviada({ dado }: { dado: CanalComAtividade['ultimaMensag
   )
 }
 
-export function PainelNumerosBlacksender({ somentePinados = false }: { somentePinados?: boolean } = {}) {
+export function PainelNumerosBlacksender() {
   const [canais, setCanais] = useState<CanalComAtividade[] | null>(null)
-  const pinnedChave = usePinnedNumerosChave()
-  const pinnedNumeros = getState().pinnedNumeros
 
   useEffect(() => {
     fetch('/api/blacksender/canais')
@@ -91,22 +91,18 @@ export function PainelNumerosBlacksender({ somentePinados = false }: { somentePi
       .catch(() => setCanais([]))
   }, [])
 
-  const visiveis = useMemo(
-    () => (somentePinados ? (canais ?? []).filter((c) => pinnedNumeros.includes(c.id)) : canais),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canais, somentePinados, pinnedChave],
-  )
+  usePinnedNumerosChave()
+  const pinnedNumeros = getState().pinnedNumeros
 
-  if (somentePinados && (visiveis === null || visiveis.length === 0)) return null
-  if (!somentePinados && canais !== null && canais.length === 0) return null
+  if (canais !== null && canais.length === 0) return null
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Layers size={16} className="text-[var(--d1)]" />
-          Números — Black Sender{somentePinados ? ' (fixados)' : ''}
-          {visiveis && <span className="text-xs font-normal text-[var(--text-muted)]">{visiveis.length}</span>}
+          Números — Black Sender
+          {canais && <span className="text-xs font-normal text-[var(--text-muted)]">{canais.length}</span>}
         </h2>
       </div>
 
@@ -123,12 +119,12 @@ export function PainelNumerosBlacksender({ somentePinados = false }: { somentePi
             </tr>
           </thead>
           <tbody>
-            {visiveis === null ? (
+            {canais === null ? (
               <tr>
                 <td colSpan={6} className="py-6 text-center text-xs text-[var(--text-muted)]">Carregando...</td>
               </tr>
             ) : (
-              visiveis.map((c) => {
+              canais.map((c) => {
                 const pinado = pinnedNumeros.includes(c.id)
                 return (
                   <tr key={c.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">

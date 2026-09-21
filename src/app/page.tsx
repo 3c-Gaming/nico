@@ -18,7 +18,7 @@ import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import { PainelFunisBlacksender } from '@/components/funis/PainelFunisBlacksender'
-import { PainelNumerosBlacksender } from '@/components/numeros/PainelNumerosBlacksender'
+import { CardNumeroBlacksender, type CanalBlacksenderComAtividade } from '@/components/numeros/CardNumeroBlacksender'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
@@ -482,6 +482,21 @@ export default function HomePage() {
       // Ativos sempre no topo, independente da conta.
       .sort((a, b) => (a.numero.status === 'ativo' ? 0 : 1) - (b.numero.status === 'ativo' ? 0 : 1))
   }, [monitoramento?.numeros, pinnedNumeros, pinVersion])
+
+  // Números (canais WhatsApp) da Black Sender — mesmo pinnedNumeros dos bots SendPulse (o pin é
+  // genérico por id, ver togglePinNumero), só entram no MESMO grid de "Números Em Atividade" em
+  // vez de uma seção separada, ver CardNumeroBlacksender.
+  const [canaisBlacksender, setCanaisBlacksender] = useState<CanalBlacksenderComAtividade[]>([])
+  useEffect(() => {
+    fetch('/api/blacksender/canais')
+      .then((r) => (r.ok ? r.json() : { canais: [] }))
+      .then((d) => setCanaisBlacksender(d.canais ?? []))
+      .catch(() => setCanaisBlacksender([]))
+  }, [])
+  const canaisBlacksenderPinados = useMemo(
+    () => canaisBlacksender.filter((c) => pinnedNumeros.includes(c.id)),
+    [canaisBlacksender, pinnedNumeros, pinVersion],
+  )
 
   const disparosPinados = useMemo(() => {
     return pinnedDisparos
@@ -1527,11 +1542,12 @@ export default function HomePage() {
                   </div>
                 </div>
               ))}
+              {canaisBlacksenderPinados.map((canal) => (
+                <CardNumeroBlacksender key={canal.id} canal={canal} />
+              ))}
             </div>
           </section>
         )}
-
-        <PainelNumerosBlacksender somentePinados />
 
         {disparosPinados.length > 0 && (
           <section>
