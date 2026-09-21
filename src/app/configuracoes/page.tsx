@@ -671,7 +671,7 @@ export default function ConfiguracoesPage() {
       <div className="max-w-2xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)]">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">GTmetrix — Páginas monitoradas</h2>
         <p className="text-xs text-[var(--text-muted)] mb-4">
-          Páginas testadas pelo cron do GTmetrix (1x/h) e pelo <code>/gtmetrix-lista</code> no Discord.
+          Páginas testadas pelo cron do GTmetrix (2x/dia, às 10h e às 18h) e pelo <code>/gtmetrix-lista</code> no Discord.
           Cada página gasta 1 crédito GTmetrix por rodada.
         </p>
 

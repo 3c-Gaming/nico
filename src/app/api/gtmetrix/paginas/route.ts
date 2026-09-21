@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
 
-const MAX_URLS = 20
-
 function normalizar(entrada: unknown): string | null {
   if (typeof entrada !== 'string') return null
   let u = entrada.trim()
@@ -48,13 +46,6 @@ export async function PUT(request: Request) {
         { status: 400 },
       )
     }
-    if (validas.length > MAX_URLS) {
-      return NextResponse.json(
-        { error: `Máximo de ${MAX_URLS} páginas (cada rodada gasta 1 crédito GTmetrix por página).` },
-        { status: 400 },
-      )
-    }
-
     const salvo = await salvarGtmetrixUrls(validas)
     return NextResponse.json({ urls: salvo, configurado: true })
   } catch (err) {

@@ -35,7 +35,11 @@
     },
     {
       "path": "/api/cron/gtmetrix",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/gtmetrix",
+      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/cron/funil-metricas-snapshot",

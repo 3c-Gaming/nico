@@ -43,11 +43,10 @@ export const RESERVA_CREDITOS = 5 // deixa isso sobrando pra testes manuais
 export const POLL_INTERVALO_MS = 12_000
 export const POLL_MAX_SEGUNDOS = 240
 
-/* Cadência do cron. O Vercel dispara de hora em hora (vercel.json), mas a rota só executa
- * de verdade a cada N horas cheias de Brasília, dentro da janela diurna. Subir esse número
- * = menos rodadas = menos crédito. Hoje: 08h, 12h, 16h, 20h (4x/dia). */
-export const GTMETRIX_INTERVALO_HORAS = 4
-export const GTMETRIX_JANELA_INICIO = 6   // hora de Brasília
-export const GTMETRIX_JANELA_FIM = 23     // hora de Brasília (inclusive)
+/* Cadência do cron. O Vercel dispara exatamente nesses horários (vercel.json, dois crons
+ * separados já convertidos pra UTC) — a rota só confere de novo por segurança (reinvocação
+ * manual, retry do Vercel), não faz mais o cálculo de janela/intervalo de antes. 2x/dia: 10h e
+ * 18h de Brasília. */
+export const GTMETRIX_HORAS_RODADA = [10, 18] as const
 
 export const PRECHECK_TIMEOUT_MS = 15_000
