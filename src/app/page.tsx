@@ -23,6 +23,7 @@ import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
 import { PainelAnaliseFunilBlacksender, type SnapshotHoje } from '@/components/funis/PainelAnaliseFunilBlacksender'
 import { hojeBrasilISO } from '@/lib/datas'
+import { canalDoFluxo } from '@/lib/blacksender/jornada'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 const POLL_FUNIL_MS = 30_000
@@ -516,12 +517,15 @@ export default function HomePage() {
   // funilRows igual o SendPulse já faz por tag.
   const [leadsBlacksenderHoje, setLeadsBlacksenderHoje] = useState<Record<string, number>>({})
   const [ultimoLeadBlacksender, setUltimoLeadBlacksender] = useState<Record<string, string | null>>({})
+  // channel_id (número WhatsApp) de cada fluxo, pra coluna "Bots" mostrar o número do canal em
+  // vez de um bot SendPulse (que não existe pra Black Sender) — ver canalDoFluxo.
+  const [canalIdPorFlowBS, setCanalIdPorFlowBS] = useState<Record<string, string | null>>({})
   useEffect(() => {
     const configs = getState().flowTagConfigs
     const flowIdsBS = pinnedFunis.flatMap((nome) =>
       Object.values(configs).filter((c) => c.funil === nome && c.origem === 'blacksender').map((c) => c.flowId),
     )
-    if (flowIdsBS.length === 0) { setLeadsBlacksenderHoje({}); setUltimoLeadBlacksender({}); return }
+    if (flowIdsBS.length === 0) { setLeadsBlacksenderHoje({}); setUltimoLeadBlacksender({}); setCanalIdPorFlowBS({}); return }
     let ativo = true
     fetch('/api/blacksender/leads-contagem-dia', {
       method: 'POST',
@@ -535,10 +539,14 @@ export default function HomePage() {
       flowIdsBS.map((flowId) =>
         fetch(`/api/blacksender/fluxos/${flowId}`)
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => [flowId, d?.ultimoLeadEm ?? null] as const)
-          .catch(() => [flowId, null] as const),
+          .then((d) => [flowId, d?.ultimoLeadEm ?? null, canalDoFluxo(d?.execucoes ?? [])] as const)
+          .catch(() => [flowId, null, null] as const),
       ),
-    ).then((pares) => { if (ativo) setUltimoLeadBlacksender(Object.fromEntries(pares)) })
+    ).then((tuplas) => {
+      if (!ativo) return
+      setUltimoLeadBlacksender(Object.fromEntries(tuplas.map(([flowId, ultimoLead]) => [flowId, ultimoLead])))
+      setCanalIdPorFlowBS(Object.fromEntries(tuplas.map(([flowId, , canalId]) => [flowId, canalId])))
+    })
     return () => { ativo = false }
   }, [pinnedFunis, flowTagConfigsVersion])
 
@@ -846,10 +854,21 @@ export default function HomePage() {
       const flowTipos = flows.map(([_, c]) => c.tipo ?? 'disparo')
       const tipo = flowTipos.includes('traffic') ? 'traffic' as const : 'disparo' as const
 
-      const botNomes = [...new Set(botIds.map((botId) => {
-        const found = monitoramento?.numeros.find((n) => n.numero.id === botId)
-        return found?.numero.numero ?? botId
-      }))]
+      // WhatsApp mostra o número (identificador que faz sentido ali); Telegram mostra o nome do
+      // bot (numero.numero seria o @username, menos legível que o nome cadastrado). Funil Black
+      // Sender não tem botId (é sempre WhatsApp, mas outro canal — mostra o número do canal, via
+      // canalIdPorFlowBS/canaisBlacksender, ver efeito acima).
+      const botNomes = origemBS
+        ? [...new Set(flows.map(([flowId]) => {
+            const canalId = canalIdPorFlowBS[flowId]
+            const canal = canalId ? canaisBlacksender.find((c) => c.id === canalId) : undefined
+            return canal?.telefone ?? null
+          }).filter((v): v is string => !!v))]
+        : [...new Set(botIds.map((botId) => {
+            const found = monitoramento?.numeros.find((n) => n.numero.id === botId)
+            if (!found) return botId
+            return found.numero.canal === 'telegram' ? found.numero.nome : found.numero.numero
+          }))]
 
       const utms = [...new Set(flows.flatMap(([_, c]) => utmsDoFluxo(c)))]
       const utm = utms.length > 0 ? utms.join(', ') : ''
@@ -1037,7 +1056,7 @@ export default function HomePage() {
 
       return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, lucroFtd, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
     })
-  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo, leadsBlacksenderHoje, ultimoLeadBlacksender])
+  }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo, leadsBlacksenderHoje, ultimoLeadBlacksender, canalIdPorFlowBS, canaisBlacksender])
 
   // Recalculado a cada render a partir do funilRows atual (não um snapshot capturado no clique) —
   // quando o funil roda em mais de um bot, escolhe o fluxo com mais leads hoje pra abrir o painel.
