@@ -267,6 +267,7 @@ export function embedLeadsBlacksender(info: {
   estagios: { tag: string; contagem: number }[]
   ultimoLeadEm: string | null
   totalEntradasNoNumero: number
+  origem?: 'blacksender' | 'sendpulse'
 }): DiscordEmbed {
   const dataFmt = new Date(`${info.data}T12:00:00`).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
   const ultimoLeadFmt = info.ultimoLeadEm
@@ -285,7 +286,7 @@ export function embedLeadsBlacksender(info: {
     description: `${info.tipo === 'funil' ? 'Funil' : 'Número'} · ${dataFmt}`,
     color: info.totalLeads > 0 ? 0x22c55e : 0x64748b,
     fields: [{ name: '​', value: linhas.join('\n'), inline: false }],
-    footer: { text: 'Nico Bot · Black Sender' },
+    footer: { text: `Nico Bot · ${info.origem === 'sendpulse' ? 'SendPulse' : 'Black Sender'}` },
     timestamp: new Date().toISOString(),
   }
 }

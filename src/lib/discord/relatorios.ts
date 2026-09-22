@@ -4,6 +4,7 @@
 
 import { hojeBrasilISO } from '@/lib/datas'
 import { calcularRelatorioFunilBlacksender } from '@/lib/blacksender/relatorio'
+import { calcularRelatorioFunilSendpulse } from '@/lib/sendpulse/relatorio'
 import { canalEstaBanido } from './notify-canal-banido'
 import { embedRelatorio, embedLeadsBlacksender, type DiscordEmbed } from './embeds'
 
@@ -41,19 +42,30 @@ export async function montarRelatorioNumeros(): Promise<DiscordEmbed> {
   return embedRelatorio(numeros, fluxosPorBot, canaisComSaude)
 }
 
-/** Um embed por funil Black Sender pinado, no mesmo formato do /leads pra "hoje" — funis
- * SendPulse pinados ficam de fora por enquanto (mesmo escopo decidido pro /leads, ver
- * handleLeads: cálculo de leads por dia pro SendPulse depende de chamadas na API deles por tag,
- * mais lento e fora do que foi pedido até aqui). */
+/** Um embed por funil pinado (Black Sender ou SendPulse — WhatsApp ou Telegram), no mesmo
+ * formato do /leads pra "hoje". Cada origem usa seu próprio cálculo (calcularRelatorioFunilBlacksender
+ * por flowId direto, calcularRelatorioFunilSendpulse via API de tags deles — mais lento, por isso
+ * roda em paralelo entre os dois grupos, não em série). O /leads (comando sob demanda) continua
+ * só Black Sender por enquanto — esse relatório horário é o único que já cobre os dois. */
 export async function montarRelatoriosFunisPinados(): Promise<DiscordEmbed[]> {
   const { listarFlowTagConfigs, getPreferencias } = await import('@/lib/db/supabase')
   const [todosConfigs, { pinnedFunis }] = await Promise.all([listarFlowTagConfigs(), getPreferencias()])
   const configsBS = todosConfigs.filter((c) => c.origem === 'blacksender')
-  const pinados = configsBS.filter((c) => c.funil && pinnedFunis.includes(c.funil))
+  const configsSP = todosConfigs.filter((c) => c.origem !== 'blacksender')
+  const pinadosBS = configsBS.filter((c) => c.funil && pinnedFunis.includes(c.funil))
+  const pinadosSP = configsSP.filter((c) => c.funil && pinnedFunis.includes(c.funil))
   const data = hojeBrasilISO()
 
-  return Promise.all(pinados.map(async (cfg) => {
-    const relatorio = await calcularRelatorioFunilBlacksender(cfg, data, configsBS)
-    return embedLeadsBlacksender({ nome: cfg.funil || cfg.flowId, tipo: 'funil', data, ...relatorio })
-  }))
+  const [embedsBS, embedsSP] = await Promise.all([
+    Promise.all(pinadosBS.map(async (cfg) => {
+      const relatorio = await calcularRelatorioFunilBlacksender(cfg, data, configsBS)
+      return embedLeadsBlacksender({ nome: cfg.funil || cfg.flowId, tipo: 'funil', data, origem: 'blacksender', ...relatorio })
+    })),
+    Promise.all(pinadosSP.map(async (cfg) => {
+      const relatorio = await calcularRelatorioFunilSendpulse(cfg, data, configsSP)
+      return embedLeadsBlacksender({ nome: cfg.funil || cfg.flowId, tipo: 'funil', data, origem: 'sendpulse', ...relatorio })
+    })),
+  ])
+
+  return [...embedsBS, ...embedsSP]
 }

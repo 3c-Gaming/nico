@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { sendChannelMessage } from '@/lib/discord/verify'
 import { montarRelatorioNumeros, montarRelatoriosFunisPinados } from '@/lib/discord/relatorios'
 
-export const maxDuration = 60
+// Funis SendPulse pinados agora entram no relatório (além de Black Sender) — a contagem por tag
+// deles pagina a API deles por bot/tag (getByTag), bem mais lenta que a consulta direta por
+// flowId da Black Sender. Só o funil de teste (1 bot, 4 tags) já levou uns 75s.
+export const maxDuration = 280
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('Authorization')
