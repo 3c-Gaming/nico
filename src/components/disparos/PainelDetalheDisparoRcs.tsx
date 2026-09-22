@@ -12,7 +12,7 @@ import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
-import { LeadConversaCard, type LeadComConversa, type MensagemFluxo } from '@/components/funis/LeadConversaCard'
+import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from '@/components/funis/LeadConversaCard'
 import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs } from '@/lib/rcs/template'
 import type { RcsContent } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
@@ -21,6 +21,8 @@ import { EditarAgendamento } from './EditarAgendamento'
 import type { Disparo } from '@/types'
 
 const LARGURA = 440
+const LARGURA_LISTA_NUMEROS = 380
+const LARGURA_LEAD_DETALHE = 440
 
 interface EnvioRcs {
   telefone: string
@@ -174,11 +176,14 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   const [carregou, setCarregou] = useState(false)
   const [atualizando, setAtualizando] = useState(false)
 
-  // "Por número" é accordion — em disparo comum a base tem dezenas de milhares de linhas, então
-  // a lista completa só carrega quando o usuário abre, com teto de LIMITE_NUMEROS.
+  // "Por número" abre um sidebar de lista (à esquerda deste painel) — em disparo comum a base
+  // tem dezenas de milhares de linhas, então a lista completa só carrega quando o usuário abre,
+  // com teto de LIMITE_NUMEROS. Clicar num lead da lista abre um 3º sidebar com a conversa —
+  // mesmo empilhamento de painéis usado em PainelConversasFluxo (funis de tráfego).
   const [mostrarNumeros, setMostrarNumeros] = useState(false)
   const [numeros, setNumeros] = useState<EnvioRcs[]>([])
   const [numerosTotal, setNumerosTotal] = useState(0)
+  const [leadSelecionado, setLeadSelecionado] = useState<LeadComConversa | null>(null)
 
   const campanha = disparo?.nomenclatura
 
@@ -336,6 +341,18 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     if (!disparo) return []
     return numeros.map((e) => envioParaLeadConversa(e, variaveisPorTelefone.get(e.telefone), disparo))
   }, [numeros, variaveisPorTelefone, disparo])
+
+  // Escape fecha o mais interno primeiro (conversa -> lista de números), só no 3º Escape fecha
+  // o painel principal — mesmo comportamento do PainelConversasFluxo.
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (leadSelecionado) setLeadSelecionado(null)
+      else if (mostrarNumeros) setMostrarNumeros(false)
+    }
+    if (mostrarNumeros || leadSelecionado) document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [mostrarNumeros, leadSelecionado])
 
   return (
     <AnimatePresence>
@@ -548,44 +565,96 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                     onClick={() => setMostrarNumeros((v) => !v)}
                     className="flex items-center gap-1.5 w-full text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide hover:text-[var(--text-primary)] transition-colors"
                   >
-                    <ChevronRight size={13} className={`transition-transform ${mostrarNumeros ? 'rotate-90' : ''}`} />
+                    <ChevronRight size={13} />
                     Por número ({total})
                   </button>
-                  {mostrarNumeros && (
-                    <>
-                      <div className="max-h-96 overflow-auto space-y-2 border border-[var(--border)] rounded-md p-2">
-                        {numeros.length === 0 && (
-                          <p className="text-[11px] text-[var(--text-muted)]">Carregando…</p>
-                        )}
-                        {leadsConversa.map((lead, i) => {
-                          const e = numeros[i]
-                          return (
-                            <div key={lead.contactId} className="space-y-1">
-                              <div className="flex items-center justify-between gap-2 px-0.5 text-[10px] font-mono">
-                                <span className={corStatus(e.status)}>{e.status}{e.fallback_status ? ` · SMS: ${e.fallback_status}` : ''}</span>
-                                {e.erro && FALHA.has(e.status) && (
-                                  <span className="text-[var(--error)]/80 truncate max-w-[220px]" title={e.erro}>{e.erro}</span>
-                                )}
-                              </div>
-                              {e.receptivo_erro && (
-                                <div className="px-0.5 text-[10px] font-mono text-[var(--error)]/80">receptivo: {e.receptivo_erro}</div>
-                              )}
-                              <LeadConversaCard lead={lead} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {numerosTotal > numeros.length && (
-                        <p className="text-[10px] text-[var(--text-muted)]">
-                          Mostrando os {numeros.length} mais recentes de {numerosTotal}.
-                        </p>
-                      )}
-                    </>
-                  )}
                 </section>
               )}
             </div>
           </motion.div>
+
+          {mostrarNumeros && (
+            <motion.div
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-y-0 z-50 w-[380px] max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
+              style={{ right: LARGURA }}
+            >
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Por número</h2>
+                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                    {numerosTotal > numeros.length ? `${numeros.length} de ${numerosTotal}` : `${numeros.length} número(s)`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setMostrarNumeros(false); setLeadSelecionado(null) }}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {numeros.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] text-center py-10">Carregando…</p>
+                ) : (
+                  leadsConversa.map((lead, i) => {
+                    const e = numeros[i]
+                    const cliques = lead.mensagens.filter((m) => m.tipo === 'botao_clicado').length
+                    const selecionado = leadSelecionado?.contactId === lead.contactId
+                    return (
+                      <button
+                        key={lead.contactId}
+                        onClick={() => setLeadSelecionado(lead)}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                          selecionado ? 'bg-[var(--d1)]/10 border-[var(--d1)]/40' : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-elevated)]'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)] truncate">{lead.telefone}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                            {lead.mensagens.length} msg · {cliques} clique(s) · {formatarTempoRelativo(lead.ultimaAtividade)}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 font-mono ${corStatus(e.status)}`}>
+                            {e.status}{e.fallback_status ? ` · SMS: ${e.fallback_status}` : ''}
+                          </div>
+                          {e.erro && FALHA.has(e.status) && (
+                            <div className="text-[10px] text-[var(--error)]/80 truncate">{e.erro}</div>
+                          )}
+                          {e.receptivo_erro && (
+                            <div className="text-[10px] text-[var(--error)]/80 truncate">receptivo: {e.receptivo_erro}</div>
+                          )}
+                        </div>
+                        <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {leadSelecionado && (
+            <motion.div
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-y-0 z-50 max-w-full glass bg-[var(--glass-bg)] border-l border-[var(--glass-border)] flex flex-col"
+              style={{ right: LARGURA + LARGURA_LISTA_NUMEROS, width: LARGURA_LEAD_DETALHE }}
+            >
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">{leadSelecionado.telefone}</h2>
+                  <p className="text-[10px] text-[var(--text-muted)]">{formatarTempoRelativo(leadSelecionado.ultimaAtividade)}</p>
+                </div>
+                <button onClick={() => setLeadSelecionado(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0">
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <LeadConversaDetalhe lead={leadSelecionado} />
+              </div>
+            </motion.div>
+          )}
         </>
       )}
     </AnimatePresence>
