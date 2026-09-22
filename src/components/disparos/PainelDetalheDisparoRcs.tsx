@@ -43,16 +43,17 @@ function conteudoParaMensagem(id: string, criadoEm: string, conteudo: RcsContent
   const c = renderizarRcsContent(conteudo, variables)
   const sugestoes = c.type === 'card' ? c.card.suggestions : c.suggestions
   const botoesOferecidos = sugestoes?.length ? sugestoes.map((s) => s.text) : undefined
-  if (c.type === 'card' && c.card.media?.url) {
+  if (c.type === 'card') {
     return {
-      id, direcao: 'saida', criadoEm, tipo: 'imagem',
-      texto: [c.card.title, c.card.description].filter(Boolean).join('\n\n') || undefined,
-      imagemUrl: c.card.media.url,
+      id, direcao: 'saida', criadoEm,
+      tipo: c.card.media?.url ? 'imagem' : 'texto',
+      titulo: c.card.title || undefined,
+      texto: c.card.description || undefined,
+      imagemUrl: c.card.media?.url,
       botoesOferecidos,
     }
   }
-  const texto = c.type === 'card' ? [c.card.title, c.card.description].filter(Boolean).join('\n\n') : c.text
-  return { id, direcao: 'saida', criadoEm, tipo: 'texto', texto, botoesOferecidos }
+  return { id, direcao: 'saida', criadoEm, tipo: 'texto', texto: c.text, botoesOferecidos }
 }
 
 function cliqueParaMensagem(id: string, criadoEm: string, conteudo: RcsContent): MensagemFluxo {

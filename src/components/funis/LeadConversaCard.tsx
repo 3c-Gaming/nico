@@ -11,6 +11,9 @@ export interface MensagemFluxo {
   direcao: 'entrada' | 'saida'
   criadoEm: string
   tipo: 'texto' | 'imagem' | 'documento' | 'audio' | 'video' | 'botao_clicado' | 'lista_selecionada' | 'link_enviado' | 'outro'
+  /** Título em destaque acima do texto (ex: título do card de um RCS) — opcional, sem título a
+   * mensagem só mostra o texto normal. */
+  titulo?: string
   texto?: string
   botaoTitulo?: string
   linkUrl?: string
@@ -75,6 +78,23 @@ function IconeMensagem({ tipo }: { tipo: MensagemFluxo['tipo'] }) {
   }
 }
 
+function BotoesOferecidos({ botoes }: { botoes?: string[] }) {
+  if (!botoes || botoes.length === 0) return null
+  return (
+    <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
+      {botoes.map((label, i) => (
+        <div
+          key={i}
+          className="flex items-center justify-center gap-1.5 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 text-[12px] font-medium text-[var(--d1)]"
+        >
+          <MousePointerClick size={12} className="text-[var(--text-muted)]" />
+          {label}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueConfirmado?: boolean }) {
   const deEntrada = msg.direcao === 'entrada'
   return (
@@ -118,12 +138,14 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
               {/* eslint-disable-next-line @next/next/no-img-element -- URL externa (S3 da SendPulse), sem domínio fixo pra configurar no next/image */}
               <img
                 src={msg.imagemUrl}
-                alt={msg.texto || 'Imagem enviada'}
+                alt={msg.titulo || msg.texto || 'Imagem enviada'}
                 className="max-w-[220px] max-h-[220px] rounded border border-[var(--border)] object-cover"
                 loading="lazy"
               />
             </a>
+            {msg.titulo && <p className="text-[var(--text-primary)] font-semibold whitespace-pre-wrap">{msg.titulo}</p>}
             {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto}</p>}
+            <BotoesOferecidos botoes={msg.botoesOferecidos} />
           </div>
         ) : msg.tipo === 'imagem' || msg.tipo === 'documento' || msg.tipo === 'audio' || msg.tipo === 'video' ? (
           <div className="flex items-center gap-1.5 text-[var(--text-muted)] italic">
@@ -133,20 +155,9 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
           </div>
         ) : (
           <div>
-            <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto || '—'}</p>
-            {msg.botoesOferecidos && msg.botoesOferecidos.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
-                {msg.botoesOferecidos.map((label, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-center gap-1.5 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 text-[12px] font-medium text-[var(--d1)]"
-                  >
-                    <MousePointerClick size={12} className="text-[var(--text-muted)]" />
-                    {label}
-                  </div>
-                ))}
-              </div>
-            )}
+            {msg.titulo && <p className="text-[var(--text-primary)] font-semibold whitespace-pre-wrap">{msg.titulo}</p>}
+            {(msg.texto || !msg.titulo) && <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto || '—'}</p>}
+            <BotoesOferecidos botoes={msg.botoesOferecidos} />
           </div>
         )}
       </div>
