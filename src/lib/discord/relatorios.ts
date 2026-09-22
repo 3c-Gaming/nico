@@ -31,7 +31,11 @@ export async function montarRelatorioNumeros(): Promise<DiscordEmbed> {
   const canaisPinados = canaisBS.filter((c) => pinnedNumeros.includes(c.id))
   const canaisComSaude = await Promise.all(canaisPinados.map(async (c) => {
     const resultado = await verificarRespostaUltimaMensagemCanal(c.id).catch(() => null)
-    return { nome: c.nome ?? '', telefone: c.telefone ?? '', banido: canalEstaBanido(c), metaPhoneStatus: c.metaPhoneStatus, respondeu: resultado?.respondeu ?? null }
+    // metaPhoneStatus pode vir null mesmo com o canal banido (a Meta às vezes some com esse
+    // campo em vez de mandar BANNED — ver healthStatus/healthReason nesse caso) — cai pro motivo
+    // do healthReason, que a Black Sender sempre preenche quando healthStatus != 'available'.
+    const motivo = c.metaPhoneStatus || (c.healthReason ? c.healthReason.slice(0, 100) : null)
+    return { nome: c.nome ?? '', telefone: c.telefone ?? '', banido: canalEstaBanido(c), motivo, respondeu: resultado?.respondeu ?? null }
   }))
 
   return embedRelatorio(numeros, fluxosPorBot, canaisComSaude)

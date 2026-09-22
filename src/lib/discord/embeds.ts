@@ -161,7 +161,7 @@ export function embedRelatorio(
   // pra isso, ver canalEstaBanido) e respondeu (se o fluxo automático respondeu à última
   // mensagem real recebida, ver verificarRespostaUltimaMensagemCanal). respondeu null = nunca
   // recebeu mensagem, não dá pra avaliar ainda essa segunda parte.
-  canaisBlacksender: { nome: string; telefone: string; banido: boolean; metaPhoneStatus: string | null; respondeu: boolean | null }[] = [],
+  canaisBlacksender: { nome: string; telefone: string; banido: boolean; motivo: string | null; respondeu: boolean | null }[] = [],
 ): DiscordEmbed {
   const canalSaudavel = (c: { banido: boolean; respondeu: boolean | null }) => !c.banido && c.respondeu !== false
   const ativos = numeros.filter(n => n.status === 'ativo').length + canaisBlacksender.filter(canalSaudavel).length
@@ -213,7 +213,7 @@ export function embedRelatorio(
     // banido). 🟡 ok pra Meta mas o fluxo não respondeu (problema na automação, não no número).
     // 🟢 os dois ok (ou sem mensagem ainda pra testar resposta).
     const icone = canal.banido ? '🔴' : canal.respondeu === false ? '🟡' : '🟢'
-    const linhaStatus = `📡 Status Black Sender: **${canal.banido ? `BANIDO/BLOQUEADO (${canal.metaPhoneStatus ?? '?'})` : 'Ativo'}**`
+    const linhaStatus = `📡 Status Black Sender: **${canal.banido ? `BANIDO/BLOQUEADO${canal.motivo ? ` (${canal.motivo})` : ''}` : 'Ativo'}**`
     const linhaResposta = canal.respondeu === null
       ? '💬 Sem mensagens recebidas ainda'
       : canal.respondeu
