@@ -42,6 +42,9 @@ interface ResultadoEnvio {
   ok: boolean
   status?: string
   erro?: string
+  clicado?: boolean
+  receptivoEnviadoEm?: string | null
+  receptivoErro?: string | null
 }
 
 const COLUNAS_TELEFONE = ['telefone', 'phone', 'numero', 'número', 'celular', 'whatsapp', 'to']
@@ -297,6 +300,16 @@ export default function RcsCompletoPage() {
       .catch(() => addToast('error', 'Erro ao carregar o disparo pra edição'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Enquanto tem receptivo configurado e resultados na tela, fica reconsultando sozinho — o cron
+  // de polling (rcs-receptivo) roda a cada 2min, então é aqui que o clique/2ª mensagem aparece
+  // sem precisar ficar clicando "Atualizar status".
+  useEffect(() => {
+    if (!resultados || !receptivoOn) return
+    const id = setInterval(() => { atualizarStatus() }, 15_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!resultados, receptivoOn])
 
   async function carregarTemplates() {
     try {
@@ -633,8 +646,21 @@ export default function RcsCompletoPage() {
         body: JSON.stringify({ campanha: campanha.trim() }),
       })
       const data = await res.json()
-      const porTel = new Map((data.envios as { telefone: string; status: string }[]).map((e) => [e.telefone, e.status]))
-      setResultados((prev) => prev?.map((r) => ({ ...r, status: porTel.get(r.telefone) ?? r.status })) ?? null)
+      const porTel = new Map(
+        (data.envios as { telefone: string; status: string; clicado?: boolean; receptivo_enviado_em?: string | null; receptivo_erro?: string | null }[])
+          .map((e) => [e.telefone, e]),
+      )
+      setResultados((prev) => prev?.map((r) => {
+        const at = porTel.get(r.telefone)
+        if (!at) return r
+        return {
+          ...r,
+          status: at.status ?? r.status,
+          clicado: at.clicado ?? r.clicado,
+          receptivoEnviadoEm: at.receptivo_enviado_em ?? r.receptivoEnviadoEm,
+          receptivoErro: at.receptivo_erro ?? r.receptivoErro,
+        }
+      }) ?? null)
     } catch (err) {
       addToast('error', (err as Error).message)
     } finally {
@@ -1098,15 +1124,35 @@ export default function RcsCompletoPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 Resultados — {resultados.filter((r) => r.ok).length}/{resultados.length} ok
               </h2>
-              <Button size="sm" variant="secondary" onClick={atualizarStatus} loading={atualizandoStatus}>
-                <RefreshCw size={14} /> Atualizar status
-              </Button>
+              <div className="flex items-center gap-2">
+                {receptivoOn && (
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    Checando clique sozinho a cada 15s (cron roda a cada 2min)
+                  </span>
+                )}
+                <Button size="sm" variant="secondary" onClick={atualizarStatus} loading={atualizandoStatus}>
+                  <RefreshCw size={14} /> Atualizar status
+                </Button>
+              </div>
             </div>
             <div className="max-h-72 overflow-auto text-xs font-mono space-y-1">
               {resultados.map((r, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-[var(--text-secondary)] w-32">{r.telefone}</span>
                   <span className={corStatus(r.status ?? (r.ok ? 'queued' : 'erro'))}>{r.status ?? (r.ok ? 'queued' : 'erro')}</span>
+                  {receptivoOn && (
+                    r.clicado ? (
+                      r.receptivoEnviadoEm ? (
+                        <span className="text-emerald-400">🖱 clicou · receptivo enviado</span>
+                      ) : r.receptivoErro ? (
+                        <span className="text-[var(--error)]">🖱 clicou · falha no receptivo: {r.receptivoErro}</span>
+                      ) : (
+                        <span className="text-amber-400">🖱 clicou · enviando receptivo…</span>
+                      )
+                    ) : (
+                      <span className="text-[var(--text-muted)]">aguardando clique</span>
+                    )
+                  )}
                   {r.erro && <span className="text-[var(--error)] truncate">{r.erro}</span>}
                 </div>
               ))}
