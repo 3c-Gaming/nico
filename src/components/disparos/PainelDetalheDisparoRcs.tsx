@@ -180,12 +180,23 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
   // tem dezenas de milhares de linhas, então a lista completa só carrega quando o usuário abre,
   // com teto de LIMITE_NUMEROS. Clicar num lead da lista abre um 3º sidebar com a conversa —
   // mesmo empilhamento de painéis usado em PainelConversasFluxo (funis de tráfego).
-  const [mostrarNumeros, setMostrarNumeros] = useState(false)
+  const [mostrarNumeros, setMostrarNumeros] = useState(!!disparo)
   const [numeros, setNumeros] = useState<EnvioRcs[]>([])
   const [numerosTotal, setNumerosTotal] = useState(0)
   const [leadSelecionado, setLeadSelecionado] = useState<LeadComConversa | null>(null)
 
   const campanha = disparo?.nomenclatura
+
+  // Abre o sidebar "Por número" junto, sem precisar rolar até o botão e clicar — e trocar de
+  // disparo (sem fechar o painel) já limpa a conversa aberta, que era de outro lead. Ajuste de
+  // estado durante o render (não em efeito) ao detectar troca de id — padrão recomendado pelo
+  // React pra "resetar estado quando uma prop muda", evita o cascading-render de um useEffect.
+  const [disparoIdAnterior, setDisparoIdAnterior] = useState(disparo?.id)
+  if (disparo?.id !== disparoIdAnterior) {
+    setDisparoIdAnterior(disparo?.id)
+    setMostrarNumeros(!!disparo)
+    setLeadSelecionado(null)
+  }
 
   // Contadores da jornada + resumo de falhas — leves (agregado no banco + só as linhas que
   // falharam), então dá pra fazer polling a cada 15s enquanto o painel está aberto.
