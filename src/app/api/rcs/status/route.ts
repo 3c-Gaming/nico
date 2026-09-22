@@ -3,8 +3,10 @@ import { consultarStatusRcs } from '@/lib/integrações/solvefy'
 import { getSupabase } from '@/lib/db/supabase'
 
 const FALHA = ['erro', 'failed', 'undelivered', 'dropped']
-// Estados que não mudam mais — para de reconsultar a Solvefy.
-const STATUS_FINAIS = ['read', 'clicked', 'failed', 'undelivered', 'erro', 'dropped']
+// Estados que não mudam mais — para de reconsultar a Solvefy. "read" NÃO entra aqui: o lead lê
+// e só depois clica, então uma mensagem "lida" ainda pode virar "clicked" — foi por isso que
+// "Clicados" sempre dava 0 (a reconsulta parava de checar assim que chegava em "read").
+const STATUS_FINAIS = ['clicked', 'failed', 'undelivered', 'erro', 'dropped']
 // Teto de reconsultas por clique no botão — bases grandes têm milhares de pendentes e o
 // webhook é o caminho principal; isso aqui é só um empurrão.
 const MAX_REPOLL = 300
@@ -67,10 +69,9 @@ export async function POST(request: NextRequest) {
     (pendentes ?? []).map(async (envio: any) => {
       const resultado = await consultarStatusRcs(envio.solvefy_message_id as string)
       if (resultado.ok && resultado.status) {
-        await supabase
-          .from('rcs_envios')
-          .update({ status: resultado.status, atualizado_em: new Date().toISOString() })
-          .eq('id', envio.id as string)
+        const patch: Record<string, unknown> = { status: resultado.status, atualizado_em: new Date().toISOString() }
+        if (resultado.status === 'clicked') patch.clicado = true
+        await supabase.from('rcs_envios').update(patch).eq('id', envio.id as string)
       }
     }),
   )
