@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { X, RefreshCw, Image as ImageIcon, CalendarClock, ChevronRight, Ban, Pencil } from 'lucide-react'
@@ -12,6 +12,7 @@ import { formatNumero, formatMoeda } from '@/lib/resultadoDisparo'
 import { useDisparos } from '@/hooks/useDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
+import { LeadConversaCard, type LeadComConversa, type MensagemFluxo } from '@/components/funis/LeadConversaCard'
 import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs } from '@/lib/rcs/template'
 import type { RcsContent } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
@@ -27,6 +28,57 @@ interface EnvioRcs {
   clicado?: boolean
   erro?: string | null
   fallback_status?: string | null
+  enviado_em?: string
+  atualizado_em?: string
+  receptivo_enviado_em?: string | null
+  receptivo_erro?: string | null
+}
+
+// Um RcsContent (texto ou card) renderizado (variáveis já resolvidas) virando bolha de conversa —
+// mesmo formato que LeadConversaCard usa pras conversas de funil de tráfego (SendPulse/Black
+// Sender), reaproveitado aqui pra dar a mesma visão de chat pros disparos de RCS.
+function conteudoParaMensagem(id: string, criadoEm: string, conteudo: RcsContent, variables?: Record<string, string>): MensagemFluxo {
+  const c = renderizarRcsContent(conteudo, variables)
+  const sugestoes = c.type === 'card' ? c.card.suggestions : c.suggestions
+  const botoesOferecidos = sugestoes?.length ? sugestoes.map((s) => s.text) : undefined
+  if (c.type === 'card' && c.card.media?.url) {
+    return {
+      id, direcao: 'saida', criadoEm, tipo: 'imagem',
+      texto: [c.card.title, c.card.description].filter(Boolean).join('\n\n') || undefined,
+      imagemUrl: c.card.media.url,
+      botoesOferecidos,
+    }
+  }
+  const texto = c.type === 'card' ? [c.card.title, c.card.description].filter(Boolean).join('\n\n') : c.text
+  return { id, direcao: 'saida', criadoEm, tipo: 'texto', texto, botoesOferecidos }
+}
+
+function cliqueParaMensagem(id: string, criadoEm: string, conteudo: RcsContent): MensagemFluxo {
+  const sugestoes = conteudo.type === 'card' ? conteudo.card.suggestions : conteudo.suggestions
+  const botao = sugestoes?.find((s) => s.type === 'REPLY') ?? sugestoes?.[0]
+  return { id, direcao: 'entrada', criadoEm, tipo: 'botao_clicado', botaoTitulo: botao?.text || 'clique' }
+}
+
+function envioParaLeadConversa(envio: EnvioRcs, variables: Record<string, string> | undefined, disparo: Disparo): LeadComConversa {
+  const mensagens: MensagemFluxo[] = []
+  const enviadoEm = envio.enviado_em ?? disparo.criadoEm
+  if (disparo.rcsConteudo) mensagens.push(conteudoParaMensagem('msg1', enviadoEm, disparo.rcsConteudo, variables))
+  if (envio.clicado && disparo.rcsConteudo) {
+    mensagens.push(cliqueParaMensagem('click', envio.atualizado_em ?? enviadoEm, disparo.rcsConteudo))
+  }
+  if (envio.receptivo_enviado_em && disparo.rcsReceptivo?.conteudo) {
+    mensagens.push(conteudoParaMensagem('msg2', envio.receptivo_enviado_em, disparo.rcsReceptivo.conteudo, variables))
+  }
+  return {
+    contactId: envio.telefone,
+    nome: envio.telefone,
+    telefone: envio.telefone,
+    ultimaAtividade: envio.receptivo_enviado_em || envio.atualizado_em || enviadoEm,
+    tags: [],
+    variaveis: variables ?? {},
+    mensagens,
+    tagCliqueLink: null,
+  }
 }
 
 const FALHA = new Set(['erro', 'failed', 'undelivered'])
@@ -272,6 +324,19 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
     { tag: 'Cliques', contagem: cliques },
   ] : []
 
+  // Variáveis por telefone (pra renderizar {{tokens}} igual saiu na mensagem de verdade) — vêm
+  // da base do próprio disparo, já carregada junto com ele.
+  const variaveisPorTelefone = useMemo(() => {
+    const mapa = new Map<string, Record<string, string>>()
+    for (const d of disparo?.rcsDestinatarios ?? []) mapa.set(d.telefone, d.variables ?? {})
+    return mapa
+  }, [disparo?.rcsDestinatarios])
+
+  const leadsConversa = useMemo(() => {
+    if (!disparo) return []
+    return numeros.map((e) => envioParaLeadConversa(e, variaveisPorTelefone.get(e.telefone), disparo))
+  }, [numeros, variaveisPorTelefone, disparo])
+
   return (
     <AnimatePresence>
       {confirmDialog}
@@ -488,27 +553,27 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                   </button>
                   {mostrarNumeros && (
                     <>
-                      <div className="max-h-72 overflow-auto text-xs font-mono space-y-1.5 border border-[var(--border)] rounded-md p-2">
+                      <div className="max-h-96 overflow-auto space-y-2 border border-[var(--border)] rounded-md p-2">
                         {numeros.length === 0 && (
-                          <p className="text-[11px] text-[var(--text-muted)] font-sans">Carregando…</p>
+                          <p className="text-[11px] text-[var(--text-muted)]">Carregando…</p>
                         )}
-                        {numeros.map((e, i) => (
-                          <div key={i}>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[var(--text-secondary)]">{e.telefone}</span>
-                              <span className="flex items-center gap-1.5">
-                                {(e.clicado || e.status === 'clicked') && <span className="text-sky-400" title="Clicou">↗</span>}
-                                <span className={corStatus(e.status)}>{e.status}</span>
-                              </span>
+                        {leadsConversa.map((lead, i) => {
+                          const e = numeros[i]
+                          return (
+                            <div key={lead.contactId} className="space-y-1">
+                              <div className="flex items-center justify-between gap-2 px-0.5 text-[10px] font-mono">
+                                <span className={corStatus(e.status)}>{e.status}{e.fallback_status ? ` · SMS: ${e.fallback_status}` : ''}</span>
+                                {e.erro && FALHA.has(e.status) && (
+                                  <span className="text-[var(--error)]/80 truncate max-w-[220px]" title={e.erro}>{e.erro}</span>
+                                )}
+                              </div>
+                              {e.receptivo_erro && (
+                                <div className="px-0.5 text-[10px] font-mono text-[var(--error)]/80">receptivo: {e.receptivo_erro}</div>
+                              )}
+                              <LeadConversaCard lead={lead} />
                             </div>
-                            {e.erro && FALHA.has(e.status) && (
-                              <div className="text-[10px] text-[var(--error)]/80 pl-1 font-sans">{e.erro}</div>
-                            )}
-                            {e.fallback_status && (
-                              <div className="text-[10px] text-sky-400/90 pl-1 font-sans">→ SMS: {e.fallback_status}</div>
-                            )}
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                       {numerosTotal > numeros.length && (
                         <p className="text-[10px] text-[var(--text-muted)]">

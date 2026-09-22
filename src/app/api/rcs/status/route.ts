@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   let q = supabase
     .from('rcs_envios')
-    .select('telefone, status, clicado, erro, fallback_status, enviado_em, receptivo_enviado_em, receptivo_erro')
+    .select('telefone, status, clicado, erro, fallback_status, enviado_em, atualizado_em, receptivo_enviado_em, receptivo_erro')
     .eq('campanha', campanha)
     .order('enviado_em', { ascending: false })
   if (apenasFalhas) q = q.in('status', FALHA)
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     .eq('campanha', campanha)
   const { data: atualizados } = await supabase
     .from('rcs_envios')
-    .select('telefone, status, clicado, erro, fallback_status, enviado_em, receptivo_enviado_em, receptivo_erro')
+    .select('telefone, status, clicado, erro, fallback_status, enviado_em, atualizado_em, receptivo_enviado_em, receptivo_erro')
     .eq('campanha', campanha)
     .order('enviado_em', { ascending: false })
     .limit(1000)
