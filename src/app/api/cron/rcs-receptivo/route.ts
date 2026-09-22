@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/db/supabase'
 import { consultarStatusRcs, enviarRcs, SOLVEFY_RCS_AGENT_ID } from '@/lib/integrações/solvefy'
 import { sanitizarReference } from '@/lib/rcs/campanha'
+import type { RcsContent } from '@/lib/rcs/tipos'
 
 // Formato receptivo (RcsReceptivo, ver src/lib/rcs/tipos.ts): a Solvefy não avisa por webhook
 // quando o lead clica a suggestion REPLY, então este cron faz polling em GET /rcs/messages/{id}
-// pros envios com receptivo_texto pendente e, ao ver status "clicked", dispara a 2ª mensagem.
+// pros envios com receptivo_conteudo pendente e, ao ver status "clicked", dispara a 2ª mensagem.
 export const maxDuration = 280
 const TAMANHO_LOTE_CICLO = 100
 // Não faz sentido ficar consultando um envio muito antigo pra sempre — depois disso, desiste.
@@ -15,7 +16,7 @@ interface EnvioPendente {
   id: string
   telefone: string
   solvefy_message_id: string | null
-  receptivo_texto: string
+  receptivo_conteudo: RcsContent
 }
 
 export async function GET(request: Request) {
@@ -32,8 +33,8 @@ export async function GET(request: Request) {
   const corte = new Date(Date.now() - JANELA_HORAS * 60 * 60_000).toISOString()
   const { data, error } = await supabase
     .from('rcs_envios')
-    .select('id, telefone, solvefy_message_id, receptivo_texto')
-    .not('receptivo_texto', 'is', null)
+    .select('id, telefone, solvefy_message_id, receptivo_conteudo')
+    .not('receptivo_conteudo', 'is', null)
     .is('receptivo_enviado_em', null)
     .eq('clicado', false)
     .not('solvefy_message_id', 'is', null)
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
     const envioMsg2 = await enviarRcs({
       from,
       to: envio.telefone,
-      content: { type: 'text', text: envio.receptivo_texto },
+      content: envio.receptivo_conteudo as unknown as Record<string, unknown>,
       reference: sanitizarReference(`${envio.id}-receptivo`),
       metadata: { receptivoDoEnvio: envio.id, telefone: envio.telefone },
     })

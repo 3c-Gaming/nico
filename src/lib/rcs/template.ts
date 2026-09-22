@@ -57,13 +57,6 @@ export function primeiroLinkRcs(conteudo: RcsContent): string | undefined {
   return sug?.find((s): s is Extract<RcsSuggestion, { type: 'OPEN_URL' }> => s.type === 'OPEN_URL')?.url
 }
 
-/** Renderiza o texto da 2ª mensagem (RcsReceptivo) por destinatário — só {{variavel}}, sem
- * {{link}} especial (ao contrário do fallback, aqui não tem "link principal" do card: a 1ª
- * mensagem do receptivo normalmente só tem o botão REPLY, o link mora no texto da 2ª mesmo). */
-export function renderizarReceptivoTexto(texto: string, variables?: Record<string, string>): string {
-  return aplicar(texto, variables) ?? ''
-}
-
 /** Renderiza o `fallback.text` por destinatário: resolve {{variavel}} e {{link}} (link = 1º
  * botão OPEN_URL do card, também com as variáveis aplicadas). */
 export function renderizarFallbackText(

@@ -62,9 +62,9 @@ export interface ResultadoEnvioRcs {
  * confere as mensagens "aguardando clique" a cada poucos minutos, não por push em tempo real. */
 export interface RcsReceptivo {
   ativo: boolean
-  /** Mesmos tokens {{variavel}} do conteúdo principal — hoje só suporta texto simples (com o
-   * link dentro do texto), não card. */
-  texto: string
+  /** Mesmo formato do conteúdo principal (texto ou card com imagem) — sem suggestions: a Solvefy
+   * não confirma clique de botão da 2ª mensagem, então ainda não dá pra montar um 3º hop. */
+  conteudo: RcsContent
 }
 
 /** Custo fixo por envio de RCS (R$) — a Solvefy não retorna preço, é contrato fixo. */

@@ -4,7 +4,7 @@
 
 import { enviarRcs, SOLVEFY_RCS_AGENT_ID, normalizarTelefone } from '@/lib/integrações/solvefy'
 import { getSupabase } from '@/lib/db/supabase'
-import { renderizarRcsContent, renderizarFallbackText, renderizarReceptivoTexto } from './template'
+import { renderizarRcsContent, renderizarFallbackText } from './template'
 import type { RcsContent, RcsSmsFallback, RcsReceptivo, DestinatarioRcs, ResultadoEnvioRcs } from './tipos'
 
 export interface EnviarCampanhaRcsParams {
@@ -16,8 +16,8 @@ export interface EnviarCampanhaRcsParams {
   /** Fallback SMS nativo da Solvefy — a copy é renderizada por destinatário ({{var}} + {{link}}). */
   fallback?: RcsSmsFallback
   /** 2ª mensagem disparada quando o lead clica a suggestion REPLY da 1ª — ver RcsReceptivo. O
-   * texto (já com {{variavel}} resolvido) fica gravado em rcs_envios.receptivo_texto, pro cron
-   * de polling (ver /api/cron/rcs-receptivo) mandar quando detectar o clique. */
+   * conteúdo (já com {{variavel}} resolvido) fica gravado em rcs_envios.receptivo_conteudo, pro
+   * cron de polling (ver /api/cron/rcs-receptivo) mandar quando detectar o clique. */
   receptivo?: RcsReceptivo
   destinatarios: DestinatarioRcs[]
   callbackUrl: string
@@ -78,8 +78,8 @@ export async function enviarCampanhaRcs(params: EnviarCampanhaRcsParams): Promis
         })
 
         if (supabase) {
-          const receptivoTexto = params.receptivo?.ativo
-            ? renderizarReceptivoTexto(params.receptivo.texto, dest.variables)
+          const receptivoConteudo = params.receptivo?.ativo
+            ? renderizarRcsContent(params.receptivo.conteudo, dest.variables)
             : null
           await supabase.from('rcs_envios').insert({
             campanha: params.campanha,
@@ -87,7 +87,7 @@ export async function enviarCampanhaRcs(params: EnviarCampanhaRcsParams): Promis
             solvefy_message_id: resultado.id ?? null,
             status: resultado.ok ? (resultado.status ?? 'queued') : 'erro',
             erro: resultado.ok ? null : resultado.error,
-            receptivo_texto: receptivoTexto,
+            receptivo_conteudo: receptivoConteudo,
           })
         }
 

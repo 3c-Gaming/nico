@@ -207,9 +207,17 @@ export default function RcsCompletoPage() {
   const [fallbackText, setFallbackText] = useState('')
 
   // --- receptivo: 2ª mensagem disparada quando o lead clica um botão REPLY da 1ª (via polling,
-  // ver /api/cron/rcs-receptivo) ---
+  // ver /api/cron/rcs-receptivo) — mesmo formato texto/card da mensagem principal, sem botões ---
   const [receptivoOn, setReceptivoOn] = useState(false)
+  const [receptivoTipo, setReceptivoTipo] = useState<'text' | 'card'>('text')
   const [receptivoTexto, setReceptivoTexto] = useState('')
+  const [receptivoCardTitle, setReceptivoCardTitle] = useState('')
+  const [receptivoCardDesc, setReceptivoCardDesc] = useState('')
+  const [receptivoMediaUrl, setReceptivoMediaUrl] = useState('')
+  const [receptivoMediaHeight, setReceptivoMediaHeight] = useState<RcsMediaHeight>('MEDIUM')
+  const [receptivoOrientation, setReceptivoOrientation] = useState<RcsCardOrientation>('VERTICAL')
+  const [subindoImgReceptivo, setSubindoImgReceptivo] = useState(false)
+  const fileImgReceptivoRef = useRef<HTMLInputElement>(null)
 
   // --- base / disparo ---
   const [campanha, setCampanha] = useState('')
@@ -263,7 +271,15 @@ export default function RcsCompletoPage() {
         setFallbackFrom(fb?.from || 'solvefy')
         setFallbackText(fb?.text || '')
         setReceptivoOn(!!d.rcsReceptivo?.ativo)
-        setReceptivoTexto(d.rcsReceptivo?.texto || '')
+        const rc = d.rcsReceptivo?.conteudo
+        if (rc?.type === 'text') {
+          setReceptivoTipo('text'); setReceptivoTexto(rc.text ?? '')
+        } else if (rc?.type === 'card') {
+          setReceptivoTipo('card')
+          setReceptivoCardTitle(rc.card.title ?? ''); setReceptivoCardDesc(rc.card.description ?? '')
+          setReceptivoMediaUrl(rc.card.media?.url ?? ''); setReceptivoMediaHeight(rc.card.media?.height ?? 'MEDIUM')
+          setReceptivoOrientation(rc.card.orientation ?? 'VERTICAL')
+        }
         if (d.utm) { setCasaTracking('superbet'); setUtmValor(d.utm) }
         else if (d.betmgmPid) { setCasaTracking('betmgm'); setUtmValor(d.betmgmPid) }
         setAgendar(true)
@@ -310,19 +326,31 @@ export default function RcsCompletoPage() {
     ? { enabled: true, from: fallbackFrom.trim(), text: fallbackText }
     : null
 
+  const receptivoConteudo: RcsContent = useMemo(() => {
+    if (receptivoTipo === 'text') return { type: 'text', text: receptivoTexto }
+    return {
+      type: 'card',
+      card: {
+        title: receptivoCardTitle || undefined,
+        description: receptivoCardDesc || undefined,
+        media: receptivoMediaUrl ? { url: receptivoMediaUrl, height: receptivoMediaHeight } : undefined,
+        orientation: receptivoOrientation,
+      },
+    }
+  }, [receptivoTipo, receptivoTexto, receptivoCardTitle, receptivoCardDesc, receptivoMediaUrl, receptivoMediaHeight, receptivoOrientation])
+
   const receptivo: RcsReceptivo | undefined = receptivoOn
-    ? { ativo: true, texto: receptivoTexto }
+    ? { ativo: true, conteudo: receptivoConteudo }
     : undefined
 
   const errosConteudo = useMemo(() => validarRcsContent(conteudo), [conteudo])
   const errosFallback = validarFallback(fallback)
   const errosReceptivo = useMemo(() => {
     if (!receptivoOn) return []
-    const erros: string[] = []
-    if (!receptivoTexto.trim()) erros.push('receptivo: o texto da 2ª mensagem é obrigatório')
-    if (!suggestions.some((s) => s.type === 'REPLY')) erros.push('receptivo: precisa de pelo menos um botão "Resposta" (REPLY) pra detectar o clique')
+    const erros = validarRcsContent(receptivoConteudo).map((e) => `receptivo: ${e}`)
+    if (!suggestions.some((s) => s.type === 'REPLY')) erros.push('receptivo: a mensagem principal precisa de um botão "Resposta" (REPLY) pra detectar o clique')
     return erros
-  }, [receptivoOn, receptivoTexto, suggestions])
+  }, [receptivoOn, receptivoConteudo, suggestions])
   const variaveisTemplate = useMemo(() => extrairVariaveisRcs(conteudo), [conteudo])
   const colunasBase = headers.filter((h) => h && h !== colTelefone)
   const previewContent = useMemo(
@@ -368,20 +396,20 @@ export default function RcsCompletoPage() {
     setFallbackText('')
   }
 
-  async function uploadImagem(file: File) {
-    setSubindoImg(true)
+  async function uploadImagem(file: File, onUrl: (url: string) => void, setLoading: (v: boolean) => void) {
+    setLoading(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch('/api/rcs/upload-imagem', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Falha no upload')
-      setMediaUrl(data.url)
+      onUrl(data.url)
       addToast('success', 'Imagem enviada')
     } catch (err) {
       addToast('error', (err as Error).message)
     } finally {
-      setSubindoImg(false)
+      setLoading(false)
     }
   }
 
@@ -730,7 +758,7 @@ export default function RcsCompletoPage() {
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
                       className="hidden"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImagem(f); e.target.value = '' }}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImagem(f, setMediaUrl, setSubindoImg); e.target.value = '' }}
                     />
                   </div>
                 </div>
@@ -956,14 +984,77 @@ export default function RcsCompletoPage() {
                 <p className="text-[11px] text-[var(--text-muted)]">
                   Quando o lead clica um botão <strong>Resposta (REPLY)</strong> da mensagem acima, um cron detecta o
                   clique por polling (a Solvefy não avisa isso por webhook — só fica sabendo consultando o status da
-                  mensagem, a cada poucos minutos) e manda esse texto automaticamente na mesma conversa. Aceita <code>{'{{variavel}}'}</code>.
+                  mensagem, a cada poucos minutos) e manda esse RCS automaticamente na mesma conversa. Aceita <code>{'{{variavel}}'}</code>.
                 </p>
-                <textarea
-                  className={`${inputCls} h-24 py-2 resize-y`}
-                  value={receptivoTexto}
-                  onChange={(e) => setReceptivoTexto(e.target.value)}
-                  placeholder="Boa! Aqui está o link da promoção: https://..."
-                />
+                <div className="flex gap-2">
+                  {(['text', 'card'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setReceptivoTipo(t)}
+                      className={`px-3 h-8 rounded text-xs border transition-colors ${
+                        receptivoTipo === t ? 'border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-primary)]' : 'border-[var(--border)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {t === 'card' ? 'Card (imagem)' : 'Texto simples'}
+                    </button>
+                  ))}
+                </div>
+                {receptivoTipo === 'text' ? (
+                  <textarea
+                    className={`${inputCls} h-24 py-2 resize-y`}
+                    value={receptivoTexto}
+                    onChange={(e) => setReceptivoTexto(e.target.value)}
+                    placeholder="Boa! Aqui está o link da promoção: https://..."
+                  />
+                ) : (
+                  <>
+                    <input
+                      className={inputCls}
+                      value={receptivoCardTitle}
+                      onChange={(e) => setReceptivoCardTitle(e.target.value)}
+                      placeholder="Título"
+                    />
+                    <textarea
+                      className={`${inputCls} h-20 py-2 resize-y`}
+                      value={receptivoCardDesc}
+                      onChange={(e) => setReceptivoCardDesc(e.target.value)}
+                      placeholder="Aqui está o link da promoção: https://..."
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        className={inputCls}
+                        value={receptivoMediaUrl}
+                        onChange={(e) => setReceptivoMediaUrl(e.target.value)}
+                        placeholder="https://... (ou faça upload)"
+                      />
+                      <Button size="sm" variant="secondary" loading={subindoImgReceptivo} onClick={() => fileImgReceptivoRef.current?.click()}>
+                        <ImageIcon size={14} /> Upload
+                      </Button>
+                      <input
+                        ref={fileImgReceptivoRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImagem(f, setReceptivoMediaUrl, setSubindoImgReceptivo); e.target.value = '' }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-[var(--text-muted)] mb-1">Altura da imagem</label>
+                        <select className={inputCls} value={receptivoMediaHeight} onChange={(e) => setReceptivoMediaHeight(e.target.value as RcsMediaHeight)}>
+                          {HEIGHTS.map((h) => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--text-muted)] mb-1">Orientação</label>
+                        <select className={inputCls} value={receptivoOrientation} onChange={(e) => setReceptivoOrientation(e.target.value as RcsCardOrientation)}>
+                          {ORIENTACOES.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
