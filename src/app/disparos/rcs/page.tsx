@@ -539,7 +539,13 @@ export default function RcsCompletoPage() {
       body: JSON.stringify({ disparo: novo }),
     })
     const data = await res.json()
-    if (!data.disparo) return null
+    // O envio de verdade já aconteceu nesse ponto (handleEnviar chama isso DEPOIS de mandar pra
+    // Solvefy) — se o registro do disparo falhar aqui, tem que avisar alto e bom som, senão a
+    // campanha desaparece da tela mesmo tendo sido enviada de verdade (já aconteceu: coluna nova
+    // faltando na tabela `disparos` quebrava esse POST em silêncio).
+    if (!res.ok || !data.disparo) {
+      throw new Error(data.error || 'A mensagem foi enviada, mas não deu pra registrar o disparo na lista')
+    }
     createDisparo(data.disparo)
     togglePin(data.disparo.id)
     return data.disparo
