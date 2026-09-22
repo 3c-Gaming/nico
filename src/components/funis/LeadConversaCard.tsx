@@ -103,7 +103,7 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
         {deEntrada ? <User size={13} className="text-[var(--d3)]" /> : <Bot size={13} className="text-[var(--text-muted)]" />}
         <span className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{formatarHora(msg.criadoEm)}</span>
       </div>
-      <div className={`flex-1 min-w-0 rounded px-2.5 py-2 text-[13px] leading-snug ${deEntrada ? 'bg-[var(--d3)]/10 border border-[var(--d3)]/20' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
+      <div className={`flex-1 min-w-0 rounded overflow-hidden px-2.5 py-2 text-[13px] leading-snug ${deEntrada ? 'bg-[var(--d3)]/10 border border-[var(--d3)]/20' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
         }`}>
         {msg.tipo === 'botao_clicado' || msg.tipo === 'lista_selecionada' ? (
           <div className="flex items-center gap-1.5 font-medium text-[var(--success)]">
@@ -133,19 +133,38 @@ function MensagemLinha({ msg, cliqueConfirmado }: { msg: MensagemFluxo; cliqueCo
             )}
           </div>
         ) : msg.tipo === 'imagem' && msg.imagemUrl ? (
-          <div className="space-y-1">
-            <a href={msg.imagemUrl} target="_blank" rel="noopener noreferrer">
+          // Card nativo: imagem sangra até a borda da bolha (cancela o padding do wrapper),
+          // texto vem logo abaixo com o próprio respiro, e os botões ficam em linhas cheias
+          // separadas por divisor — mesma composição visual do card real no RCS.
+          <div className="-mx-2.5 -mt-2">
+            <a href={msg.imagemUrl} target="_blank" rel="noopener noreferrer" className="block">
               {/* eslint-disable-next-line @next/next/no-img-element -- URL externa (S3 da SendPulse), sem domínio fixo pra configurar no next/image */}
               <img
                 src={msg.imagemUrl}
                 alt={msg.titulo || msg.texto || 'Imagem enviada'}
-                className="max-w-[220px] max-h-[220px] rounded border border-[var(--border)] object-cover"
+                className="w-full max-h-[220px] object-cover"
                 loading="lazy"
               />
             </a>
-            {msg.titulo && <p className="text-[var(--text-primary)] font-semibold whitespace-pre-wrap">{msg.titulo}</p>}
-            {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto}</p>}
-            <BotoesOferecidos botoes={msg.botoesOferecidos} />
+            {(msg.titulo || msg.texto) && (
+              <div className="px-2.5 pt-2 pb-1.5 space-y-0.5">
+                {msg.titulo && <p className="text-[var(--text-primary)] font-semibold whitespace-pre-wrap">{msg.titulo}</p>}
+                {msg.texto && <p className="text-[var(--text-secondary)] whitespace-pre-wrap">{msg.texto}</p>}
+              </div>
+            )}
+            {msg.botoesOferecidos && msg.botoesOferecidos.length > 0 && (
+              <div className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
+                {msg.botoesOferecidos.map((label, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-center gap-1.5 px-2.5 py-2 text-[12px] font-medium text-[var(--d1)]"
+                  >
+                    <MousePointerClick size={12} className="text-[var(--text-muted)]" />
+                    {label}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : msg.tipo === 'imagem' || msg.tipo === 'documento' || msg.tipo === 'audio' || msg.tipo === 'video' ? (
           <div className="flex items-center gap-1.5 text-[var(--text-muted)] italic">
