@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/db/supabase'
+import { getSupabase, registrarWebhookEvento } from '@/lib/db/supabase'
 
 // Callback da Solvefy pros eventos de mensagem RCS (e do fallback SMS nativo).
 // A Solvefy manda o nome do evento em vários formatos: "message.delivered", "rcs.message.delivered",
@@ -111,6 +111,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => null)
     if (!body) return NextResponse.json({ ok: true, ignored: 'body-vazio' })
+
+    // Grava cru TODO evento recebido (não só status de entrega/clique de link) — a gente ainda não
+    // sabe se/como a Solvefy manda um evento de reply/postback (clique em suggestion chip REPLY,
+    // ver RCS-body-request.md) até vermos o payload real aqui (consultar em
+    // /api/webhooks/eventos?origem=rcs). Não bloqueia o resto do handler se falhar.
+    const headersRcs: Record<string, string> = {}
+    request.headers.forEach((valor, chave) => { headersRcs[chave] = valor })
+    await registrarWebhookEvento({
+      id: crypto.randomUUID(),
+      origem: 'rcs',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      evento: (body as any)?.action ?? (body as any)?.event ?? (body as any)?.type ?? (body as any)?.status ?? 'desconhecido',
+      payload: body,
+      headers: headersRcs,
+      metodo: request.method,
+      ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      recebidoEm: new Date().toISOString(),
+    }).catch(() => {})
 
     const dados = extrair(body)
     if (!dados.status) return NextResponse.json({ ok: true, ignored: 'no-status' })

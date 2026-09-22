@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/db/supabase'
+import { getSupabase, registrarWebhookEvento } from '@/lib/db/supabase'
 
 // Webhook público que a Solvefy chama quando um evento de mensagem acontece (message.sent,
 // message.delivered, message.clicked etc. — ver callbackUrl no envio, em enviarSms). Não temos a
@@ -23,6 +23,23 @@ function extrairIdEStatus(body: any): { id: string | null; status: string | null
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ ok: false }, { status: 400 })
+
+  // Grava cru TODO evento recebido (não só os de status que já reconhecemos) — mesmo princípio
+  // do webhook da Black Sender: sem isso, nunca vamos saber se/como a Solvefy manda um evento de
+  // resposta (SMS MO) até vermos o payload real na tabela webhook_eventos_recebidos (ver
+  // /api/webhooks/eventos?origem=sms pra consultar). Não bloqueia o resto do handler se falhar.
+  const headersSms: Record<string, string> = {}
+  request.headers.forEach((valor, chave) => { headersSms[chave] = valor })
+  await registrarWebhookEvento({
+    id: crypto.randomUUID(),
+    origem: 'sms',
+    evento: body?.event ?? body?.type ?? body?.status ?? 'desconhecido',
+    payload: body,
+    headers: headersSms,
+    metodo: request.method,
+    ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    recebidoEm: new Date().toISOString(),
+  }).catch(() => {})
 
   const { id, status } = extrairIdEStatus(body)
 
