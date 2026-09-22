@@ -118,6 +118,7 @@ export async function GET(request: Request) {
         campanha: disparo.nomenclatura,
         conteudo: disparo.rcsConteudo,
         fallback: disparo.rcsFallback,
+        receptivo: disparo.rcsReceptivo,
         destinatarios: lote,
         callbackUrl,
       })

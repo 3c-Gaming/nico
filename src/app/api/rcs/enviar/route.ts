@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/db/supabase'
 import { enviarCampanhaRcs } from '@/lib/rcs/campanha'
 import { validarRcsContent, validarFallback } from '@/lib/rcs/template'
-import type { RcsContent, RcsSmsFallback, DestinatarioRcs } from '@/lib/rcs/tipos'
+import type { RcsContent, RcsSmsFallback, RcsReceptivo, DestinatarioRcs } from '@/lib/rcs/tipos'
 
 interface EnviarBody {
   campanha: string
@@ -10,6 +10,7 @@ interface EnviarBody {
   conteudo?: RcsContent
   templateId?: string
   fallback?: RcsSmsFallback | null
+  receptivo?: RcsReceptivo | null
   destinatarios: DestinatarioRcs[]
 }
 
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       campanha: body.campanha,
       conteudo: conteudo!,
       fallback: fallback ?? undefined,
+      receptivo: body.receptivo ?? undefined,
       destinatarios: body.destinatarios,
       callbackUrl,
     })

@@ -336,6 +336,9 @@ export interface Disparo {
   rcsConteudo?: import('@/lib/rcs/tipos').RcsContent
   rcsFallback?: import('@/lib/rcs/tipos').RcsSmsFallback
   rcsDestinatarios?: { telefone: string; variables?: Record<string, string> }[]
+  /** 2ª mensagem RCS, disparada quando o lead clica a suggestion REPLY da 1ª (ver RcsReceptivo
+   * em src/lib/rcs/tipos.ts pro porquê de ser por polling e não webhook). */
+  rcsReceptivo?: import('@/lib/rcs/tipos').RcsReceptivo
 }
 
 export interface Esteira {

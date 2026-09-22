@@ -15,6 +15,7 @@ import type {
   RcsContent,
   RcsSuggestion,
   RcsSmsFallback,
+  RcsReceptivo,
   RcsMediaHeight,
   RcsCardOrientation,
 } from '@/lib/rcs/tipos'
@@ -205,6 +206,11 @@ export default function RcsCompletoPage() {
   const [fallbackFrom, setFallbackFrom] = useState('solvefy')
   const [fallbackText, setFallbackText] = useState('')
 
+  // --- receptivo: 2ª mensagem disparada quando o lead clica um botão REPLY da 1ª (via polling,
+  // ver /api/cron/rcs-receptivo) ---
+  const [receptivoOn, setReceptivoOn] = useState(false)
+  const [receptivoTexto, setReceptivoTexto] = useState('')
+
   // --- base / disparo ---
   const [campanha, setCampanha] = useState('')
   const [linhas, setLinhas] = useState<LinhaBase[]>([])
@@ -256,6 +262,8 @@ export default function RcsCompletoPage() {
         setFallbackOn(!!fb?.enabled)
         setFallbackFrom(fb?.from || 'solvefy')
         setFallbackText(fb?.text || '')
+        setReceptivoOn(!!d.rcsReceptivo?.ativo)
+        setReceptivoTexto(d.rcsReceptivo?.texto || '')
         if (d.utm) { setCasaTracking('superbet'); setUtmValor(d.utm) }
         else if (d.betmgmPid) { setCasaTracking('betmgm'); setUtmValor(d.betmgmPid) }
         setAgendar(true)
@@ -302,8 +310,19 @@ export default function RcsCompletoPage() {
     ? { enabled: true, from: fallbackFrom.trim(), text: fallbackText }
     : null
 
+  const receptivo: RcsReceptivo | undefined = receptivoOn
+    ? { ativo: true, texto: receptivoTexto }
+    : undefined
+
   const errosConteudo = useMemo(() => validarRcsContent(conteudo), [conteudo])
   const errosFallback = validarFallback(fallback)
+  const errosReceptivo = useMemo(() => {
+    if (!receptivoOn) return []
+    const erros: string[] = []
+    if (!receptivoTexto.trim()) erros.push('receptivo: o texto da 2ª mensagem é obrigatório')
+    if (!suggestions.some((s) => s.type === 'REPLY')) erros.push('receptivo: precisa de pelo menos um botão "Resposta" (REPLY) pra detectar o clique')
+    return erros
+  }, [receptivoOn, receptivoTexto, suggestions])
   const variaveisTemplate = useMemo(() => extrairVariaveisRcs(conteudo), [conteudo])
   const colunasBase = headers.filter((h) => h && h !== colTelefone)
   const previewContent = useMemo(
@@ -443,7 +462,8 @@ export default function RcsCompletoPage() {
   // painel de detalhe depois, conforme os webhooks de entrega chegam.
   const custoTeto = total * CUSTO_RCS_POR_ENVIO
   const podeEnviar =
-    campanha.trim().length > 1 && total > 0 && errosConteudo.length === 0 && errosFallback.length === 0 && !enviando
+    campanha.trim().length > 1 && total > 0 && errosConteudo.length === 0 && errosFallback.length === 0 &&
+    errosReceptivo.length === 0 && !enviando
 
   async function criarRegistroDisparo(status: 'executado' | 'agendado'): Promise<Disparo | null> {
     const agora = new Date()
@@ -466,6 +486,7 @@ export default function RcsCompletoPage() {
       rcsTemplateId: templateSelId || undefined,
       rcsConteudo: conteudo,
       rcsFallback: fallback ?? undefined,
+      rcsReceptivo: receptivo,
       rcsDestinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
       criadoEm: agora.toISOString(),
       atualizadoEm: agora.toISOString(),
@@ -503,6 +524,7 @@ export default function RcsCompletoPage() {
         rcsTemplateId: templateSelId || undefined,
         rcsConteudo: conteudo,
         rcsFallback: fallback ?? undefined,
+        rcsReceptivo: receptivo,
         rcsDestinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
       } as Partial<Disparo>)
       addToast('success', `Disparo agendado atualizado — ${dataAgendada} às ${horarioAgendado}`)
@@ -556,6 +578,7 @@ export default function RcsCompletoPage() {
           campanha: campanha.trim(),
           conteudo,
           fallback,
+          receptivo,
           destinatarios: linhas.map((l) => ({ telefone: l.telefone, variables: l.variables })),
         }),
       })
@@ -922,6 +945,29 @@ export default function RcsCompletoPage() {
             )}
           </div>
 
+          {/* receptivo — 2ª mensagem quando o lead clica o botão REPLY */}
+          <div className="space-y-1.5 p-3 rounded-md border border-[var(--border)] bg-[var(--bg-base)]">
+            <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-primary)] cursor-pointer w-fit">
+              <input type="checkbox" checked={receptivoOn} onChange={(e) => setReceptivoOn(e.target.checked)} />
+              Mensagem receptiva ao clique <span className="font-normal text-[var(--text-muted)]">(opcional)</span>
+            </label>
+            {receptivoOn && (
+              <div className="space-y-2 pl-1">
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Quando o lead clica um botão <strong>Resposta (REPLY)</strong> da mensagem acima, um cron detecta o
+                  clique por polling (a Solvefy não avisa isso por webhook — só fica sabendo consultando o status da
+                  mensagem, a cada poucos minutos) e manda esse texto automaticamente na mesma conversa. Aceita <code>{'{{variavel}}'}</code>.
+                </p>
+                <textarea
+                  className={`${inputCls} h-24 py-2 resize-y`}
+                  value={receptivoTexto}
+                  onChange={(e) => setReceptivoTexto(e.target.value)}
+                  placeholder="Boa! Aqui está o link da promoção: https://..."
+                />
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 text-xs">
             <input type="checkbox" id="agendar" checked={agendar} onChange={(e) => setAgendar(e.target.checked)} />
             <label htmlFor="agendar" className="text-[var(--text-muted)]">Agendar</label>
@@ -932,6 +978,10 @@ export default function RcsCompletoPage() {
               </>
             )}
           </div>
+
+          {errosReceptivo.length > 0 && (
+            <p className="text-xs text-[var(--error)]">⚠ {errosReceptivo.join(' · ')}</p>
+          )}
 
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--text-muted)]">

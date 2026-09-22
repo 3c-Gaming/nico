@@ -55,6 +55,18 @@ export interface ResultadoEnvioRcs {
   erro?: string
 }
 
+/** 2ª mensagem RCS, disparada quando o lead clica a suggestion REPLY da 1ª — a Solvefy não avisa
+ * esse clique por webhook (confirmado testando ao vivo: só entrega status de entrega/leitura por
+ * lá), mas o clique FICA registrado do lado deles e aparece consultando o status da mensagem
+ * (GET /rcs/messages/{id} volta status: "clicked"). Por isso funciona por POLLING — um cron
+ * confere as mensagens "aguardando clique" a cada poucos minutos, não por push em tempo real. */
+export interface RcsReceptivo {
+  ativo: boolean
+  /** Mesmos tokens {{variavel}} do conteúdo principal — hoje só suporta texto simples (com o
+   * link dentro do texto), não card. */
+  texto: string
+}
+
 /** Custo fixo por envio de RCS (R$) — a Solvefy não retorna preço, é contrato fixo. */
 export const CUSTO_RCS_POR_ENVIO = 0.13
 

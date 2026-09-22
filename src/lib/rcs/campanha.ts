@@ -4,8 +4,8 @@
 
 import { enviarRcs, SOLVEFY_RCS_AGENT_ID, normalizarTelefone } from '@/lib/integrações/solvefy'
 import { getSupabase } from '@/lib/db/supabase'
-import { renderizarRcsContent, renderizarFallbackText } from './template'
-import type { RcsContent, RcsSmsFallback, DestinatarioRcs, ResultadoEnvioRcs } from './tipos'
+import { renderizarRcsContent, renderizarFallbackText, renderizarReceptivoTexto } from './template'
+import type { RcsContent, RcsSmsFallback, RcsReceptivo, DestinatarioRcs, ResultadoEnvioRcs } from './tipos'
 
 export interface EnviarCampanhaRcsParams {
   campanha: string
@@ -15,6 +15,10 @@ export interface EnviarCampanhaRcsParams {
   conteudo: RcsContent
   /** Fallback SMS nativo da Solvefy — a copy é renderizada por destinatário ({{var}} + {{link}}). */
   fallback?: RcsSmsFallback
+  /** 2ª mensagem disparada quando o lead clica a suggestion REPLY da 1ª — ver RcsReceptivo. O
+   * texto (já com {{variavel}} resolvido) fica gravado em rcs_envios.receptivo_texto, pro cron
+   * de polling (ver /api/cron/rcs-receptivo) mandar quando detectar o clique. */
+  receptivo?: RcsReceptivo
   destinatarios: DestinatarioRcs[]
   callbackUrl: string
 }
@@ -24,8 +28,9 @@ export interface EnviarCampanhaRcsParams {
 const TAMANHO_LOTE = 10
 
 // A Solvefy só aceita [A-Za-z0-9._~-] em `reference` (max 64) — sanitiza o nome da campanha
-// (texto livre com espaço/acento) antes de concatenar com o telefone.
-function sanitizarReference(valor: string): string {
+// (texto livre com espaço/acento) antes de concatenar com o telefone. Exportada porque o cron de
+// receptivo (rcs-receptivo) monta a reference da 2ª mensagem com a mesma regra.
+export function sanitizarReference(valor: string): string {
   return valor
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Za-z0-9._~-]/g, '-')
@@ -73,12 +78,16 @@ export async function enviarCampanhaRcs(params: EnviarCampanhaRcsParams): Promis
         })
 
         if (supabase) {
+          const receptivoTexto = params.receptivo?.ativo
+            ? renderizarReceptivoTexto(params.receptivo.texto, dest.variables)
+            : null
           await supabase.from('rcs_envios').insert({
             campanha: params.campanha,
             telefone,
             solvefy_message_id: resultado.id ?? null,
             status: resultado.ok ? (resultado.status ?? 'queued') : 'erro',
             erro: resultado.ok ? null : resultado.error,
+            receptivo_texto: receptivoTexto,
           })
         }
 
