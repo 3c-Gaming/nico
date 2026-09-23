@@ -90,7 +90,7 @@ function BotoesOferecidos({ botoes }: { botoes?: string[] }) {
       {botoes.map((label, i) => (
         <div
           key={i}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-current/25 px-2.5 py-1.5 text-[12px] font-semibold"
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-current/25 px-2.5 py-1.5 text-[12px] font-semibold bg-white text-[var(--text-primary)]"
         >
           <MousePointerClick size={12} />
           {label}
@@ -269,7 +269,7 @@ function MensagemLinha({
                   {msg.botoesOferecidos.map((label, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-semibold"
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-semibold bg-white text-[var(--text-primary)]"
                     >
                       <MousePointerClick size={12} />
                       {label}
