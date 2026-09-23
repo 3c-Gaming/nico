@@ -63,23 +63,39 @@ export async function GET(request: NextRequest) {
   const tagFiltro = request.nextUrl.searchParams.get('tagFiltro') || tag
 
   try {
-    const resolvidos = await comContaECanalDoBot(botId, async (apiKey, canal) => {
-      const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS, canal)
+    // getByTag falha esporadicamente com 400 mesmo na conta/canal CERTA (confirmado ao vivo:
+    // o mesmo combo que funciona minutos depois falha agora — cara de rate limit da SendPulse
+    // se manifestando como 400 em vez do 429 de sempre, não um "tag não existe" de verdade).
+    // comContaECanalDoBot já cascateia até 6 combos de conta×canal, mas se TODOS falharem nesse
+    // instante (visto ao vivo pedindo 6 tags em sequência rápida), uma 2ª tentativa passados
+    // ~1,5s já resolve — mesmo princípio do retry em contarTagHoje (lib/sendpulse/relatorio.ts).
+    let resolvidos: PromiseSettledResult<LeadComConversa>[] | undefined
+    let ultimoErro: unknown
+    for (let tentativa = 0; tentativa < 2 && !resolvidos; tentativa++) {
+      try {
+        resolvidos = await comContaECanalDoBot(botId, async (apiKey, canal) => {
+          const candidatos = await buscarUltimosContatosPorTag(botId, tagFiltro, apiKey, quantidade * MULTIPLICADOR_CANDIDATOS, canal)
 
-      const resultados: PromiseSettledResult<LeadComConversa>[] = []
-      for (let i = 0; i < candidatos.length; i += BATCH_SIZE_MENSAGENS) {
-        const lote = candidatos.slice(i, i + BATCH_SIZE_MENSAGENS)
-        const loteResolvido = await Promise.allSettled(
-          lote.map(async (candidato): Promise<LeadComConversa> => {
-            const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId, canal)
-            const mensagens = filtrarConversaPorFluxo(brutas, flowId)
-            return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
-          }),
-        )
-        resultados.push(...loteResolvido)
+          const resultados: PromiseSettledResult<LeadComConversa>[] = []
+          for (let i = 0; i < candidatos.length; i += BATCH_SIZE_MENSAGENS) {
+            const lote = candidatos.slice(i, i + BATCH_SIZE_MENSAGENS)
+            const loteResolvido = await Promise.allSettled(
+              lote.map(async (candidato): Promise<LeadComConversa> => {
+                const brutas = await buscarMensagensDoContatoNaConta(apiKey, candidato.contactId, canal)
+                const mensagens = filtrarConversaPorFluxo(brutas, flowId)
+                return { ...candidato, mensagens, tagCliqueLink: acharTagDeCliqueLink(tag, candidato.tags) }
+              }),
+            )
+            resultados.push(...loteResolvido)
+          }
+          return resultados
+        })
+      } catch (err) {
+        ultimoErro = err
+        if (tentativa === 0) await new Promise((r) => setTimeout(r, 1500))
       }
-      return resultados
-    })
+    }
+    if (!resolvidos) throw ultimoErro instanceof Error ? ultimoErro : new Error('Falha ao buscar conversas')
 
     // Descarta quem não tem mensagem correlacionável a esse fluxo (ou cuja busca falhou), e
     // ordena por quem respondeu mais recentemente — não pela recência de entrada na tag (que,

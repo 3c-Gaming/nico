@@ -821,7 +821,10 @@ export function PainelConversasFluxo({
     fetch(`/api/sendpulse/ultimas-conversas-fluxo?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.error) { setErro(data.error); setLeads([]); return }
+        // Mensagem crua da SendPulse (ex: "Sendpulse getByTag error 400") não diz nada útil pro
+        // usuário — a rota já tenta 2x sozinha antes de desistir (ver ultimas-conversas-fluxo),
+        // então quando chega aqui é rate limit persistente mesmo, não um problema de dado.
+        if (data.error) { setErro('A SendPulse limitou as requisições agora — tenta de novo em alguns segundos.'); setLeads([]); return }
         setLeads(data.leads ?? [])
       })
       .catch(() => setErro('Erro ao buscar conversas'))
