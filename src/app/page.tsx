@@ -1882,7 +1882,7 @@ export default function HomePage() {
                           {totalTraffic.leadsHojeCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : (
-                            <span className={`font-bold ${totalTraffic.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
+                            <span className={`block truncate text-xs font-bold ${totalTraffic.leadsHoje > 0 ? 'text-[var(--d3)]' : 'text-[var(--text-muted)]'}`}>
                               {totalTraffic.leadsHoje}
                             </span>
                           )}
@@ -1891,23 +1891,23 @@ export default function HomePage() {
                           {totalTraffic.registrosFtdsCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : (
-                            <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
+                            <span className="block truncate text-xs font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
                           {totalTraffic.registrosFtdsCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : (
-                            <span className="font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
+                            <span className="block truncate text-xs font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
                           {totalTraffic.leadsHojeCarregando || totalTraffic.registrosFtdsCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : !totalTraffic.leadsHoje ? (
-                            <span className="text-[var(--text-muted)]/40">—</span>
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="font-mono text-[var(--text-primary)]">
+                            <span className="block truncate text-xs font-mono text-[var(--text-primary)]">
                               {((totalTraffic.registros / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
@@ -1916,35 +1916,35 @@ export default function HomePage() {
                           {totalTraffic.leadsHojeCarregando || totalTraffic.registrosFtdsCarregando ? (
                             <div className="flex justify-end"><Spinner size={12} /></div>
                           ) : !totalTraffic.leadsHoje ? (
-                            <span className="text-[var(--text-muted)]/40">—</span>
+                            <span className="text-xs text-[var(--text-muted)]/40">—</span>
                           ) : (
-                            <span className="font-mono text-[var(--text-primary)]">
+                            <span className="block truncate text-xs font-mono text-[var(--text-primary)]">
                               {((totalTraffic.ftds / totalTraffic.leadsHoje) * 100).toFixed(1)}%
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                          <span className="block truncate text-xs font-bold font-mono text-[var(--text-primary)]">
                             {totalTraffic.gastoMeta > 0 ? `R$ ${totalTraffic.gastoMeta.toFixed(2).replace('.', ',')}` : '—'}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                          <span className="block truncate text-xs font-bold font-mono text-[var(--text-primary)]">
                             {totalTraffic.custoEntradaMeta === null ? '—' : `R$ ${totalTraffic.custoEntradaMeta.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                          <span className="block truncate text-xs font-bold font-mono text-[var(--text-primary)]">
                             {totalTraffic.custoRegMeta === null ? '—' : `R$ ${totalTraffic.custoRegMeta.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">
+                          <span className="block truncate text-xs font-bold font-mono text-[var(--text-primary)]">
                             {totalTraffic.custoFtdMeta === null ? '—' : `R$ ${totalTraffic.custoFtdMeta.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className={`font-bold font-mono ${totalTraffic.lucroFtd === null ? 'text-[var(--text-muted)]' : totalTraffic.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+                          <span className={`block truncate text-xs font-bold font-mono ${totalTraffic.lucroFtd === null ? 'text-[var(--text-muted)]' : totalTraffic.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
                             {totalTraffic.lucroFtd === null ? '—' : `R$ ${totalTraffic.lucroFtd.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
