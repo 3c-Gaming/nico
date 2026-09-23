@@ -1059,7 +1059,12 @@ export default function HomePage() {
         }
       }
       const gastoParaLucro = tipo === 'traffic' ? gastoMeta : baseCusto
-      const lucroFtd = lucroCandidatos.size === 1 ? ftds * [...lucroCandidatos.values()][0] - gastoParaLucro : null
+      // Com 0 FTD o valor configurado por FTD não importa (0 × qualquer coisa = 0) — dá pra
+      // calcular o lucro (= -gasto) mesmo sem casa/lucroFtdPorCasa configurado nesse funil
+      // específico. Só cai no "—" quando TEM ftd mas não dá pra saber quanto cada um vale.
+      const lucroFtd = ftds === 0
+        ? -gastoParaLucro
+        : lucroCandidatos.size === 1 ? ftds * [...lucroCandidatos.values()][0] - gastoParaLucro : null
 
       return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, registrosFtdsCarregando, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, lucroFtd, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
     })

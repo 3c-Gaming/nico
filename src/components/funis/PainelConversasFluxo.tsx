@@ -583,9 +583,13 @@ export function BlocoLucroELinks({
   }
 
   // ROI só quando dá pra atribuir o FTD todo a uma casa só (ver comentário da função) — com mais
-  // de uma casa com lucro configurado, mostra "—" em vez de arriscar um número errado.
+  // de uma casa com lucro configurado, mostra "—" em vez de arriscar um número errado. Exceção:
+  // com 0 FTD a receita é 0 não importa o valor por FTD (0 × qualquer coisa), então dá pra
+  // calcular mesmo sem nenhuma casa com lucro configurado ainda.
   const casasComLucro = Object.entries(lucroPorCasa).filter(([, v]) => v.trim() !== '' && !isNaN(Number(v.replace(',', '.'))))
-  const lucroFtdTotal = casasComLucro.length === 1 ? ftds * Number(casasComLucro[0][1].replace(',', '.')) : null
+  const lucroFtdTotal = ftds === 0
+    ? 0
+    : casasComLucro.length === 1 ? ftds * Number(casasComLucro[0][1].replace(',', '.')) : null
   const roi = lucroFtdTotal !== null && gastoTotal > 0 ? ((lucroFtdTotal - gastoTotal) / gastoTotal) * 100 : null
 
   if (casas.length === 0) return null
