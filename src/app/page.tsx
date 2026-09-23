@@ -357,6 +357,7 @@ interface FunilBotDetail {
   ultimoLeadAt: string | null
   registros: number
   ftds: number
+  registrosFtdsCarregando: boolean
   entregues: number
   lidas: number
 }
@@ -385,6 +386,7 @@ interface FunilRow {
   ultimoLeadAt: string | null
   registros: number
   ftds: number
+  registrosFtdsCarregando: boolean
   entregues: number
   lidas: number
   custoPorReg: number
@@ -882,6 +884,10 @@ export default function HomePage() {
       const ftds = liveTrackingLoaded
         ? (trackingPorFunil[funilNome]?.ftds ?? 0)
         : (cache?.ftds ?? 0)
+      // Mesmo raciocínio de leadsHojeCarregando: sem tracking ao vivo nem cache pra cair como
+      // fallback, mostrar "0" passaria a impressão de que já sabemos que é zero — SendPulse
+      // demora alguns segundos pra responder (Black Sender não passa por esse caminho).
+      const registrosFtdsCarregando = !origemBS && !liveTrackingLoaded && cache?.registros == null
 
       // Gasto em Ads (Meta) — união das campanhas atribuídas a cada config desse grupo de funil
       // (evita contar 2x quando 2+ configs do mesmo funil têm a campanha marcada) e chama
@@ -1035,6 +1041,7 @@ export default function HomePage() {
           ftds: liveTrackingLoaded
             ? data.flowIds.reduce((acc, fid) => acc + (trackingMap[fid]?.ftds ?? 0), 0)
             : (cache?.ftds ?? 0),
+          registrosFtdsCarregando: !origemBS && !liveTrackingLoaded && cache?.registros == null,
           entregues: Math.round(entreguesPorBot.get(botId) ?? 0),
           lidas: Math.round(lidasPorBot.get(botId) ?? 0),
         }
@@ -1054,7 +1061,7 @@ export default function HomePage() {
       const gastoParaLucro = tipo === 'traffic' ? gastoMeta : baseCusto
       const lucroFtd = lucroCandidatos.size === 1 ? ftds * [...lucroCandidatos.values()][0] - gastoParaLucro : null
 
-      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, lucroFtd, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
+      return { funilNome, botNomes, tags, casas, utm, corBadge, lpUrls: allLpUrls, leadsHoje, leadsHojeCarregando, leadsTotal, baseCusto: Math.round((baseCusto + Number.EPSILON) * 100) / 100, baseLinhas, ultimoLeadAt, registros, ftds, registrosFtdsCarregando, entregues: Math.round(entreguesTotal), lidas: Math.round(lidasTotal), custoPorReg, custoPorFtd, regParaFtd, gastoMeta, custoEntradaMeta, custoRegMeta, custoFtdMeta, lucroFtd, bots, tipo, flowsDetalhados, origem: origemBS ? 'blacksender' as const : 'sendpulse' as const, flowIdPrincipal: origemBS ? (flows[0]?.[0] ?? null) : null }
     })
   }, [pinnedFunis, contagens, contagensTotal, ultimoLeadMap, monitoramento?.numeros, pinVersion, trackingMap, trackingPorFunil, fluxosMap, daxxCampanhas, todosDisparos, campanhasMetaDoPeriodo, leadsBlacksenderHoje, ultimoLeadBlacksender, canalIdPorFlowBS, canaisBlacksender])
 
@@ -1120,9 +1127,10 @@ export default function HomePage() {
         leadsTotal: acc.leadsTotal + r.leadsTotal,
         registros: acc.registros + r.registros,
         ftds: acc.ftds + r.ftds,
+        registrosFtdsCarregando: acc.registrosFtdsCarregando || r.registrosFtdsCarregando,
         gastoMeta: acc.gastoMeta + r.gastoMeta,
       }),
-      { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0, gastoMeta: 0 },
+      { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0, registrosFtdsCarregando: false, gastoMeta: 0 },
     )
     // Recalculado a partir das somas agregadas (não é média/soma dos custos já calculados por
     // linha) — matematicamente correto mesmo com denominadores diferentes por funil.
@@ -1296,17 +1304,27 @@ export default function HomePage() {
             </>
           )}
           <td className="py-3 px-3 text-right">
-            <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-              {row.registros}
-            </span>
+            {row.registrosFtdsCarregando ? (
+              <div className="flex justify-end"><Spinner size={12} /></div>
+            ) : (
+              <span className={`font-semibold font-mono ${row.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                {row.registros}
+              </span>
+            )}
           </td>
           <td className="py-3 px-3 text-right">
-            <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
-              {row.ftds}
-            </span>
+            {row.registrosFtdsCarregando ? (
+              <div className="flex justify-end"><Spinner size={12} /></div>
+            ) : (
+              <span className={`font-semibold font-mono ${row.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>
+                {row.ftds}
+              </span>
+            )}
           </td>
           <td className="py-3 px-3 text-right">
-            {!row.leadsHoje ? (
+            {row.leadsHojeCarregando || row.registrosFtdsCarregando ? (
+              <div className="flex justify-end"><Spinner size={12} /></div>
+            ) : !row.leadsHoje ? (
               <span className="text-xs text-[var(--text-muted)]/40">—</span>
             ) : (
               <span className="font-mono text-[var(--text-primary)]">
@@ -1315,7 +1333,9 @@ export default function HomePage() {
             )}
           </td>
           <td className="py-3 px-3 text-right">
-            {!row.leadsHoje ? (
+            {row.leadsHojeCarregando || row.registrosFtdsCarregando ? (
+              <div className="flex justify-end"><Spinner size={12} /></div>
+            ) : !row.leadsHoje ? (
               <span className="text-xs text-[var(--text-muted)]/40">—</span>
             ) : (
               <span className="font-mono text-[var(--text-primary)]">
@@ -1481,10 +1501,18 @@ export default function HomePage() {
                           </>
                         )}
                         <td className="py-2 px-3 text-right">
-                          <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
+                          {bot.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : (
+                            <span className={`font-semibold font-mono ${bot.registros > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>{bot.registros}</span>
+                          )}
                         </td>
                         <td className="py-2 px-3 text-right">
-                          <span className={`font-semibold font-mono ${bot.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{bot.ftds}</span>
+                          {bot.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : (
+                            <span className={`font-semibold font-mono ${bot.ftds > 0 ? 'text-[var(--d1)]' : 'text-[var(--text-muted)]'}`}>{bot.ftds}</span>
+                          )}
                         </td>
                         <td className="py-2 px-3">
                           <span className={`text-xs font-mono ${formatarTempoRelativo(bot.ultimoLeadAt).cor}`}>
@@ -1855,13 +1883,23 @@ export default function HomePage() {
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
+                          {totalTraffic.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : (
+                            <span className="font-bold font-mono text-[var(--text-primary)]">{totalTraffic.registros}</span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className="font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
+                          {totalTraffic.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : (
+                            <span className="font-bold font-mono text-[var(--d1)]">{totalTraffic.ftds}</span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          {!totalTraffic.leadsHoje ? (
+                          {totalTraffic.leadsHojeCarregando || totalTraffic.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : !totalTraffic.leadsHoje ? (
                             <span className="text-[var(--text-muted)]/40">—</span>
                           ) : (
                             <span className="font-mono text-[var(--text-primary)]">
@@ -1870,7 +1908,9 @@ export default function HomePage() {
                           )}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          {!totalTraffic.leadsHoje ? (
+                          {totalTraffic.leadsHojeCarregando || totalTraffic.registrosFtdsCarregando ? (
+                            <div className="flex justify-end"><Spinner size={12} /></div>
+                          ) : !totalTraffic.leadsHoje ? (
                             <span className="text-[var(--text-muted)]/40">—</span>
                           ) : (
                             <span className="font-mono text-[var(--text-primary)]">
