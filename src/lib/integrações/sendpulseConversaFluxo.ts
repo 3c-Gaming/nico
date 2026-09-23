@@ -188,6 +188,20 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
     // mandou a imagem) só trazem "url" — endpoint de mídia da própria SendPulse, sem autenticação
     // necessária pra baixar (confirmado testando direto).
     imagemUrl = data.image.link ?? data.image.url ?? undefined
+  } else if (Array.isArray(data.photo) && data.photo.length > 0) {
+    // Foto de ENTRADA no Telegram não vem como "image" (isso é só WhatsApp) — vem como um array
+    // de tamanhos (PhotoSize do Bot API), sem URL nenhuma, só um file_id interno do Telegram.
+    // Confirmado ao vivo: sem tratar isso aqui, a foto do lead caía no fallback genérico ('outro',
+    // sem texto nem imagem) — a mensagem se perdia em silêncio. O token do bot chega solto no
+    // payload dessa mensagem mesma (data.token); usa a rota de proxy (telegram-file) pra resolver
+    // o file_id em bytes de verdade sem esse token vazar pro <img src> do navegador.
+    tipo = 'imagem'
+    texto = data.caption ?? undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const maior = (data.photo as any[])[data.photo.length - 1]
+    if (maior?.file_id && data.token) {
+      imagemUrl = `/api/sendpulse/telegram-file?fileId=${encodeURIComponent(maior.file_id)}&token=${encodeURIComponent(data.token)}`
+    }
   } else if (data.file || data.document) {
     tipo = 'documento'
     texto = (data.file ?? data.document)?.caption ?? undefined
