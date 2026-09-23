@@ -202,6 +202,20 @@ function normalizarMensagem(msg: MensagemBruta, chain: Chain): MensagemFluxo {
     if (maior?.file_id && data.token) {
       imagemUrl = `/api/sendpulse/telegram-file?fileId=${encodeURIComponent(maior.file_id)}&token=${encodeURIComponent(data.token)}`
     }
+  } else if (typeof data.photo === 'string' && data.photo) {
+    // Foto de SAÍDA no Telegram (o bot mandou) — "photo" aqui é uma STRING, não o array de
+    // PhotoSize do caso de entrada acima. Duas origens possíveis, distinguidas por
+    // is_external_attachment: (1) veio de uma URL externa informada no builder — "photo" já É a
+    // URL, renderiza direto; (2) veio de upload direto no File Manager da SendPulse (is_fm:
+    // true) — "photo" é só o NOME do arquivo interno (ex: "banner.png"), sem file_id do
+    // Telegram nem link do S3 em lugar nenhum do payload. Confirmado ao vivo (lead Douglas
+    // Silva, F01.12): a API de histórico da SendPulse não expõe nenhuma forma de resolver esse
+    // nome pra uma URL pública — não tem endpoint de File Manager, e o bot não pode reconsultar
+    // uma mensagem antiga do Telegram só pelo message_id. Sem imagem pra mostrar nesse caso,
+    // mas pelo menos mantém a legenda (antes a mensagem inteira sumia, virava um "—" em branco).
+    tipo = 'imagem'
+    texto = data.caption ?? undefined
+    if (data.is_external_attachment) imagemUrl = data.photo
   } else if (data.file || data.document) {
     tipo = 'documento'
     texto = (data.file ?? data.document)?.caption ?? undefined
