@@ -87,7 +87,7 @@ export function PainelNumerosBlacksender() {
   useEffect(() => {
     fetch('/api/blacksender/canais')
       .then((r) => (r.ok ? r.json() : { canais: [] }))
-      .then((d) => setCanais(d.canais ?? []))
+      .then((d) => setCanais((d.canais ?? []).filter((c: CanalComAtividade) => c.status === 'active')))
       .catch(() => setCanais([]))
   }, [])
 
