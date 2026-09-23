@@ -249,15 +249,25 @@ export async function handleLeads(reply: ReplyFn, options: { name: string; value
     } = await import('@/lib/db/supabase')
     const { calcularEstagiosTag, canalDoFluxo } = await import('@/lib/blacksender/jornada')
 
-    const configs = (await listarFlowTagConfigs()).filter((c) => c.origem === 'blacksender')
+    const todosConfigs = await listarFlowTagConfigs()
+    const configs = todosConfigs.filter((c) => c.origem === 'blacksender')
+    const configsSP = todosConfigs.filter((c) => c.origem !== 'blacksender')
     const alvoLower = alvoInput.toLowerCase()
-    const cfgAlvo = configs.find((c) => c.flowId === alvoInput || (c.funil ?? '').toLowerCase().includes(alvoLower))
+    const cfgAlvo = todosConfigs.find((c) => c.flowId === alvoInput || (c.funil ?? '').toLowerCase().includes(alvoLower))
 
     if (cfgAlvo) {
-      const { calcularRelatorioFunilBlacksender } = await import('@/lib/blacksender/relatorio')
-      const relatorio = await calcularRelatorioFunilBlacksender(cfgAlvo, data, configs)
+      if (cfgAlvo.origem === 'blacksender') {
+        const { calcularRelatorioFunilBlacksender } = await import('@/lib/blacksender/relatorio')
+        const relatorio = await calcularRelatorioFunilBlacksender(cfgAlvo, data, configs)
+        await reply({
+          embeds: [embedLeadsBlacksender({ nome: cfgAlvo.funil || cfgAlvo.flowId, tipo: 'funil', data, origem: 'blacksender', ...relatorio })],
+        })
+        return
+      }
+      const { calcularRelatorioFunilSendpulse } = await import('@/lib/sendpulse/relatorio')
+      const relatorio = await calcularRelatorioFunilSendpulse(cfgAlvo, data, configsSP)
       await reply({
-        embeds: [embedLeadsBlacksender({ nome: cfgAlvo.funil || cfgAlvo.flowId, tipo: 'funil', data, ...relatorio })],
+        embeds: [embedLeadsBlacksender({ nome: cfgAlvo.funil || cfgAlvo.flowId, tipo: 'funil', data, origem: 'sendpulse', ...relatorio })],
       })
       return
     }
