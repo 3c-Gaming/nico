@@ -3,8 +3,9 @@
 // Cartão de lead com a jornada dentro de um fluxo — usado tanto no painel lateral (PainelConversasFluxo,
 // tela de Funis) quanto na apresentação pública de funil único (funis/apresentar-funil).
 
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, Bot, User, MousePointerClick, Link2, Image as ImageIcon, FileText, Volume2, Video, Tag as TagIcon, CheckCircle2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronDown, ChevronUp, Bot, User, MousePointerClick, Link2, Image as ImageIcon, FileText, Volume2, Video, Tag as TagIcon, CheckCircle2, X } from 'lucide-react'
 
 export interface MensagemFluxo {
   id: string
@@ -141,8 +142,46 @@ function Avatar({ fotoUrl, Icone }: { fotoUrl?: string | null; Icone: typeof Bot
   )
 }
 
+/** Modal de imagem ampliada — via portal pra `document.body`: os painéis de conversa vivem dentro
+ * de sidebars animadas (framer-motion aplica transform no wrapper), e um ancestral com transform
+ * quebra `position: fixed` (vira relativo a ele, não à viewport inteira). Portal escapa isso. */
+function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    const overflowAnterior = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = overflowAnterior
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/75 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+      >
+        <X size={24} />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element -- URL externa (proxy do Telegram, S3 da SendPulse/Black Sender), sem domínio fixo */}
+      <img
+        src={url}
+        alt=""
+        className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>,
+    document.body,
+  )
+}
+
 function MensagemLinha({
-  msg, cliqueConfirmado, remetenteNome, remetenteFotoUrl, leadNome, tema,
+  msg, cliqueConfirmado, remetenteNome, remetenteFotoUrl, leadNome, tema, onImagemClick,
 }: {
   msg: MensagemFluxo
   cliqueConfirmado?: boolean
@@ -152,6 +191,7 @@ function MensagemLinha({
   remetenteFotoUrl?: string | null
   leadNome?: string
   tema: typeof TEMA_PADRAO
+  onImagemClick: (url: string) => void
 }) {
   const deEntrada = msg.direcao === 'entrada'
   const nome = deEntrada ? (leadNome || 'Lead') : (remetenteNome || 'Bot')
@@ -209,7 +249,7 @@ function MensagemLinha({
             // cor de texto atual (border-current), então funcionam em qualquer tema sem contraste
             // ruim — era um pill escuro fixo em cima de bolha clara antes.
             <div className="-mx-3 -mt-2">
-              <a href={msg.imagemUrl} target="_blank" rel="noopener noreferrer" className="block">
+              <button type="button" onClick={() => onImagemClick(msg.imagemUrl!)} className="block w-full cursor-zoom-in">
                 {/* eslint-disable-next-line @next/next/no-img-element -- URL externa (S3 da SendPulse), sem domínio fixo pra configurar no next/image */}
                 <img
                   src={msg.imagemUrl}
@@ -217,7 +257,7 @@ function MensagemLinha({
                   className="w-full max-h-[220px] object-cover"
                   loading="lazy"
                 />
-              </a>
+              </button>
               {(msg.titulo || msg.texto) && (
                 <div className="px-3 pt-2 pb-1.5 space-y-0.5">
                   {msg.titulo && <p className="font-semibold whitespace-pre-wrap">{msg.titulo}</p>}
@@ -273,6 +313,7 @@ export function LeadConversaDetalhe({
 }) {
   const variaveisEntries = Object.entries(lead.variaveis).filter(([, v]) => v != null && v !== '')
   const tema = canal ? TEMA_POR_CANAL[canal] : TEMA_PADRAO
+  const [imagemAberta, setImagemAberta] = useState<string | null>(null)
 
   return (
     <div className="space-y-3">
@@ -323,9 +364,11 @@ export function LeadConversaDetalhe({
             remetenteFotoUrl={remetenteFotoUrl}
             leadNome={lead.nome}
             tema={tema}
+            onImagemClick={setImagemAberta}
           />
         ))}
       </div>
+      {imagemAberta && <Lightbox url={imagemAberta} onClose={() => setImagemAberta(null)} />}
     </div>
   )
 }
