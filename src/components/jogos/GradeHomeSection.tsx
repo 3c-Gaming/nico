@@ -74,6 +74,11 @@ export function GradeHomeSection() {
     trilhaRef.current?.scrollBy({ left: direcao * 300, behavior: 'smooth' })
   }
 
+  // Sem jogo nenhum pra mostrar (e sem erro, que precisa aparecer) — a seção inteira só ocupa
+  // espaço vazio na Home sem agregar nada, esconde em vez de deixar o "Sem jogos hoje ou amanhã"
+  // solto lá.
+  if (!carregando && !erro && itens.length === 0) return null
+
   return (
     <section>
       <div className="flex items-center justify-between mb-4">

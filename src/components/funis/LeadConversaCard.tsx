@@ -301,7 +301,7 @@ function MensagemLinha({
  * ser usado tanto dentro do LeadConversaCard (apresentação pública) quanto num painel próprio
  * (sidebar de detalhe do PainelConversasFluxo). */
 export function LeadConversaDetalhe({
-  lead, remetenteNome, remetenteFotoUrl, canal,
+  lead, remetenteNome, remetenteFotoUrl, canal, mostrarCabecalho = true,
 }: {
   lead: LeadComConversa
   /** Nome/foto do bot que mandou as mensagens "saida" dessa conversa (ver MensagemLinha). */
@@ -310,6 +310,9 @@ export function LeadConversaDetalhe({
   /** WhatsApp/Telegram/RCS — dá a cor da bolha (ver TEMA_POR_CANAL). Sem canal reconhecido, cai
    * no visual neutro antigo. */
   canal?: TemaConversa
+  /** Tags/variáveis/label "Jornada" — desliga pra usar isso como mockup puro de chat (ex: prévia
+   * de template antes de disparar, sem lead de verdade por trás). */
+  mostrarCabecalho?: boolean
 }) {
   const variaveisEntries = Object.entries(lead.variaveis).filter(([, v]) => v != null && v !== '')
   const tema = canal ? TEMA_POR_CANAL[canal] : TEMA_PADRAO
@@ -317,7 +320,7 @@ export function LeadConversaDetalhe({
 
   return (
     <div className="space-y-3">
-      {lead.tags.length > 0 && (
+      {mostrarCabecalho && lead.tags.length > 0 && (
         <div className="flex items-start gap-1.5">
           <TagIcon size={12} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
           <div className="flex flex-wrap gap-1">
@@ -339,7 +342,7 @@ export function LeadConversaDetalhe({
         </div>
       )}
 
-      {variaveisEntries.length > 0 && (
+      {mostrarCabecalho && variaveisEntries.length > 0 && (
         <div className="space-y-1">
           <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Variáveis</p>
           <div className="rounded bg-[var(--bg-elevated)] border border-[var(--border)] p-2 space-y-0.5">
@@ -354,7 +357,7 @@ export function LeadConversaDetalhe({
       )}
 
       <div className="space-y-1.5">
-        <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada</p>
+        {mostrarCabecalho && <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Jornada</p>}
         {lead.mensagens.map((msg) => (
           <MensagemLinha
             key={msg.id}

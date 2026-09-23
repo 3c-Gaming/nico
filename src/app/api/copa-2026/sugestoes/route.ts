@@ -21,7 +21,7 @@ function montarPrompt(
     .map((m) => `- ${m.homeTeam} vs ${m.awayTeam} (${m.stage})`)
     .join('\n')
 
-  let prompt = `Você é um especialista em marketing para a SuperBet, casa de apostas brasileira.
+  const prompt = `Você é um especialista em marketing para a SuperBet, casa de apostas brasileira.
 
 Gere ${quantidade} sugestões de disparo promocional para os jogos de amanhã da Copa do Mundo FIFA 2026.
 

@@ -325,7 +325,7 @@ export function PainelFunisBlacksender() {
       .then((r) => (r.ok ? r.json() : { campanhas: [] }))
       .then((d) => setCampanhas(d.campanhas ?? []))
       .catch(() => setCampanhas([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [hoje])
 
   useEffect(() => {
@@ -356,7 +356,7 @@ export function PainelFunisBlacksender() {
       setCarregando(false)
     })
     return () => { cancelado = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [configs, hoje, campanhas, saveVersion])
 
   // Último lead por flow — reaproveita /api/blacksender/fluxos/[flowId] (já ordena por

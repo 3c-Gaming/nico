@@ -13,7 +13,7 @@ import { useDisparos } from '@/hooks/useDisparos'
 import { useResultadoDisparo } from '@/hooks/useResultadoDisparo'
 import { FunilConversaoChart, type EstagioFunil } from '@/components/funis/FunilConversaoChart'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from '@/components/funis/LeadConversaCard'
-import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs } from '@/lib/rcs/template'
+import { renderizarRcsContent, renderizarFallbackText, primeiroLinkRcs, conteudoParaMensagem, cliqueParaMensagem } from '@/lib/rcs/template'
 import type { RcsContent } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { RcsSuggestionChips } from './RcsSuggestionChips'
@@ -34,32 +34,6 @@ interface EnvioRcs {
   atualizado_em?: string
   receptivo_enviado_em?: string | null
   receptivo_erro?: string | null
-}
-
-// Um RcsContent (texto ou card) renderizado (variáveis já resolvidas) virando bolha de conversa —
-// mesmo formato que LeadConversaCard usa pras conversas de funil de tráfego (SendPulse/Black
-// Sender), reaproveitado aqui pra dar a mesma visão de chat pros disparos de RCS.
-function conteudoParaMensagem(id: string, criadoEm: string, conteudo: RcsContent, variables?: Record<string, string>): MensagemFluxo {
-  const c = renderizarRcsContent(conteudo, variables)
-  const sugestoes = c.type === 'card' ? c.card.suggestions : c.suggestions
-  const botoesOferecidos = sugestoes?.length ? sugestoes.map((s) => s.text) : undefined
-  if (c.type === 'card') {
-    return {
-      id, direcao: 'saida', criadoEm,
-      tipo: c.card.media?.url ? 'imagem' : 'texto',
-      titulo: c.card.title || undefined,
-      texto: c.card.description || undefined,
-      imagemUrl: c.card.media?.url,
-      botoesOferecidos,
-    }
-  }
-  return { id, direcao: 'saida', criadoEm, tipo: 'texto', texto: c.text, botoesOferecidos }
-}
-
-function cliqueParaMensagem(id: string, criadoEm: string, conteudo: RcsContent): MensagemFluxo {
-  const sugestoes = conteudo.type === 'card' ? conteudo.card.suggestions : conteudo.suggestions
-  const botao = sugestoes?.find((s) => s.type === 'REPLY') ?? sugestoes?.[0]
-  return { id, direcao: 'entrada', criadoEm, tipo: 'botao_clicado', botaoTitulo: botao?.text || 'clique' }
 }
 
 function envioParaLeadConversa(envio: EnvioRcs, variables: Record<string, string> | undefined, disparo: Disparo): LeadComConversa {

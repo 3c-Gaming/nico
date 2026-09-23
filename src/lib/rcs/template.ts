@@ -1,5 +1,6 @@
 import type { RcsContent, RcsSuggestion, RcsCard, RcsSmsFallback } from './tipos'
 import { LIMITE_FALLBACK_TEXT } from './tipos'
+import type { MensagemFluxo } from '@/components/funis/LeadConversaCard'
 
 const TOKEN_RE = /\{\{([^}]+)\}\}/g
 
@@ -101,6 +102,35 @@ export function extrairVariaveisRcs(conteudo: RcsContent): string[] {
     c.suggestions?.forEach((s) => { push(s.text); if (s.type === 'OPEN_URL') push(s.url) })
   }
   return Array.from(new Set(alvos))
+}
+
+/** Um RcsContent (texto ou card) renderizado (variáveis já resolvidas) virando bolha de conversa —
+ * mesmo formato que LeadConversaCard usa pras conversas de funil de tráfego (SendPulse/Black
+ * Sender), reaproveitado pra dar a mesma visão de chat pros disparos de RCS (real e prévia). */
+export function conteudoParaMensagem(id: string, criadoEm: string, conteudo: RcsContent, variables?: Record<string, string>): MensagemFluxo {
+  const c = renderizarRcsContent(conteudo, variables)
+  const sugestoes = c.type === 'card' ? c.card.suggestions : c.suggestions
+  const botoesOferecidos = sugestoes?.length ? sugestoes.map((s) => s.text) : undefined
+  if (c.type === 'card') {
+    return {
+      id, direcao: 'saida', criadoEm,
+      tipo: c.card.media?.url ? 'imagem' : 'texto',
+      titulo: c.card.title || undefined,
+      texto: c.card.description || undefined,
+      imagemUrl: c.card.media?.url,
+      botoesOferecidos,
+    }
+  }
+  return { id, direcao: 'saida', criadoEm, tipo: 'texto', texto: c.text, botoesOferecidos }
+}
+
+/** O clique do lead num botão Resposta (REPLY) do conteúdo — vira bolha "entrada" do tipo
+ * botao_clicado. Sem REPLY configurado, cai no 1º botão qualquer (não deveria acontecer na
+ * prática: só chamamos isso quando já sabemos que houve clique registrado). */
+export function cliqueParaMensagem(id: string, criadoEm: string, conteudo: RcsContent): MensagemFluxo {
+  const sugestoes = conteudo.type === 'card' ? conteudo.card.suggestions : conteudo.suggestions
+  const botao = sugestoes?.find((s) => s.type === 'REPLY') ?? sugestoes?.[0]
+  return { id, direcao: 'entrada', criadoEm, tipo: 'botao_clicado', botaoTitulo: botao?.text || 'clique' }
 }
 
 /** Valida o esqueleto do template antes de salvar/disparar. Retorna lista de erros (vazia = ok). */

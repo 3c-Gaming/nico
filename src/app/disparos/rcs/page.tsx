@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, Send, RefreshCw, Save, Plus, Trash2, Image as ImageIcon, CalendarClock, Link2, MessageSquare } from 'lucide-react'
+import { Upload, Send, RefreshCw, Save, Plus, Trash2, Image as ImageIcon, CalendarClock, Link2, MessageSquare, LayoutTemplate } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { UtmComboBox } from '@/components/ui/UtmComboBox'
+import { Modal } from '@/components/ui/Modal'
 import { useDisparos } from '@/hooks/useDisparos'
 import { usePinnedDisparos } from '@/hooks/usePinnedDisparos'
 import { useCasasAposta } from '@/hooks/useCasasAposta'
@@ -20,8 +21,16 @@ import type {
   RcsCardOrientation,
 } from '@/lib/rcs/tipos'
 import { CUSTO_RCS_POR_ENVIO, CUSTO_FALLBACK_SMS, LIMITE_FALLBACK_TEXT } from '@/lib/rcs/tipos'
-import { renderizarRcsContent, extrairVariaveisRcs, validarRcsContent, validarFallback } from '@/lib/rcs/template'
+import {
+  renderizarRcsContent,
+  extrairVariaveisRcs,
+  validarRcsContent,
+  validarFallback,
+  conteudoParaMensagem,
+  cliqueParaMensagem,
+} from '@/lib/rcs/template'
 import { RcsSuggestionChips } from '@/components/disparos/RcsSuggestionChips'
+import { LeadConversaDetalhe, type LeadComConversa, type MensagemFluxo } from '@/components/funis/LeadConversaCard'
 import { useConfirm } from '@/components/ui/useConfirm'
 
 interface RcsTemplate {
@@ -190,6 +199,7 @@ export default function RcsCompletoPage() {
   const [templates, setTemplates] = useState<RcsTemplate[]>([])
   const [templateSelId, setTemplateSelId] = useState<string>('')
   const [salvandoTemplate, setSalvandoTemplate] = useState(false)
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false)
 
   // --- builder ---
   const [nome, setNome] = useState('')
@@ -371,10 +381,36 @@ export default function RcsCompletoPage() {
   }, [receptivoOn, receptivoConteudo, suggestions])
   const variaveisTemplate = useMemo(() => extrairVariaveisRcs(conteudo), [conteudo])
   const colunasBase = headers.filter((h) => h && h !== colTelefone)
-  const previewContent = useMemo(
-    () => renderizarRcsContent(conteudo, linhas[0]?.variables ?? {}),
-    [conteudo, linhas],
-  )
+
+  // Prévia como conversa: mensagem principal, o clique do lead (se tiver botão REPLY) e a
+  // receptiva (se ligada) — mesmas peças que montam a conversa real de um envio (ver
+  // envioParaLeadConversa em PainelDetalheDisparoRcs), só que com dados sintéticos pra dar pro
+  // usuário ver o resultado ANTES de disparar de verdade.
+  const temReplyPrincipal = suggestions.some((s) => s.type === 'REPLY')
+  const numeroExemplo = linhas[0]?.telefone
+  const variaveisExemplo = linhas[0]?.variables
+  const leadPreview: LeadComConversa = useMemo(() => {
+    const agora = Date.now()
+    const mensagens: MensagemFluxo[] = [
+      conteudoParaMensagem('preview-msg1', new Date(agora - 3 * 60_000).toISOString(), conteudo, variaveisExemplo),
+    ]
+    if (temReplyPrincipal) {
+      mensagens.push(cliqueParaMensagem('preview-click', new Date(agora - 2 * 60_000).toISOString(), conteudo))
+      if (receptivoOn) {
+        mensagens.push(conteudoParaMensagem('preview-msg2', new Date(agora - 60_000).toISOString(), receptivoConteudo, variaveisExemplo))
+      }
+    }
+    return {
+      contactId: 'preview',
+      nome: numeroExemplo || '5599999999999',
+      telefone: numeroExemplo || '5599999999999',
+      ultimaAtividade: new Date(agora).toISOString(),
+      tags: [],
+      variaveis: {},
+      mensagens,
+      tagCliqueLink: null,
+    }
+  }, [conteudo, temReplyPrincipal, receptivoOn, receptivoConteudo, variaveisExemplo, numeroExemplo])
 
   function carregarTemplateNoBuilder(t: RcsTemplate) {
     setTemplateSelId(t.id)
@@ -714,18 +750,31 @@ export default function RcsCompletoPage() {
         descricao="Templates com imagem + botões, envio pra base via Solvefy"
       />
 
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 xl:pr-[404px]">
         {modoEdicao && (
           <div className="max-w-5xl rounded-lg border border-[var(--d1)]/40 bg-[var(--d1)]/10 px-3 py-2 text-xs text-[var(--text-secondary)]">
             Editando um disparo RCS <b>agendado</b>. Pode mudar template, base, tracking, fallback, data/hora — ao salvar, ele continua agendado com os novos dados.
           </div>
         )}
         {/* ===== TEMPLATES ===== */}
-        <section className="max-w-5xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Templates</h2>
+        <section className="max-w-6xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+              {templateSelId ? templates.find((t) => t.id === templateSelId)?.nome ?? 'Template' : 'Novo template'}
+            </h2>
+            <p className="text-xs text-[var(--text-muted)]">
+              {templates.length > 0 ? `${templates.length} template(s) salvo(s)` : 'Nenhum template salvo ainda'}
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="secondary" onClick={() => setTemplatesModalOpen(true)} disabled={templates.length === 0}>
+              <LayoutTemplate size={14} /> Escolher template
+            </Button>
             <Button size="sm" variant="secondary" onClick={novoTemplate}><Plus size={14} /> Novo</Button>
           </div>
+        </section>
+
+        <Modal open={templatesModalOpen} onClose={() => setTemplatesModalOpen(false)} title="Templates salvos" width="920px">
           {templates.length === 0 ? (
             <p className="text-xs text-[var(--text-muted)]">Nenhum template salvo ainda.</p>
           ) : (
@@ -735,16 +784,15 @@ export default function RcsCompletoPage() {
                   key={t.id}
                   t={t}
                   selecionado={templateSelId === t.id}
-                  onSelecionar={() => carregarTemplateNoBuilder(t)}
+                  onSelecionar={() => { carregarTemplateNoBuilder(t); setTemplatesModalOpen(false) }}
                   onExcluir={() => excluirTemplate(t.id)}
                 />
               ))}
             </div>
           )}
-        </section>
+        </Modal>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 max-w-5xl">
-          {/* ===== BUILDER ===== */}
+        {/* ===== BUILDER ===== */}
           <section className="p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] space-y-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               {templateSelId ? 'Editar template' : 'Novo template'}
@@ -920,42 +968,8 @@ export default function RcsCompletoPage() {
             </Button>
           </section>
 
-          {/* ===== PREVIEW ===== */}
-          <section className="p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] h-fit sticky top-6">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Prévia</h2>
-            <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--bg-base)]">
-              {previewContent.type === 'card' ? (
-                <>
-                  {previewContent.card.media?.url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previewContent.card.media.url} alt="" className="w-full object-cover" style={{ maxHeight: mediaHeight === 'TALL' ? 260 : mediaHeight === 'SHORT' ? 110 : 170 }} />
-                  )}
-                  <div className="p-3 space-y-1">
-                    {previewContent.card.title && <p className="text-sm font-semibold text-[var(--text-primary)]">{previewContent.card.title}</p>}
-                    {previewContent.card.description && <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap">{previewContent.card.description}</p>}
-                  </div>
-                </>
-              ) : (
-                <div className="p-3">
-                  <p className="text-xs text-[var(--text-primary)] whitespace-pre-wrap">{previewContent.type === 'text' ? previewContent.text : ''}</p>
-                </div>
-              )}
-              <RcsSuggestionChips
-                suggestions={previewContent.type === 'card' ? previewContent.card.suggestions : previewContent.suggestions}
-              />
-            </div>
-            {variaveisTemplate.length > 0 && (
-              <p className="mt-2 text-[10px] text-[var(--text-muted)]">
-                Variáveis: {variaveisTemplate.map((v) => (
-                  <span key={v} className={colunasBase.includes(v) ? 'text-emerald-400' : 'text-red-400'}>{`{{${v}}} `}</span>
-                ))}
-              </p>
-            )}
-          </section>
-        </div>
-
         {/* ===== DISPARO ===== */}
-        <section className="max-w-5xl p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] space-y-4">
+        <section className="p-4 rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] space-y-4">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Disparo</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1213,6 +1227,32 @@ export default function RcsCompletoPage() {
               ))}
             </div>
           </section>
+        )}
+      </div>
+
+      {/* ===== PREVIEW (chat) — fixa na tela (position: fixed, fora do scroll do <main>), só
+      visível a partir de xl pra não brigar por espaço com os forms em telas estreitas ===== */}
+      <div className="hidden xl:flex xl:flex-col fixed top-0 right-0 bottom-0 z-10 w-[380px] border-l border-[var(--border)] bg-[var(--bg-base)] p-4 overflow-y-auto">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Prévia da conversa</h2>
+        <div className="rounded-xl bg-[var(--bg-base)] border border-[var(--border)] p-3">
+          <LeadConversaDetalhe lead={leadPreview} remetenteNome="RCS" canal="rcs" mostrarCabecalho={false} />
+        </div>
+        {!temReplyPrincipal && (
+          <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+            Adicione um botão de <strong>Resposta (REPLY)</strong> na mensagem principal pra simular o clique do lead aqui.
+          </p>
+        )}
+        {temReplyPrincipal && !receptivoOn && (
+          <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+            Ligue a <strong>mensagem receptiva</strong> (mais abaixo) pra ver a resposta automática depois do clique.
+          </p>
+        )}
+        {variaveisTemplate.length > 0 && (
+          <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+            Variáveis: {variaveisTemplate.map((v) => (
+              <span key={v} className={colunasBase.includes(v) ? 'text-emerald-400' : 'text-red-400'}>{`{{${v}}} `}</span>
+            ))}
+          </p>
         )}
       </div>
     </div>

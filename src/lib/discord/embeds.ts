@@ -239,16 +239,12 @@ export function embedRelatorio(
  * replyToInteraction não fazem hoje), então usa blocos Unicode (█/░) alinhados num ```code block```,
  * mesma ideia visual das barras de "Execuções por status" do painel web (largura proporcional ao
  * maior valor), só que em texto puro. */
-function barraProporcionalTags(estagios: { tag: string; contagem: number; falhou?: boolean }[]): string {
+function barraProporcionalTags(estagios: { tag: string; contagem: number }[]): string {
   if (estagios.length === 0) return ''
   const LARGURA_BARRA = 14
-  // Etapa que falhou ao consultar não entra no cálculo do pico — um 0 de falha não é "realmente
-  // zero" (ver contarTagHoje em sendpulse/relatorio.ts), não pode influenciar a escala das outras.
-  const validos = estagios.filter((e) => !e.falhou)
-  const max = Math.max(...validos.map((e) => e.contagem), 1)
+  const max = Math.max(...estagios.map((e) => e.contagem), 1)
   const maiorNome = Math.max(...estagios.map((e) => e.tag.length))
   const linhas = estagios.map((e) => {
-    if (e.falhou) return `${e.tag.padEnd(maiorNome, ' ')} ⚠️ falha ao consultar`
     // Pelo menos 1 bloco preenchido quando contagem > 0 — igual TAMANHO_MINIMO_PCT do
     // FunilConversaoChart, deixa claro que a etapa teve gente mesmo quando é bem menor que o pico.
     const preenchido = e.contagem > 0 ? Math.max(1, Math.round((e.contagem / max) * LARGURA_BARRA)) : 0
@@ -268,7 +264,7 @@ export function embedLeadsBlacksender(info: {
   totalLeads: number
   registros: number
   ftds: number
-  estagios: { tag: string; contagem: number; falhou?: boolean }[]
+  estagios: { tag: string; contagem: number }[]
   ultimoLeadEm: string | null
   totalEntradasNoNumero: number
   origem?: 'blacksender' | 'sendpulse'
@@ -284,16 +280,13 @@ export function embedLeadsBlacksender(info: {
   linhas.push(`🧑‍🧒‍🧒 **REG:** **${info.registros}** · ✅ **FTD:** **${info.ftds}**`)
   linhas.push(`**Último Lead às** ${ultimoLeadFmt ?? '—'}`)
   linhas.push(`**Total de Entradas no Número:** ${info.totalEntradasNoNumero}`)
-  if (info.estagios.some((e) => e.falhou)) {
-    linhas.push('⚠️ *Algumas etapas falharam ao consultar a SendPulse — números incompletos, confira de novo em instantes.*')
-  }
 
   return {
     title: `📈 FUNIL — ${info.nome}`,
     description: `${info.tipo === 'funil' ? 'Funil' : 'Número'} · ${dataFmt}`,
     color: info.totalLeads > 0 ? 0x22c55e : 0x64748b,
     fields: [{ name: '​', value: linhas.join('\n'), inline: false }],
-    footer: { text: `Nico Bot · ${info.origem === 'sendpulse' ? 'SendPulse' : 'Black Sender'}` },
+    footer: { text: 'Nico Bot · Black Sender' },
     timestamp: new Date().toISOString(),
   }
 }
