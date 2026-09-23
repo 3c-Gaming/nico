@@ -110,6 +110,12 @@ export function validarRcsContent(conteudo: RcsContent | null | undefined): stri
 
   if (conteudo.type === 'text') {
     if (!conteudo.text?.trim()) erros.push('texto é obrigatório')
+    for (const s of conteudo.suggestions ?? []) {
+      if (!s.text?.trim()) erros.push('botão sem texto')
+      if (s.type === 'OPEN_URL' && !/^https?:\/\//i.test(s.url ?? '')) erros.push(`botão "${s.text}" sem URL válida`)
+      if (s.type === 'REPLY' && !s.postbackData?.trim()) erros.push(`botão "${s.text}" sem postbackData`)
+    }
+    if ((conteudo.suggestions?.length ?? 0) > 4) erros.push('máximo de 4 botões (limite do RCS)')
   } else if (conteudo.type === 'card') {
     const c = conteudo.card
     if (!c) erros.push('card vazio')

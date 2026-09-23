@@ -210,7 +210,8 @@ export default function RcsCompletoPage() {
   const [fallbackText, setFallbackText] = useState('')
 
   // --- receptivo: 2ª mensagem disparada quando o lead clica um botão REPLY da 1ª (via polling,
-  // ver /api/cron/rcs-receptivo) — mesmo formato texto/card da mensagem principal, sem botões ---
+  // ver /api/cron/rcs-receptivo) — mesmo formato texto/card da mensagem principal. Só aceita
+  // botão de link (OPEN_URL): REPLY exigiria um 3º hop de clique que a Solvefy não confirma ---
   const [receptivoOn, setReceptivoOn] = useState(false)
   const [receptivoTipo, setReceptivoTipo] = useState<'text' | 'card'>('text')
   const [receptivoTexto, setReceptivoTexto] = useState('')
@@ -219,6 +220,7 @@ export default function RcsCompletoPage() {
   const [receptivoMediaUrl, setReceptivoMediaUrl] = useState('')
   const [receptivoMediaHeight, setReceptivoMediaHeight] = useState<RcsMediaHeight>('MEDIUM')
   const [receptivoOrientation, setReceptivoOrientation] = useState<RcsCardOrientation>('VERTICAL')
+  const [receptivoSuggestions, setReceptivoSuggestions] = useState<RcsSuggestion[]>([])
   const [subindoImgReceptivo, setSubindoImgReceptivo] = useState(false)
   const fileImgReceptivoRef = useRef<HTMLInputElement>(null)
 
@@ -276,12 +278,12 @@ export default function RcsCompletoPage() {
         setReceptivoOn(!!d.rcsReceptivo?.ativo)
         const rc = d.rcsReceptivo?.conteudo
         if (rc?.type === 'text') {
-          setReceptivoTipo('text'); setReceptivoTexto(rc.text ?? '')
+          setReceptivoTipo('text'); setReceptivoTexto(rc.text ?? ''); setReceptivoSuggestions(rc.suggestions ?? [])
         } else if (rc?.type === 'card') {
           setReceptivoTipo('card')
           setReceptivoCardTitle(rc.card.title ?? ''); setReceptivoCardDesc(rc.card.description ?? '')
           setReceptivoMediaUrl(rc.card.media?.url ?? ''); setReceptivoMediaHeight(rc.card.media?.height ?? 'MEDIUM')
-          setReceptivoOrientation(rc.card.orientation ?? 'VERTICAL')
+          setReceptivoOrientation(rc.card.orientation ?? 'VERTICAL'); setReceptivoSuggestions(rc.card.suggestions ?? [])
         }
         if (d.utm) { setCasaTracking('superbet'); setUtmValor(d.utm) }
         else if (d.betmgmPid) { setCasaTracking('betmgm'); setUtmValor(d.betmgmPid) }
@@ -340,7 +342,9 @@ export default function RcsCompletoPage() {
     : null
 
   const receptivoConteudo: RcsContent = useMemo(() => {
-    if (receptivoTipo === 'text') return { type: 'text', text: receptivoTexto }
+    if (receptivoTipo === 'text') {
+      return { type: 'text', text: receptivoTexto, suggestions: receptivoSuggestions.length ? receptivoSuggestions : undefined }
+    }
     return {
       type: 'card',
       card: {
@@ -348,9 +352,10 @@ export default function RcsCompletoPage() {
         description: receptivoCardDesc || undefined,
         media: receptivoMediaUrl ? { url: receptivoMediaUrl, height: receptivoMediaHeight } : undefined,
         orientation: receptivoOrientation,
+        suggestions: receptivoSuggestions.length ? receptivoSuggestions : undefined,
       },
     }
-  }, [receptivoTipo, receptivoTexto, receptivoCardTitle, receptivoCardDesc, receptivoMediaUrl, receptivoMediaHeight, receptivoOrientation])
+  }, [receptivoTipo, receptivoTexto, receptivoCardTitle, receptivoCardDesc, receptivoMediaUrl, receptivoMediaHeight, receptivoOrientation, receptivoSuggestions])
 
   const receptivo: RcsReceptivo | undefined = receptivoOn
     ? { ativo: true, conteudo: receptivoConteudo }
@@ -688,6 +693,17 @@ export default function RcsCompletoPage() {
   }
   function rmSuggestion(i: number) {
     setSuggestions(suggestions.filter((_, idx) => idx !== i))
+  }
+
+  function addReceptivoSuggestion() {
+    if (receptivoSuggestions.length >= 4) { addToast('error', 'Máximo de 4 botões'); return }
+    setReceptivoSuggestions([...receptivoSuggestions, { type: 'OPEN_URL', text: '', url: '' }])
+  }
+  function updReceptivoSuggestion(i: number, patch: Partial<RcsSuggestion>) {
+    setReceptivoSuggestions(receptivoSuggestions.map((s, idx) => (idx === i ? ({ ...s, ...patch } as RcsSuggestion) : s)))
+  }
+  function rmReceptivoSuggestion(i: number) {
+    setReceptivoSuggestions(receptivoSuggestions.filter((_, idx) => idx !== i))
   }
 
   return (
@@ -1087,6 +1103,39 @@ export default function RcsCompletoPage() {
                     </div>
                   </>
                 )}
+
+                {/* botões de link — só OPEN_URL, sem REPLY (a Solvefy não confirma clique da 2ª mensagem) */}
+                <div className="space-y-2 border-t border-[var(--border)] pt-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-[var(--text-primary)]">
+                      Botões de link <span className="text-[var(--text-muted)] font-normal">({receptivoSuggestions.length}/4)</span>
+                    </label>
+                    <Button size="sm" variant="secondary" onClick={addReceptivoSuggestion} disabled={receptivoSuggestions.length >= 4}>
+                      <Link2 size={13} /> Botão de link
+                    </Button>
+                  </div>
+                  {receptivoSuggestions.map((s, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input
+                        className={`${inputCls} h-8`}
+                        value={s.text}
+                        onChange={(e) => updReceptivoSuggestion(i, { text: e.target.value })}
+                        placeholder="Texto do botão"
+                      />
+                      <input
+                        className={`${inputCls} h-8`}
+                        value={(s as Extract<RcsSuggestion, { type: 'OPEN_URL' }>).url}
+                        onChange={(e) => updReceptivoSuggestion(i, { url: e.target.value } as Partial<RcsSuggestion>)}
+                        placeholder="https://..."
+                      />
+                      <button onClick={() => rmReceptivoSuggestion(i)} className="text-[var(--text-muted)] hover:text-[var(--error)] shrink-0">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <RcsSuggestionChips suggestions={receptivoSuggestions} />
               </div>
             )}
           </div>

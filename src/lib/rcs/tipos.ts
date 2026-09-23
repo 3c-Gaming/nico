@@ -62,8 +62,10 @@ export interface ResultadoEnvioRcs {
  * confere as mensagens "aguardando clique" a cada poucos minutos, não por push em tempo real. */
 export interface RcsReceptivo {
   ativo: boolean
-  /** Mesmo formato do conteúdo principal (texto ou card com imagem) — sem suggestions: a Solvefy
-   * não confirma clique de botão da 2ª mensagem, então ainda não dá pra montar um 3º hop. */
+  /** Mesmo formato do conteúdo principal (texto ou card com imagem). Aceita suggestions do tipo
+   * OPEN_URL (botão de link) — não precisa de um 3º hop de clique pra funcionar. REPLY não é
+   * usado aqui: a Solvefy não confirma clique de botão da 2ª mensagem, então não dá pra montar
+   * um 3º hop de conversa. */
   conteudo: RcsContent
 }
 
