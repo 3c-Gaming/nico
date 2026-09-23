@@ -13,6 +13,10 @@
 export interface EstagioFunil {
   tag: string
   contagem: number
+  /** A consulta dessa etapa falhou (timeout/erro na API) — `contagem` nesse caso é só um
+   * placeholder (0), NÃO significa "ninguém chegou aqui". Ver src/lib/sendpulse/relatorio.ts —
+   * hoje só usado no relatório do Discord, que mostra a etapa como "falhou" em vez de barra. */
+  falhou?: boolean
 }
 
 // Tamanho mínimo visível mesmo com contagem 0 — deixa claro que a etapa existe, só não teve leads.

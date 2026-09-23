@@ -13,10 +13,26 @@ import type { EstagioFunil } from '@/components/funis/FunilConversaoChart'
 // mesmo embed em src/lib/discord/relatorios.ts.
 export type RelatorioFunil = RelatorioFunilBlacksender
 
-async function contarTagHoje(botId: string, tag: string, data: string) {
-  return comContaECanalDoBot(botId, (apiKey, canal) =>
-    contarPorTagIntervaloSendpulse(botId, tag, apiKey, data, data, AbortSignal.timeout(60_000), canal),
-  ).catch(() => ({ total: 0, ultimoLeadAt: null as string | null }))
+// Antes disso, um erro em QUALQUER tentativa (timeout, rate limit, hiccup de rede — a SendPulse
+// vive instável sob carga de várias chamadas em paralelo, que é exatamente o caso aqui) virava um
+// "0" silencioso — indistinguível de "a etapa realmente não teve ninguém". Resultado real visto
+// no relatório do Discord: FC_F01_12 e CTA_REGISTRO_F01_12 em 0 enquanto COMPR_REGISTRO_F01_12
+// (etapa POSTERIOR, que só existe se o lead passou pelas duas primeiras) tinha 6 — impossível
+// num funil cumulativo, prova de que as duas etapas "zeradas" na verdade falharam ao consultar.
+// Agora tenta de novo uma vez antes de desistir, e a falha final fica marcada (`falhou: true`) em
+// vez de virar um 0 que mente pra quem lê o relatório.
+async function contarTagHoje(botId: string, tag: string, data: string, tentativas = 2): Promise<{ total: number; ultimoLeadAt: string | null; falhou: boolean }> {
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      const r = await comContaECanalDoBot(botId, (apiKey, canal) =>
+        contarPorTagIntervaloSendpulse(botId, tag, apiKey, data, data, AbortSignal.timeout(60_000), canal),
+      )
+      return { ...r, falhou: false }
+    } catch {
+      if (i < tentativas - 1) await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+  }
+  return { total: 0, ultimoLeadAt: null, falhou: true }
 }
 
 /** `todosConfigsSP`, se passado, evita relistar flow_tag_configs a cada funil quando o chamador
@@ -36,7 +52,7 @@ export async function calcularRelatorioFunilSendpulse(
     Promise.all(tags.map((tag) => contarTagHoje(cfg.botId, tag, data))),
     buscarEventosTrackingDoDiaServidor(data),
   ])
-  const estagios: EstagioFunil[] = tags.map((tag, i) => ({ tag, contagem: resultadosPorTag[i].total }))
+  const estagios: EstagioFunil[] = tags.map((tag, i) => ({ tag, contagem: resultadosPorTag[i].total, falhou: resultadosPorTag[i].falhou }))
   const totalLeads = resultadosPorTag[0]?.total ?? 0
   const ultimoLeadEm = resultadosPorTag[0]?.ultimoLeadAt ?? null
   const { registros, ftds } = calcularResultadoLinhaNoDia(cfg, dia)
