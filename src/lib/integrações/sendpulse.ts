@@ -70,6 +70,7 @@ function mapearBotParaNumero(bot: any, canal: Canal): NumeroSendpulse {
     canal,
     numero,
     nome,
+    foto: bot.channel_data?.photo || undefined,
     status: traduzirStatusBot(bot.status),
     inboxTotal: bot.inbox?.total ?? 0,
     inboxNaoLidas: bot.inbox?.unread ?? 0,

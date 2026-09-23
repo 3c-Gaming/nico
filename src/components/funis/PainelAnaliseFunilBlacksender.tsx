@@ -16,8 +16,8 @@ import { Spinner } from '@/components/ui/Spinner'
 import { adicionarDias, formatarData, parsearDataISO, hojeBrasilISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, contarFunisPorUtm } from '@/lib/funis'
 import { getState } from '@/lib/store'
-import type { FlowTagConfig, CasaAposta, BlacksenderMensagem } from '@/types'
-import { extrairVariaveisDaJornada } from '@/lib/blacksender/jornada'
+import type { FlowTagConfig, CasaAposta, BlacksenderMensagem, BlacksenderCanal } from '@/types'
+import { extrairVariaveisDaJornada, extrairCanalId } from '@/lib/blacksender/jornada'
 import { BlocoMetricas, BlocoGastoMeta, BlocoLucroELinks, BlocoFunilChart, FunilComboBox } from './PainelConversasFluxo'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from './LeadConversaCard'
 import type { EstagioFunil } from './FunilConversaoChart'
@@ -153,12 +153,17 @@ export function PainelAnaliseFunilBlacksender({
   nomeFluxo,
   snapshot,
   onClose,
+  canaisBlacksender,
 }: {
   aberto: boolean
   config: FlowTagConfig | null
   nomeFluxo: string
   snapshot: SnapshotHoje | null
   onClose: () => void
+  /** Lista de canais (números WhatsApp) do Black Sender — usada só pra achar nome/foto do canal
+   * que rodou esse fluxo (ver canalId abaixo), pra mostrar nas mensagens "saída" da conversa em
+   * vez do genérico "Bot". Quem chama já tem essa lista carregada (ver home page). */
+  canaisBlacksender?: BlacksenderCanal[]
 }) {
   const flowId = config?.flowId ?? null
   const dataReferencia = hojeBrasilISO()
@@ -169,7 +174,7 @@ export function PainelAnaliseFunilBlacksender({
   const [buscaLead, setBuscaLead] = useState('')
   const [flowIdCopiado, setFlowIdCopiado] = useState(false)
   const [dataComparacao, setDataComparacao] = useState<string | null>(null)
-  const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; leads: number; registros: number; ftds: number } | null>(null)
+  const [resultadoComparacao, setResultadoComparacao] = useState<{ data: string; leads: number; registros: number; ftds: number; estagiosTag: EstagioFunil[] } | null>(null)
   const [todosFunis, setTodosFunis] = useState<FlowTagConfig[]>([])
   const [funisComparados, setFunisComparados] = useState<string[]>([])
   type ResultadoFunilComparado = { leads: number; registros: number; ftds: number }
@@ -201,10 +206,21 @@ export function PainelAnaliseFunilBlacksender({
   useEffect(() => {
     if (!dataComparacao || !flowId) return
     const dataAlvo = dataComparacao
-    buscarResultadosDoDia(dataAlvo, [], [flowId])
-      .then((dia) => {
+    // Mesmo endpoint do dia atual (dados), só que pro dia comparado — sem isso o funil de
+    // conversão da coluna de comparação ficava sempre vazio (só os totais vinham).
+    Promise.all([
+      buscarResultadosDoDia(dataAlvo, [], [flowId]),
+      fetch(`/api/blacksender/fluxos/${flowId}?data=${dataAlvo}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ])
+      .then(([dia, dadosDia]) => {
         const r = calcularResultadoLinhaNoDia({ flowId, origem: 'blacksender', utm: config?.utm, utmsExtras: config?.utmsExtras }, dia)
-        setResultadoComparacao({ data: dataAlvo, leads: r.leads, registros: Math.round(r.registros), ftds: Math.round(r.ftds) })
+        setResultadoComparacao({
+          data: dataAlvo,
+          leads: r.leads,
+          registros: Math.round(r.registros),
+          ftds: Math.round(r.ftds),
+          estagiosTag: dadosDia?.estagiosTag ?? [],
+        })
       })
       .catch(() => setResultadoComparacao(null))
   }, [dataComparacao, flowId, config?.utm, config?.utmsExtras])
@@ -321,6 +337,18 @@ export function PainelAnaliseFunilBlacksender({
     ? { ...leadSelecionadoBase, mensagens: mensagensPorLead[leadSelecionadoBase.contactId] ?? [] }
     : null
   const carregandoMensagensLead = leadSelecionadoBase !== null && mensagensPorLead[leadSelecionadoBase.contactId] === undefined
+
+  // Canal (número WhatsApp) que rodou esse fluxo — primeiro channel_id não-nulo entre as
+  // execuções (mesma lógica de canalDoFluxo em lib/blacksender/jornada.ts, mas sem o tipo
+  // BlacksenderFlowRun completo, que Execucao aqui não satisfaz).
+  const canalId = useMemo(() => {
+    for (const e of dados?.execucoes ?? []) {
+      const c = extrairCanalId(e.bruto)
+      if (c) return c
+    }
+    return null
+  }, [dados?.execucoes])
+  const canalDoFlow = canalId ? canaisBlacksender?.find((c) => c.id === canalId) : undefined
 
   const totalStatus = dados ? Object.values(dados.porStatus).reduce((a, b) => a + b, 0) : 0
 
@@ -471,6 +499,7 @@ export function PainelAnaliseFunilBlacksender({
                           tags={[]}
                           contagensPorTag={{}}
                         />
+                        <BlocoFunilChart estagios={resultadoComparacao.estagiosTag} cor={corDoFunil} />
                       </>
                     )}
                   </div>
@@ -490,9 +519,12 @@ export function PainelAnaliseFunilBlacksender({
                     contagensPorTag={{}}
                     editavel
                   />
-                  <BlocoLucroELinks flowId={flowId} dataInicio={dataReferencia} dataFim={dataReferencia} ftds={snapshot?.ftds ?? 0} editavel />
-
                   <BlocoFunilChart estagios={dados?.estagiosTag ?? []} cor={corDoFunil} />
+
+                  {/* Depois do funil (não antes) — se vier antes, empurra o funil pra baixo e
+                      desalinha visualmente com o gráfico da coluna de comparação ao lado, que
+                      não tem esse bloco (só a coluna "Hoje" edita lucro/links). */}
+                  <BlocoLucroELinks flowId={flowId} dataInicio={dataReferencia} dataFim={dataReferencia} ftds={snapshot?.ftds ?? 0} editavel />
 
                   <div>
                     <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Execuções por status</p>
@@ -580,7 +612,7 @@ export function PainelAnaliseFunilBlacksender({
                 {carregandoMensagensLead ? (
                   <div className="flex items-center justify-center py-10"><Spinner size={20} /></div>
                 ) : (
-                  <LeadConversaDetalhe lead={leadSelecionado} />
+                  <LeadConversaDetalhe lead={leadSelecionado} remetenteNome={canalDoFlow?.nome ?? undefined} remetenteFotoUrl={canalDoFlow?.fotoUrl} canal="whatsapp" />
                 )}
               </div>
             </motion.div>

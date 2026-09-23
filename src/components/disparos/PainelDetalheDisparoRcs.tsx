@@ -663,7 +663,7 @@ export function PainelDetalheDisparoRcs({ disparo, onClose }: { disparo: Disparo
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <LeadConversaDetalhe lead={leadSelecionado} />
+                <LeadConversaDetalhe lead={leadSelecionado} remetenteNome="RCS" canal="rcs" />
               </div>
             </motion.div>
           )}

@@ -1945,6 +1945,9 @@ export default function HomePage() {
         dataInicio={painelProps?.dataInicio ?? trackingData}
         utm={painelProps?.utm ?? null}
         utmsExtras={painelProps?.utmsExtras ?? []}
+        remetenteNome={monitoramento?.numeros.find((n) => n.numero.id === painelProps?.botId)?.numero.nome}
+        remetenteFotoUrl={monitoramento?.numeros.find((n) => n.numero.id === painelProps?.botId)?.numero.foto}
+        canal={monitoramento?.numeros.find((n) => n.numero.id === painelProps?.botId)?.numero.canal}
       />
 
       <PainelAnaliseFunilBlacksender
@@ -1953,6 +1956,7 @@ export default function HomePage() {
         nomeFluxo={painelBSNomeFluxoAtivo}
         snapshot={painelBSSnapshotAtivo}
         onClose={() => setPainelFunilNome(null)}
+        canaisBlacksender={canaisBlacksender}
       />
     </>
   )

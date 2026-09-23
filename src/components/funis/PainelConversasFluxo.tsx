@@ -10,7 +10,7 @@ import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, ta
 import type { KpiBotao, KpiCusto, FlowTagConfig, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
-import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa } from './LeadConversaCard'
+import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type TemaConversa } from './LeadConversaCard'
 
 const LARGURA_METRICAS = 420
 const LARGURA_COLUNA_COMPARACAO = 380
@@ -107,6 +107,12 @@ interface PainelConversasFluxoProps {
   dataInicio: string
   utm: string | null
   utmsExtras: string[]
+  /** Nome/foto do bot (WhatsApp ou Telegram) que aparece nas mensagens "saída" da conversa —
+   * quem chama já tem isso (useMonitoramento/numeros), ver MensagemLinha em LeadConversaCard. */
+  remetenteNome?: string
+  remetenteFotoUrl?: string | null
+  /** WhatsApp ou Telegram — quem chama já sabe (numero.canal), ver TEMA_POR_CANAL. */
+  canal?: TemaConversa
 }
 
 export function formatInt(n: number): string {
@@ -729,6 +735,9 @@ export function PainelConversasFluxo({
   dataInicio,
   utm,
   utmsExtras,
+  remetenteNome,
+  remetenteFotoUrl,
+  canal,
 }: PainelConversasFluxoProps) {
   const [leads, setLeads] = useState<LeadComConversa[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -1182,6 +1191,11 @@ export function PainelConversasFluxo({
                       editavel
                     />
                   )}
+                  <BlocoFunilChart estagios={estagios} cor={cor} />
+
+                  {/* Depois do funil (não antes) — se vier antes, empurra o funil pra baixo e
+                      desalinha visualmente com o gráfico da coluna de comparação ao lado, que
+                      não tem esse bloco (só a coluna principal edita lucro/links). */}
                   {flowId && (
                     <BlocoLucroELinks
                       flowId={flowId}
@@ -1191,7 +1205,6 @@ export function PainelConversasFluxo({
                       editavel
                     />
                   )}
-                  <BlocoFunilChart estagios={estagios} cor={cor} />
                 </div>
                 {funisComparados.map((flowIdComparado) => {
                   const config = todosFunis.find((f) => f.flowId === flowIdComparado)
@@ -1249,7 +1262,7 @@ export function PainelConversasFluxo({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <LeadConversaDetalhe lead={leadSelecionado} />
+                <LeadConversaDetalhe lead={leadSelecionado} remetenteNome={remetenteNome} remetenteFotoUrl={remetenteFotoUrl} canal={canal} />
               </div>
             </motion.div>
           )}

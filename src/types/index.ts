@@ -211,6 +211,9 @@ export interface NumeroSendpulse {
    * depende do canal. */
   numero: string
   nome: string
+  /** Foto de perfil do bot — a SendPulse expõe isso em channel_data.photo (Telegram quase sempre
+   * tem; WhatsApp Business só quando o número configurou uma foto). */
+  foto?: string
   descricao?: string
   status: 'ativo' | 'inativo'
   inboxTotal: number

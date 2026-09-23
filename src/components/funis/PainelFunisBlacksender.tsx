@@ -18,7 +18,7 @@ import { getState, updateFlowTagConfig, deleteFlowTagConfig, togglePinFunil } fr
 import { buscarResultadosDoDia, calcularSnapshotDoFunil, contarFunisPorCampanha, contarFunisPorUtm, gastoDoFunil } from '@/lib/funis'
 import { hojeBrasilISO } from '@/lib/datas'
 import { PainelAnaliseFunilBlacksender } from './PainelAnaliseFunilBlacksender'
-import type { FlowTagConfig, BlacksenderFlow, CasaAposta } from '@/types'
+import type { FlowTagConfig, BlacksenderFlow, CasaAposta, BlacksenderCanal } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 
 function formatMoeda(n: number): string {
@@ -299,6 +299,9 @@ export function PainelFunisBlacksender() {
   // o render quanto setState síncrono dentro de effect (ambos proibidos pelas regras do projeto).
   const [analiseConfigAtivo, setAnaliseConfigAtivo] = useState<FlowTagConfig | null>(null)
   const [saveVersion, setSaveVersion] = useState(0)
+  // Só pro nome/foto do canal aparecer na conversa (PainelAnaliseFunilBlacksender) em vez do
+  // genérico "Bot" — a home page já tem essa lista carregada pra outros fins, aqui não tinha.
+  const [canaisBlacksender, setCanaisBlacksender] = useState<BlacksenderCanal[]>([])
 
   const hoje = hojeBrasilISO()
   const pinnedFunis = getState().pinnedFunis
@@ -308,6 +311,13 @@ export function PainelFunisBlacksender() {
       .then((r) => (r.ok ? r.json() : { fluxos: [] }))
       .then((d) => setFluxosDisponiveis(d.fluxos ?? []))
       .catch(() => setFluxosDisponiveis([]))
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/blacksender/canais')
+      .then((r) => (r.ok ? r.json() : { canais: [] }))
+      .then((d) => setCanaisBlacksender(d.canais ?? []))
+      .catch(() => setCanaisBlacksender([]))
   }, [])
 
   useEffect(() => {
@@ -586,6 +596,7 @@ export function PainelFunisBlacksender() {
         nomeFluxo={analiseConfigAtivo ? fluxosDisponiveis.find((f) => f.id === analiseConfigAtivo.flowId)?.nome ?? analiseConfigAtivo.flowId : ''}
         snapshot={analiseConfigAtivo ? snapshots[analiseConfigAtivo.flowId] ?? null : null}
         onClose={() => setAnaliseFlowId(null)}
+        canaisBlacksender={canaisBlacksender}
       />
     </section>
   )

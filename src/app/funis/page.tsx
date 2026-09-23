@@ -1735,6 +1735,9 @@ function FunisPageInner() {
         dataInicio={conversasFluxoProps?.dataInicio ?? hojeISO}
         utm={conversasFluxoProps?.utm ?? null}
         utmsExtras={conversasFluxoProps?.utmsExtras ?? []}
+        remetenteNome={numeros.find((n) => n.id === conversasFluxoProps?.botId)?.nome}
+        remetenteFotoUrl={numeros.find((n) => n.id === conversasFluxoProps?.botId)?.foto}
+        canal={numeros.find((n) => n.id === conversasFluxoProps?.botId)?.canal}
       />
     </>
   )
