@@ -5,6 +5,7 @@
 import { chaveTagBot, contarLeadsIntervalo, type GrupoBotTags } from './sendpulseLeads'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import type { CasaAposta, FunilMetricaDiaria } from '@/types'
+import { chaveCasaDeTracking, resolverLucroFtdDaCasa } from './lucro'
 
 // Um fluxo pode ter mais de uma UTM/PID (ex: mesmo funil rodando em duas campanhas
 // diferentes) — soma os resultados de todas ao invés de só olhar a principal.
@@ -161,12 +162,13 @@ export function calcularResultadoLinhaNoDia(
 
 /** Snapshot completo de um funil pra um dia (ou período já agregado em `dia`/`gasto`) — junta
  * leads/registros/FTDs (calcularResultadoLinhaNoDia) com o lucro por FTD configurado por casa
- * (FlowTagConfig.lucroFtdPorCasa) pra chegar no ROI. Usado tanto pelo cron de snapshot diário
+ * (FlowTagConfig.lucroFtdPorCasa) ou o padrão comercial da casa (Superbet = R$ 680/FTD)
+ * pra chegar no ROI. Usado tanto pelo cron de snapshot diário
  * (funil-metricas-snapshot) quanto ao salvar um funil na tela (grava o dia corrente). Sem
  * `atualizadoEm`/`data`/`funil` — quem chama preenche isso (são metadados do registro, não do
  * cálculo em si). */
 export function calcularSnapshotDoFunil(
-  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; flowId?: string; origem?: 'sendpulse' | 'blacksender'; lucroFtdPorCasa?: Record<string, number> },
+  cfg: { tags?: string[]; utm?: string | null; utmsExtras?: string[]; botId?: string; flowId?: string; origem?: 'sendpulse' | 'blacksender'; casas?: string[]; lucroFtdPorCasa?: Record<string, number> },
   dia: ResultadoDia,
   casasAposta: CasaAposta[],
   gasto: number,
@@ -177,16 +179,33 @@ export function calcularSnapshotDoFunil(
   // CASAS_TRACKING em src/lib/tracking.ts). A correlação confiável que existe é pelo nome.
   const casasPorSlug = new Map<string, string>()
   for (const casa of casasAposta) {
-    const nome = casa.nome.toLowerCase()
-    if (nome.includes('superbet')) casasPorSlug.set('superbet', casa.id)
-    else if (nome.includes('betmgm') || nome.includes('bet mgm')) casasPorSlug.set('betmgm', casa.id)
+    const chave = chaveCasaDeTracking(casa)
+    if (chave) casasPorSlug.set(chave, casa.id)
   }
   const resultado = calcularResultadoLinhaNoDia(cfg, dia, funisPorUtm, casasPorSlug)
-  const lucroPorCasa = cfg.lucroFtdPorCasa ?? {}
-  let lucroFtdTotal = 0
+  const casasPorId = new Map(casasAposta.map((casa) => [casa.id, casa]))
+  // `casas` não existia em todas as gravações antigas. Quando está presente, respeita o
+  // vínculo salvo; quando está ausente, mantém a compatibilidade e resolve pelas casas do
+  // resultado (ou pelo slug bruto) sem descartar o histórico já persistido.
+  const casasConfiguradas = cfg.casas ? new Set(cfg.casas) : null
+  let lucroFtdTotal: number | null = 0
+  let ftdParaLucro = 0
+  let ftdForaDasCasas = 0
   for (const [casaId, ftdsCasa] of Object.entries(resultado.ftdsPorCasa)) {
-    lucroFtdTotal += ftdsCasa * (lucroPorCasa[casaId] ?? 0)
+    if (ftdsCasa === 0) continue
+    if (casasConfiguradas && !casasConfiguradas.has(casaId)) {
+      ftdForaDasCasas += ftdsCasa
+      continue
+    }
+    const valor = resolverLucroFtdDaCasa(casaId, cfg.lucroFtdPorCasa, casasPorId.get(casaId))
+    if (valor === null) {
+      lucroFtdTotal = null
+      break
+    }
+    ftdParaLucro += ftdsCasa
+    lucroFtdTotal = (lucroFtdTotal ?? 0) + ftdsCasa * valor
   }
+  if (ftdForaDasCasas > 0 || (resultado.ftds > 0 && ftdParaLucro === 0)) lucroFtdTotal = null
   return {
     leads: resultado.leads,
     registros: Math.round(resultado.registros),
@@ -197,7 +216,7 @@ export function calcularSnapshotDoFunil(
     custoRegistro: gasto > 0 && resultado.registros > 0 ? gasto / resultado.registros : null,
     custoFtd: gasto > 0 && resultado.ftds > 0 ? gasto / resultado.ftds : null,
     lucroFtdTotal,
-    roi: gasto > 0 ? (lucroFtdTotal - gasto) / gasto : null,
+    roi: gasto > 0 && lucroFtdTotal !== null ? (lucroFtdTotal - gasto) / gasto : null,
   }
 }
 

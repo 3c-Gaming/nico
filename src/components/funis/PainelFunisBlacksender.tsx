@@ -283,7 +283,7 @@ function EditorFunilBlacksender({
 
 export function PainelFunisBlacksender() {
   const configs = useConfigsBlacksender()
-  const { list: casasList } = useCasasAposta()
+  const { list: casasList, casas: casasAposta } = useCasasAposta()
   const [fluxosDisponiveis, setFluxosDisponiveis] = useState<BlacksenderFlow[]>([])
   const [campanhas, setCampanhas] = useState<CampanhaMeta[] | null>(null)
   const [snapshots, setSnapshots] = useState<Record<string, SnapshotHoje>>({})
@@ -336,12 +336,13 @@ export function PainelFunisBlacksender() {
     const todasConfigs = Object.values(getState().flowTagConfigs)
     const funisPorUtm = contarFunisPorUtm(todasConfigs)
     const funisPorCampanha = contarFunisPorCampanha(todasConfigs)
+    const casasParaSnapshot = Object.values(casasAposta)
     buscarResultadosDoDia(hoje, [], flowIds).then((dia) => {
       if (cancelado) return
       const next: Record<string, SnapshotHoje> = {}
       for (const cfg of configs) {
         const gasto = campanhas ? gastoDoFunil(cfg.campanhasMeta, campanhas, funisPorCampanha) : 0
-        const snap = calcularSnapshotDoFunil(cfg, dia, [], gasto, funisPorUtm)
+        const snap = calcularSnapshotDoFunil(cfg, dia, casasParaSnapshot, gasto, funisPorUtm)
         next[cfg.flowId] = {
           leads: snap.leads,
           registros: snap.registros,
@@ -357,7 +358,7 @@ export function PainelFunisBlacksender() {
     })
     return () => { cancelado = true }
      
-  }, [configs, hoje, campanhas, saveVersion])
+  }, [configs, hoje, campanhas, saveVersion, casasAposta])
 
   // Último lead por flow — reaproveita /api/blacksender/fluxos/[flowId] (já ordena por
   // criadoEmOrigem desc), não precisa de endpoint novo só pra isso.

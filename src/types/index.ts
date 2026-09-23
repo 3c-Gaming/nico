@@ -409,7 +409,8 @@ export interface FlowTagConfig {
    * gasto (Meta) ÷ leads com aquela tag, ex: "custo por CTA". Ver painel de Detalhes. */
   kpisCusto?: KpiCusto[]
   /** Lucro por FTD (R$) configurado por casa vinculada ao funil (chave = CasaAposta.id) — usado
-   * pra calcular o ROI do funil. Casas sem valor configurado não entram no ROI. */
+   * pra calcular o ROI do funil. Sem override, casas com padrão comercial cadastrado usam o valor
+   * padrão (por exemplo, Superbet = R$ 680/FTD). */
   lucroFtdPorCasa?: Record<string, number>
   /** Link de registro/aposta usados nesse funil — preenchidos manualmente ou via "Buscar da LP"
    * (ver painel de Detalhes). Distintos do link geral da casa (betting-links). */

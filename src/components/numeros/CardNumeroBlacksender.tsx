@@ -7,6 +7,7 @@
 // de verdade agora, tá vivo.
 
 import { Pin } from 'lucide-react'
+import { NumeroAvatar } from '@/components/numeros/NumeroAvatar'
 import { togglePinNumero } from '@/lib/store'
 import type { BlacksenderCanal } from '@/types'
 
@@ -46,7 +47,14 @@ export function CardNumeroBlacksender({ canal }: { canal: CanalBlacksenderComAti
     <div className="rounded-lg glass bg-[var(--glass-bg)] border-2 border-[var(--glass-border)] shadow-[var(--glass-shadow)] p-4 space-y-3 hover:bg-[var(--glass-hover-bg)] hover:shadow-[var(--glass-hover-shadow)] transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${canal.status === 'active' ? 'bg-green-500' : 'bg-red-400'}`} />
+          <div className="relative shrink-0">
+            <NumeroAvatar foto={canal.fotoUrl} nome={canal.nome || canal.telefone} canal="whatsapp" />
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 inline-block w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-surface)] ${canal.status === 'active' ? 'bg-green-500' : 'bg-red-400'}`}
+              title={canal.status === 'active' ? 'Ativo' : 'Inativo'}
+              aria-label={canal.status === 'active' ? 'Ativo' : 'Inativo'}
+            />
+          </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-[var(--text-primary)] truncate">{canal.nome || 'Sem nome'}</span>

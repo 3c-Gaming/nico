@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { getState, updateFlowTagConfig } from '@/lib/store'
 import { adicionarDias, formatarData, parsearDataISO } from '@/lib/datas'
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, gerarRangeDatas, tagDeEntradaDoFluxo, contarFunisPorCampanha, gastoDoFunil, contarFunisPorUtm, type ResultadoLinhaDia } from '@/lib/funis'
+import { resolverLucroFtdDaCasa } from '@/lib/lucro'
 import type { KpiBotao, KpiCusto, FlowTagConfig, CasaAposta } from '@/types'
 import type { CampanhaMeta } from '@/app/api/meta-ads/campanhas/route'
 import { FunilConversaoChart, type EstagioFunil } from './FunilConversaoChart'
@@ -488,8 +489,9 @@ export function BlocoGastoMeta({
 /** Lucro por FTD (configurável por casa vinculada ao funil), links de Registro/Aposta e o ROI
  * resultante — mesmo padrão de auto-save no blur dos outros campos desse painel (comentarios,
  * campanhasMeta). ROI aqui é um best-effort client-side: só calcula quando exatamente UMA casa
- * tem lucro configurado (não dá pra separar `ftds` por casa nesse ponto da árvore de props sem
- * replicar o cálculo pesado que já roda mais acima) — o valor por-casa correto e histórico fica
+ * tem lucro resolvido (override ou padrão). Não dá pra separar `ftds` por casa nesse ponto
+ * da árvore de props sem replicar o cálculo pesado que já roda mais acima) — o valor por-casa
+ * correto e histórico fica
  * gravado em funil_metricas_diarias (ver src/lib/funilSnapshot.ts, calcularSnapshotDoFunil). */
 export function BlocoLucroELinks({
   flowId,
@@ -512,6 +514,8 @@ export function BlocoLucroELinks({
   const casasAposta = getState().casasAposta as Record<string, CasaAposta>
   const casas = config?.casas ?? []
   const lpUrl = config?.lpUrl ?? ''
+  const lucroEfetivoDaCasa = (casaId: string): number | null =>
+    resolverLucroFtdDaCasa(casaId, config?.lucroFtdPorCasa, casasAposta[casaId])
 
   // Mesmo fetch de BlocoGastoMeta (não compartilhado — cada Bloco* dessa tela busca o que
   // precisa por conta própria, ver comentário na definição dela) só pra chegar no gasto já
@@ -583,13 +587,14 @@ export function BlocoLucroELinks({
   }
 
   // ROI só quando dá pra atribuir o FTD todo a uma casa só (ver comentário da função) — com mais
-  // de uma casa com lucro configurado, mostra "—" em vez de arriscar um número errado. Exceção:
-  // com 0 FTD a receita é 0 não importa o valor por FTD (0 × qualquer coisa), então dá pra
-  // calcular mesmo sem nenhuma casa com lucro configurado ainda.
-  const casasComLucro = Object.entries(lucroPorCasa).filter(([, v]) => v.trim() !== '' && !isNaN(Number(v.replace(',', '.'))))
+  // de uma casa com lucro configurado, mostra "—" em vez de arriscar um número errado. O valor
+  // padrão da casa entra como fallback; o override explícito do funil continua prevalecendo.
+  const casasComLucro = casas
+    .map((casaId) => ({ casaId, valor: lucroEfetivoDaCasa(casaId) }))
+    .filter((item): item is { casaId: string; valor: number } => item.valor !== null)
   const lucroFtdTotal = ftds === 0
     ? 0
-    : casasComLucro.length === 1 ? ftds * Number(casasComLucro[0][1].replace(',', '.')) : null
+    : casasComLucro.length === 1 ? ftds * casasComLucro[0].valor : null
   const roi = lucroFtdTotal !== null && gastoTotal > 0 ? ((lucroFtdTotal - gastoTotal) / gastoTotal) * 100 : null
 
   if (casas.length === 0) return null
@@ -607,6 +612,8 @@ export function BlocoLucroELinks({
       <div className="grid grid-cols-2 gap-2">
         {casas.map((casaId) => {
           const casa = casasAposta[casaId]
+          const valorEfetivo = lucroEfetivoDaCasa(casaId)
+          const valorExibido = lucroPorCasa[casaId] ?? (valorEfetivo !== null ? String(valorEfetivo) : '')
           return (
             <div key={casaId} className="flex items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)] truncate flex-1" title={casa?.nome}>{casa?.nome ?? casaId}</span>
@@ -614,10 +621,11 @@ export function BlocoLucroELinks({
                 type="text"
                 inputMode="decimal"
                 disabled={!editavel}
-                value={lucroPorCasa[casaId] ?? ''}
+                value={valorExibido}
                 onChange={(e) => setLucroPorCasa((prev) => ({ ...prev, [casaId]: e.target.value }))}
                 onBlur={(e) => salvarLucroCasa(casaId, e.target.value)}
                 placeholder="R$/FTD"
+                title={lucroPorCasa[casaId] === undefined && valorEfetivo !== null ? 'Valor padrão da casa' : undefined}
                 className="w-20 h-6 px-1.5 text-[11px] font-mono bg-[var(--bg-base)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-strong)] disabled:opacity-50"
               />
             </div>

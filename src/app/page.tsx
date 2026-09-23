@@ -18,6 +18,8 @@ import { CUSTO_FALLBACK_SMS } from '@/lib/rcs/tipos'
 import { getState, togglePinNumero, togglePinFunil } from '@/lib/store'
 import { contarFunisPorCampanha, gastoDoFunil, tagDeEntradaDoFluxo, contarFunisPorUtm, calcularResultadoLinhaNoDia, arredondarPreservandoTotalPorGrupo } from '@/lib/funis'
 import { CardNumeroBlacksender, type CanalBlacksenderComAtividade } from '@/components/numeros/CardNumeroBlacksender'
+import { NumeroAvatar } from '@/components/numeros/NumeroAvatar'
+import { resolverLucroFtdDaCasa } from '@/lib/lucro'
 import { chaveTagBot } from '@/lib/sendpulseLeads'
 import { PainelConversasFluxo } from '@/components/funis/PainelConversasFluxo'
 import type { NumeroMonitorado, FluxoSendpulse, CasaAposta, DisparoDaxx, Disparo, TemplateDaxx } from '@/types'
@@ -402,8 +404,8 @@ interface FunilRow {
   custoFtdMeta: number | null
   // Lucro (R$) = FTDs × lucro/FTD configurado por casa (Detalhes do funil) − o gasto que gerou
   // esse Custo/FTD (Meta pra tráfego, DAXX interno pra disparo). null quando o grupo não tem
-  // exatamente uma casa com lucro/FTD configurado — mesma limitação do ROI em BlocoLucroELinks:
-  // sem saber quantos FTDs vieram de qual casa, não dá pra separar com mais de uma configurada.
+  // exatamente uma casa com lucro/FTD resolvido — mesma limitação do ROI em BlocoLucroELinks:
+  // sem saber quantos FTDs vieram de qual casa, não dá pra separar com mais de uma resolvida.
   lucroFtd: number | null
   utm: string
   bots: FunilBotDetail[]
@@ -1051,11 +1053,13 @@ export default function HomePage() {
       // um Record que acumula entradas de qualquer casa já selecionada alguma vez (trocar a casa
       // no editor não limpa a antiga), mesma filtragem que BlocoLucroELinks já faz no painel de
       // Detalhes, senão uma casa antiga sobrando ali derruba a condição de "só uma configurada".
+      // Quando o funil ainda não tem override, usa o valor padrão da casa (Superbet = R$ 680/FTD).
+      const casasEstado = getState().casasAposta as Record<string, CasaAposta>
       const lucroCandidatos = new Map<string, number>()
       for (const [, c] of flows) {
         for (const casaId of c.casas ?? []) {
-          const valor = c.lucroFtdPorCasa?.[casaId]
-          if (valor !== undefined) lucroCandidatos.set(casaId, valor)
+          const valor = resolverLucroFtdDaCasa(casaId, c.lucroFtdPorCasa, casasEstado[casaId])
+          if (valor !== null) lucroCandidatos.set(casaId, valor)
         }
       }
       const gastoParaLucro = tipo === 'traffic' ? gastoMeta : baseCusto
@@ -1137,15 +1141,17 @@ export default function HomePage() {
       }),
       { leadsHoje: 0, leadsHojeCarregando: false, leadsTotal: 0, registros: 0, ftds: 0, registrosFtdsCarregando: false, gastoMeta: 0 },
     )
-    // Recalculado a partir das somas agregadas (não é média/soma dos custos já calculados por
-    // linha) — matematicamente correto mesmo com denominadores diferentes por funil.
-    const linhasComLucro = trafficRows.filter((r) => r.lucroFtd !== null)
+    // Não soma apenas as linhas conhecidas: se algum funil tiver FTD sem lucro/FTD
+    // resolvido, o total ficaria artificialmente otimista e esconderia uma configuração pendente.
+    const lucroTotal = trafficRows.every((r) => r.lucroFtd !== null)
+      ? trafficRows.reduce((acc, r) => acc + (r.lucroFtd ?? 0), 0)
+      : null
     return {
       ...somas,
       custoEntradaMeta: somas.gastoMeta > 0 && somas.leadsHoje > 0 ? somas.gastoMeta / somas.leadsHoje : null,
       custoRegMeta: somas.gastoMeta > 0 && somas.registros > 0 ? somas.gastoMeta / somas.registros : null,
       custoFtdMeta: somas.gastoMeta > 0 && somas.ftds > 0 ? somas.gastoMeta / somas.ftds : null,
-      lucroFtd: linhasComLucro.length > 0 ? linhasComLucro.reduce((acc, r) => acc + (r.lucroFtd ?? 0), 0) : null,
+      lucroFtd: lucroTotal,
     }
   }, [trafficRows])
 
@@ -1373,7 +1379,10 @@ export default function HomePage() {
             </>
           )}
           <td className="py-3 px-3 text-right">
-            <span className={`text-xs font-mono font-semibold ${row.lucroFtd === null ? 'text-[var(--text-muted)]' : row.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+            <span
+              className={`text-xs font-mono font-semibold ${row.lucroFtd === null ? 'text-[var(--text-muted)]' : row.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}
+              title={row.lucroFtd === null ? 'Lucro/FTD não configurado para todos os FTDs deste funil' : undefined}
+            >
               {row.lucroFtd === null ? '—' : `R$ ${row.lucroFtd.toFixed(2).replace('.', ',')}`}
             </span>
           </td>
@@ -1625,7 +1634,14 @@ export default function HomePage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${item.numero.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`} />
+                      <div className="relative shrink-0">
+                        <NumeroAvatar foto={item.numero.foto} nome={item.numero.nome} canal={item.numero.canal} />
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 inline-block w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-surface)] ${item.numero.status === 'ativo' ? 'bg-green-500' : 'bg-red-400'}`}
+                          title={item.numero.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                          aria-label={item.numero.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                        />
+                      </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-sm font-medium text-[var(--text-primary)] truncate">{item.numero.nome}</span>
@@ -1944,7 +1960,10 @@ export default function HomePage() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <span className={`block truncate text-xs font-bold font-mono ${totalTraffic.lucroFtd === null ? 'text-[var(--text-muted)]' : totalTraffic.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}>
+                          <span
+                            className={`block truncate text-xs font-bold font-mono ${totalTraffic.lucroFtd === null ? 'text-[var(--text-muted)]' : totalTraffic.lucroFtd >= 0 ? 'text-green-400' : 'text-[var(--error)]'}`}
+                            title={totalTraffic.lucroFtd === null ? 'Total incompleto: algum funil com FTD não tem lucro/FTD resolvido' : undefined}
+                          >
                             {totalTraffic.lucroFtd === null ? '—' : `R$ ${totalTraffic.lucroFtd.toFixed(2).replace('.', ',')}`}
                           </span>
                         </td>
