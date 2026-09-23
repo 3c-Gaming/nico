@@ -17,7 +17,7 @@ import { adicionarDias, formatarData, parsearDataISO, hojeBrasilISO } from '@/li
 import { buscarResultadosDoDia, calcularResultadoLinhaNoDia, contarFunisPorUtm } from '@/lib/funis'
 import { getState } from '@/lib/store'
 import type { FlowTagConfig, CasaAposta, BlacksenderMensagem, BlacksenderCanal } from '@/types'
-import { extrairVariaveisDaJornada, extrairCanalId } from '@/lib/blacksender/jornada'
+import { extrairVariaveisDaJornada, extrairCanalId, extrairTagsDaJornada } from '@/lib/blacksender/jornada'
 import { BlocoMetricas, BlocoGastoMeta, BlocoLucroELinks, BlocoFunilChart, FunilComboBox } from './PainelConversasFluxo'
 import { LeadConversaDetalhe, formatarTempoRelativo, type LeadComConversa, type MensagemFluxo } from './LeadConversaCard'
 import type { EstagioFunil } from './FunilConversaoChart'
@@ -303,7 +303,9 @@ export function PainelAnaliseFunilBlacksender({
           nome: e.leadNome ?? '',
           telefone: e.leadTelefone ?? '',
           ultimaAtividade: quando,
-          tags: [],
+          // Acumulada conforme o lead avança nos nós do fluxo (ver extrairTagsDaJornada) — o
+          // último elemento é a etapa mais recente que ele alcançou, mostrada na lista de leads.
+          tags: extrairTagsDaJornada(e.bruto),
           variaveis: {},
           mensagens: [],
           tagCliqueLink: null,
@@ -329,7 +331,11 @@ export function PainelAnaliseFunilBlacksender({
 
   const buscaNormalizada = buscaLead.trim().toLowerCase()
   const leadsFiltrados = buscaNormalizada
-    ? leads.filter((l) => l.nome.toLowerCase().includes(buscaNormalizada) || l.telefone.toLowerCase().includes(buscaNormalizada))
+    ? leads.filter((l) =>
+        l.nome.toLowerCase().includes(buscaNormalizada) ||
+        l.telefone.toLowerCase().includes(buscaNormalizada) ||
+        l.tags.some((t) => t.toLowerCase().includes(buscaNormalizada)),
+      )
     : leads
 
   const leadSelecionadoBase = leadSelecionadoId ? leads.find((l) => l.contactId === leadSelecionadoId) ?? null : null
@@ -644,7 +650,7 @@ export function PainelAnaliseFunilBlacksender({
                 type="text"
                 value={buscaLead}
                 onChange={(e) => setBuscaLead(e.target.value)}
-                placeholder="Filtrar por nome ou telefone..."
+                placeholder="Filtrar por nome, telefone ou tag..."
                 className="w-full text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] rounded px-2 py-1.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
               />
             </div>
@@ -657,10 +663,11 @@ export function PainelAnaliseFunilBlacksender({
               ) : leads.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhuma conversa encontrada pra esse fluxo ainda.</p>
               ) : leadsFiltrados.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhum lead com esse nome/telefone nos {leads.length} carregados.</p>
+                <p className="text-xs text-[var(--text-muted)] text-center py-10">Nenhum lead com esse nome/telefone/tag nos {leads.length} carregados.</p>
               ) : (
                 leadsFiltrados.map((lead) => {
                   const selecionado = leadSelecionadoId === lead.contactId
+                  const ultimaEtapa = lead.tags[lead.tags.length - 1]
                   return (
                     <button
                       key={lead.contactId}
@@ -675,6 +682,11 @@ export function PainelAnaliseFunilBlacksender({
                         <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                           {lead.telefone} · {formatarTempoRelativo(lead.ultimaAtividade)}
                         </div>
+                        {ultimaEtapa && (
+                          <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-secondary)] truncate max-w-full">
+                            {ultimaEtapa}
+                          </span>
+                        )}
                       </div>
                       <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />
                     </button>
