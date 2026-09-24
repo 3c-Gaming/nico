@@ -147,6 +147,7 @@ const contatosConhecidos = new Map<string, string>()
 // atualiza ultimo_visto_em; a assinatura evita encaminhar mudanças repetidas a cada ciclo.
 const canaisConhecidos = new Map<string, string>()
 let ultimoCanalHeartbeat = 0
+let timerCiclo: ReturnType<typeof setTimeout> | null = null
 
 async function pollContatos() {
   const desde = new Date(Date.now() - CONTATOS_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString()
@@ -270,9 +271,20 @@ export async function iniciar() {
   setInterval(() => { void autenticar(client!) }, 50 * 60 * 1000)
 
   await ciclo()
-  setInterval(ciclo, POLL_INTERVALO_MS)
+
+  // Agenda o próximo ciclo somente depois do atual terminar. Com retry de timeout, um ciclo
+  // pode passar de 30s; setInterval sobreposto acabaria multiplicando queries e piorando o
+  // statement timeout que estamos tentando corrigir.
+  const agendarProximoCiclo = () => {
+    timerCiclo = setTimeout(() => {
+      void ciclo().finally(agendarProximoCiclo)
+    }, POLL_INTERVALO_MS)
+  }
+  agendarProximoCiclo()
 }
 
 export async function parar() {
+  if (timerCiclo) clearTimeout(timerCiclo)
+  timerCiclo = null
   await client?.auth.signOut()
 }
