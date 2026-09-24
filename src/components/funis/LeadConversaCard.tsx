@@ -17,6 +17,8 @@ export interface MensagemFluxo {
   titulo?: string
   texto?: string
   botaoTitulo?: string
+  /** Clique recuperado do estado do flow_run porque a Black Sender não persistiu a mensagem inbound. */
+  inferido?: boolean
   linkUrl?: string
   linkTexto?: string
   imagemUrl?: string
@@ -220,7 +222,10 @@ function MensagemLinha({
           {msg.tipo === 'botao_clicado' || msg.tipo === 'lista_selecionada' ? (
             <div className="flex items-center gap-1.5 font-medium">
               <MousePointerClick size={13} className="shrink-0 text-[var(--success)]" />
-              clicou: {msg.botaoTitulo}
+              <span>clicou: {msg.botaoTitulo}</span>
+              {msg.inferido && (
+                <span className="text-[10px] font-normal text-[var(--text-muted)]">· inferido</span>
+              )}
             </div>
           ) : msg.tipo === 'link_enviado' ? (
             <div className="space-y-1">

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido, BlacksenderLead, BlacksenderFlowRun, BlacksenderConversa, BlacksenderMensagem, BlacksenderFlow, BlacksenderCanal } from '@/types'
-import { inicioDoDiaBrasilMs } from '@/lib/datas'
+import type { Disparo, DisparoPilhado, PilhadoPremiosConfig, Esteira, CasaAposta, LinkTemplate, FlowTagConfig, FunilMetricaDiaria, CacheMetrica, Demanda, UsuarioResponsavel, UtmConfig, EsteiraEtapaConfig, Resultado, FunilComparacao, FunilApresentacao, CampanhaSendpulseImportada, WebhookEventoRecebido, BlacksenderLead, BlacksenderFlowRun, BlacksenderConversa, BlacksenderMensagem, BlacksenderFlow, BlacksenderCanal, BlacksenderNumeroResumo } from '@/types'
+import { dataParaBrasilISO, hojeBrasilISO, inicioDoDiaBrasilMs } from '@/lib/datas'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? ''
@@ -97,6 +97,8 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   aiDisabled: 'ai_disabled',
   criadoEmOrigem: 'criado_em_origem',
   atualizadoEmOrigem: 'atualizado_em_origem',
+  primeiroVistoEm: 'primeiro_visto_em',
+  ultimoVistoEm: 'ultimo_visto_em',
   contactId: 'contact_id',
   channelId: 'channel_id',
   ultimaMensagemEmOrigem: 'ultima_mensagem_em_origem',
@@ -216,6 +218,8 @@ const SNAKE_TO_CAMEL: Record<string, string> = {
   ai_disabled: 'aiDisabled',
   criado_em_origem: 'criadoEmOrigem',
   atualizado_em_origem: 'atualizadoEmOrigem',
+  primeiro_visto_em: 'primeiroVistoEm',
+  ultimo_visto_em: 'ultimoVistoEm',
   contact_id: 'contactId',
   channel_id: 'channelId',
   ultima_mensagem_em_origem: 'ultimaMensagemEmOrigem',
@@ -1071,6 +1075,69 @@ export async function listarBlacksenderCanais(): Promise<BlacksenderCanal[]> {
     return []
   }
   return rows<BlacksenderCanal>(data)
+}
+
+/** Resumo persistente de aquecimento por canal Black Sender, derivado dos flow_runs espelhados.
+ * Um contato é contado uma vez por dia, mesmo quando passa por mais de um funil; a data do run
+ * é o momento em que esse número recebeu o lead. Não depende do canal continuar aparecendo no
+ * bridge: os flow_runs ficam no banco e continuam alimentando o histórico. */
+export async function listarResumosNumerosBlacksender(): Promise<Record<string, BlacksenderNumeroResumo>> {
+  const { data, error } = await tb('blacksender_flow_runs')
+    .select('flow_id, contact_id, criado_em_origem, bruto')
+  if (error) {
+    console.warn('[supabase] listarResumosNumerosBlacksender error:', error.message)
+    return {}
+  }
+
+  type EstadoCanal = {
+    flows: Set<string>
+    contatosPorDia: Map<string, Set<string>>
+    primeiroLeadEm: string | null
+    ultimoLeadEm: string | null
+  }
+  const porCanal = new Map<string, EstadoCanal>()
+  for (const row of (data ?? []) as Array<{
+    flow_id: string | null
+    contact_id: string | null
+    criado_em_origem: string | null
+    bruto: unknown
+  }>) {
+    const bruto = row.bruto && typeof row.bruto === 'object'
+      ? row.bruto as { channel_id?: unknown; channelId?: unknown }
+      : null
+    const channelId = [bruto?.channel_id, bruto?.channelId].find((v): v is string => typeof v === 'string' && v !== '')
+    if (!channelId || !row.contact_id || !row.criado_em_origem) continue
+    if (Number.isNaN(new Date(row.criado_em_origem).getTime())) continue
+
+    let estado = porCanal.get(channelId)
+    if (!estado) {
+      estado = { flows: new Set(), contatosPorDia: new Map(), primeiroLeadEm: null, ultimoLeadEm: null }
+      porCanal.set(channelId, estado)
+    }
+    if (row.flow_id) estado.flows.add(row.flow_id)
+    const dataLead = dataParaBrasilISO(row.criado_em_origem)
+    const contatos = estado.contatosPorDia.get(dataLead) ?? new Set<string>()
+    contatos.add(row.contact_id)
+    estado.contatosPorDia.set(dataLead, contatos)
+    if (!estado.primeiroLeadEm || row.criado_em_origem < estado.primeiroLeadEm) estado.primeiroLeadEm = row.criado_em_origem
+    if (!estado.ultimoLeadEm || row.criado_em_origem > estado.ultimoLeadEm) estado.ultimoLeadEm = row.criado_em_origem
+  }
+
+  const hoje = hojeBrasilISO()
+  const resultado: Record<string, BlacksenderNumeroResumo> = {}
+  for (const [channelId, estado] of porCanal) {
+    const leadsPorDia = [...estado.contatosPorDia.entries()]
+      .map(([data, contatos]) => ({ data, total: contatos.size }))
+      .sort((a, b) => a.data.localeCompare(b.data))
+    resultado[channelId] = {
+      leadsHoje: leadsPorDia.find((d) => d.data === hoje)?.total ?? 0,
+      leadsPorDia,
+      primeiroLeadEm: estado.primeiroLeadEm,
+      ultimoLeadEm: estado.ultimoLeadEm,
+      funis: estado.flows.size,
+    }
+  }
+  return resultado
 }
 
 export async function getBlacksenderCanal(id: string): Promise<BlacksenderCanal | null> {

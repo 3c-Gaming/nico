@@ -122,8 +122,11 @@ async function estruturar(evento: string, body: unknown) {
   // `registro` aqui já vem sem access_token/meta_app_secret — o bridge nunca seleciona essas
   // colunas na origem (ver blacksender-bridge/src/poller.ts, CANAIS_COLUNAS). `bruto` abaixo é
   // seguro de guardar.
-  if (evento === 'canais_realtime' && alvo?.tabela === 'whatsapp_channels') {
+  if ((evento === 'canais_realtime' || evento === 'canais_heartbeat') && alvo?.tabela === 'whatsapp_channels') {
     const id = String(registro.id)
+    // O bridge pode continuar reenviando o mesmo canal; primeiro_visto_em nunca pode ser
+    // sobrescrito depois disso. recebido_em/ultimo_visto_em mostram a última observação.
+    const existente = await getBlacksenderCanal(id)
     const canal = {
       id,
       nome: (registro.channel_name as string) ?? null,
@@ -138,6 +141,8 @@ async function estruturar(evento: string, body: unknown) {
       qualityRating: (registro.meta_quality_rating as string) ?? null,
       fotoUrl: (registro.profile_picture_url as string) ?? null,
       criadoEmOrigem: (registro.created_at as string) ?? null,
+      primeiroVistoEm: existente?.primeiroVistoEm ?? recebidoEm,
+      ultimoVistoEm: recebidoEm,
       recebidoEm,
       bruto: registro,
     }
@@ -145,7 +150,6 @@ async function estruturar(evento: string, body: unknown) {
     // Só notifica na TRANSIÇÃO pra banido/bloqueado (existia e não estava banido, ou é a primeira
     // vez que vemos esse canal e já chega banido) — comparar com o estado salvo ANTES do upsert
     // evita avisar de novo a cada poll enquanto o número continuar banido.
-    const existente = await getBlacksenderCanal(id)
     const jaEstavaBanido = existente ? canalEstaBanido(existente) : false
     await upsertBlacksenderCanal(canal)
     if (!jaEstavaBanido && canalEstaBanido(canal)) {
@@ -166,16 +170,19 @@ async function registrar(request: NextRequest) {
   const evento = extrairEvento(request, body)
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
 
-  await registrarWebhookEvento({
-    id: crypto.randomUUID(),
-    origem: 'blacksender',
-    evento,
-    payload: body,
-    headers,
-    metodo: request.method,
-    ip,
-    recebidoEm: new Date().toISOString(),
-  })
+  // Heartbeat é um sinal operational repetitivo; não precisa inflar webhook_eventos_recebidos.
+  if (evento !== 'canais_heartbeat') {
+    await registrarWebhookEvento({
+      id: crypto.randomUUID(),
+      origem: 'blacksender',
+      evento,
+      payload: body,
+      headers,
+      metodo: request.method,
+      ip,
+      recebidoEm: new Date().toISOString(),
+    })
+  }
 
   await estruturar(evento, body)
 

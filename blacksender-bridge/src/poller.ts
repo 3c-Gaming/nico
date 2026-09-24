@@ -31,13 +31,19 @@ const NICO_WEBHOOK_URL = (process.env.NICO_WEBHOOK_URL || '').replace(/\/+$/, ''
 // achar a causa exata (proxy/firewall de saída bloqueando o upgrade do WebSocket?), polling é
 // muito mais portável — REST puro, funciona em qualquer host.
 const POLL_INTERVALO_MS = 30_000
-
-// `contacts` não tem coluna updated_at (só created_at) — não dá pra filtrar "mudou desde X" só
-// com timestamp. Pra pegar tag nova/etapa mudando num lead já existente, cada ciclo relê os
-// contatos criados nessa janela inteira e compara com o que o ciclo anterior tinha guardado em
-// memória — bem mais barato que parece (~100-300 linhas), e não depende de nada persistido (se o
-// processo reiniciar, só reenvia tudo de novo nesse ciclo, sem problema, o webhook já faz upsert).
-const CONTATOS_JANELA_DIAS = 7
+// Ao subir, reprocessa uma janela recente. O cursor fica em memória, mas não pode começar
+// "agora": caso contrário, qualquer mensagem/run criado enquanto o bridge estava fora seria
+// perdida definitivamente. Os upserts do webhook são idempotentes, então reenviar essa janela é seguro.
+const BACKFILL_INICIAL_DIAS = 7
+const CONTATOS_JANELA_DIAS = BACKFILL_INICIAL_DIAS
+// `select=*` na tabela de mensagens deixava o poll intermitentemente estourar o timeout da
+// consulta (status 57014 visto em produção). Estes são os campos que o webhook e o painel usam;
+// `interactive` precisa permanecer para reconhecer os botões oferecidos.
+const CAMPOS_MENSAGEM = [
+  'id', 'conversation_id', 'content', 'direction', 'sender_name', 'status',
+  'delivery_error_code', 'delivery_error_message', 'media_url', 'media_type',
+  'interactive', 'created_at',
+].join(',')
 
 let client: SupabaseClient | null = null
 let token: string | null = null
@@ -84,12 +90,19 @@ async function autenticar(sb: SupabaseClient) {
 }
 
 async function rest<T>(caminho: string): Promise<T[]> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
-    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(20_000),
-  })
-  if (!res.ok) throw new Error(`Supabase REST ${res.status} em ${caminho}: ${await res.text().catch(() => '')}`)
-  return res.json()
+  let ultimaResposta: { status: number; corpo: string } | null = null
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(20_000),
+    })
+    const corpo = await res.text()
+    if (res.ok) return JSON.parse(corpo) as T[]
+    ultimaResposta = { status: res.status, corpo }
+    if (res.status !== 500 && res.status !== 429) break
+    if (tentativa < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** tentativa))
+  }
+  throw new Error(`Supabase REST ${ultimaResposta?.status ?? 'sem resposta'} em ${caminho}: ${ultimaResposta?.corpo ?? ''}`)
 }
 
 // Encaminha uma lista pro webhook com concorrência limitada — sequencial (um await por vez) era
@@ -110,17 +123,30 @@ async function encaminharEmLotes<T extends Record<string, unknown>>(
   }
 }
 
-let ultimoPollFlowRuns = new Date().toISOString()
-let ultimoPollConversas = new Date().toISOString()
-let ultimoPollMensagens = new Date().toISOString()
-let ultimoPollFlows = new Date().toISOString()
+/** Avança o cursor apenas até o timestamp realmente visto. Se a página vier cheia (limite do
+ * REST), deixá-lo em `agora` pularia o restante; o próximo ciclo continua a partir do último item. */
+function maiorTimestamp(itens: Record<string, unknown>[], campos: string[], fallback: string): string {
+  let maior = ''
+  for (const item of itens) {
+    for (const campo of campos) {
+      const valor = item[campo]
+      if (typeof valor === 'string' && valor > maior) maior = valor
+    }
+  }
+  return maior || fallback
+}
+
+const cursorInicial = new Date(Date.now() - BACKFILL_INICIAL_DIAS * 24 * 60 * 60 * 1000).toISOString()
+let ultimoPollFlowRuns = cursorInicial
+let ultimoPollConversas = cursorInicial
+let ultimoPollMensagens = cursorInicial
+let ultimoPollFlows = cursorInicial
 // contactId -> assinatura (JSON) do estado observado no ciclo anterior, só pra detectar mudança
 const contatosConhecidos = new Map<string, string>()
-// canalId -> assinatura, mesmo princípio de contatosConhecidos. Canal muda pouco (status de
-// saúde/quality rating) e o filtro "updated_at > desde que o bridge subiu" perde qualquer
-// atualização anterior ao boot do processo — como são poucos canais por workspace (não centenas,
-// como flow_runs/mensagens), reler tudo inteiro a cada ciclo e comparar é barato.
+// canalId -> assinatura, mesmo princípio de contatosConhecidos. O heartbeat periódico
+// atualiza ultimo_visto_em; a assinatura evita encaminhar mudanças repetidas a cada ciclo.
 const canaisConhecidos = new Map<string, string>()
+let ultimoCanalHeartbeat = 0
 
 async function pollContatos() {
   const desde = new Date(Date.now() - CONTATOS_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString()
@@ -141,39 +167,39 @@ async function pollContatos() {
 }
 
 async function pollFlowRuns() {
-  const agora = new Date().toISOString()
+  const cursorAnterior = ultimoPollFlowRuns
   const runs = await rest<Record<string, unknown>>(
-    `flow_runs?select=*&updated_at=gt.${ultimoPollFlowRuns}&order=updated_at.asc&limit=500`,
+    `flow_runs?select=*&updated_at=gt.${cursorAnterior}&order=updated_at.asc&limit=500`,
   )
   await encaminharEmLotes(runs, 'flow_runs_realtime', 'flow_runs', () => 'UPDATE')
-  ultimoPollFlowRuns = agora
+  ultimoPollFlowRuns = maiorTimestamp(runs, ['updated_at'], cursorAnterior)
 }
 
 async function pollConversas() {
-  const agora = new Date().toISOString()
+  const cursorAnterior = ultimoPollConversas
   const conversas = await rest<Record<string, unknown>>(
-    `conversations?select=*&or=(created_at.gt.${ultimoPollConversas},last_message_at.gt.${ultimoPollConversas})&order=created_at.asc&limit=500`,
+    `conversations?select=*&or=(created_at.gt.${cursorAnterior},last_message_at.gt.${cursorAnterior})&order=created_at.asc&limit=500`,
   )
   await encaminharEmLotes(conversas, 'conversas_realtime', 'conversations', () => 'UPDATE')
-  ultimoPollConversas = agora
+  ultimoPollConversas = maiorTimestamp(conversas, ['created_at', 'last_message_at'], cursorAnterior)
 }
 
 async function pollMensagens() {
-  const agora = new Date().toISOString()
+  const cursorAnterior = ultimoPollMensagens
   const mensagens = await rest<Record<string, unknown>>(
-    `messages?select=*&created_at=gt.${ultimoPollMensagens}&order=created_at.asc&limit=500`,
+    `messages?select=${CAMPOS_MENSAGEM}&created_at=gt.${cursorAnterior}&order=created_at.asc&limit=500`,
   )
   await encaminharEmLotes(mensagens, 'mensagens_realtime', 'messages', () => 'INSERT')
-  ultimoPollMensagens = agora
+  ultimoPollMensagens = maiorTimestamp(mensagens, ['created_at'], cursorAnterior)
 }
 
 async function pollFlows() {
-  const agora = new Date().toISOString()
+  const cursorAnterior = ultimoPollFlows
   const flows = await rest<Record<string, unknown>>(
-    `flows?select=*&updated_at=gt.${ultimoPollFlows}&order=updated_at.asc&limit=200`,
+    `flows?select=*&updated_at=gt.${cursorAnterior}&order=updated_at.asc&limit=200`,
   )
   await encaminharEmLotes(flows, 'flows_realtime', 'flows', () => 'UPDATE')
-  ultimoPollFlows = agora
+  ultimoPollFlows = maiorTimestamp(flows, ['updated_at'], cursorAnterior)
 }
 
 // Colunas escolhidas a dedo (NUNCA select=*) — whatsapp_channels guarda access_token e
@@ -186,11 +212,14 @@ const CANAIS_COLUNAS = [
   'health_status', 'health_reason', 'health_checked_at', 'meta_phone_status',
   'meta_name_status', 'meta_quality_rating', 'profile_picture_url', 'created_at', 'updated_at',
 ].join(',')
+const CANAL_HEARTBEAT_INTERVAL_MS = 120_000
 
 async function pollCanais() {
   const canais = await rest<Record<string, unknown>>(
     `whatsapp_channels?select=${CANAIS_COLUNAS}&order=updated_at.asc&limit=100`,
   )
+  const agora = Date.now()
+  const heartbeatDue = agora - ultimoCanalHeartbeat >= CANAL_HEARTBEAT_INTERVAL_MS
   const mudaram = canais.filter((c) => {
     const id = String(c.id)
     const assinatura = JSON.stringify(c)
@@ -198,11 +227,20 @@ async function pollCanais() {
     canaisConhecidos.set(id, assinatura)
     return true
   })
-  await encaminharEmLotes(mudaram, 'canais_realtime', 'whatsapp_channels', () => 'UPDATE')
+
+  if (heartbeatDue) {
+    // Heartbeat não é uma mudança de estado: atualiza ultimo_visto_em para provar que o canal
+    // ainda existe no bridge, sem criar um evento bruto por canal a cada 30s.
+    await encaminharEmLotes(canais, 'canais_heartbeat', 'whatsapp_channels', () => 'UPDATE')
+    ultimoCanalHeartbeat = agora
+  } else if (mudaram.length > 0) {
+    await encaminharEmLotes(mudaram, 'canais_realtime', 'whatsapp_channels', () => 'UPDATE')
+  }
 }
 
 async function ciclo() {
   status.eventosNoUltimoCiclo = 0
+  status.ultimoErro = null
   try {
     await Promise.all([pollContatos(), pollFlowRuns(), pollConversas(), pollMensagens(), pollFlows(), pollCanais()])
     status.ultimoCiclo = new Date().toISOString()

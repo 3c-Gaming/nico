@@ -2015,6 +2015,7 @@ export default function HomePage() {
       />
 
       <PainelAnaliseFunilBlacksender
+        key={painelBSConfigAtivo?.flowId ?? 'fechado'}
         aberto={painelFunilRow?.origem === 'blacksender'}
         config={painelBSConfigAtivo}
         nomeFluxo={painelBSNomeFluxoAtivo}

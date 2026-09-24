@@ -16,6 +16,8 @@ create table if not exists blacksender_canais (
   quality_rating text,
   foto_url text,
   criado_em_origem text,
+  primeiro_visto_em text,
+  ultimo_visto_em text,
   recebido_em text not null,
   bruto jsonb
 );

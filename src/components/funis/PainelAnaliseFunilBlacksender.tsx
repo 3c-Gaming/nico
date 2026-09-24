@@ -26,6 +26,7 @@ const LARGURA_METRICAS = 420
 const LARGURA_COLUNA_COMPARACAO = 380
 const LARGURA_LEAD_DETALHE = 440
 const LARGURA_LISTA = 420
+const INTERVALO_ATUALIZACAO_MS = 15_000
 
 function formatarDataCurta(iso: string): string {
   return formatarData(parsearDataISO(iso), 'DD/MM')
@@ -52,6 +53,7 @@ interface Execucao {
   contactId: string | null
   status: string | null
   criadoEmOrigem: string | null
+  atualizadoEmOrigem: string | null
   leadNome: string | null
   leadTelefone: string | null
   bruto: unknown
@@ -109,6 +111,37 @@ function extrairBotoesOferecidos(bruto: unknown): string[] {
   return typeof label === 'string' ? [label] : []
 }
 
+function extrairCtaOferecida(bruto: unknown): string | null {
+  if (!bruto || typeof bruto !== 'object') return null
+  const interactive = (bruto as { interactive?: unknown }).interactive
+  const cta = interactive && typeof interactive === 'object'
+    ? (interactive as { cta?: unknown }).cta
+    : undefined
+  const label = cta && typeof cta === 'object' ? (cta as { label?: unknown }).label : undefined
+  return typeof label === 'string' ? label : null
+}
+
+function normalizarBotao(valor: string): string {
+  return valor.trim().toLocaleLowerCase('pt-BR')
+}
+
+interface CliqueBSInferido {
+  botaoId: string
+  botaoTitulo: string | null
+}
+
+/** Último botão que o Black Sender guardou no estado do flow_run. Esse snapshot não é histórico:
+ * ele serve para recuperar o evento mais recente quando a mensagem inbound correspondente não
+ * foi persistida (o caso dos CTAs de link e alguns quick replies). */
+function extrairCliqueInferido(execucao: Execucao): CliqueBSInferido | null {
+  const variaveis = extrairVariaveisDaJornada(execucao.bruto)
+  const botaoId = [variaveis.last_button_id, variaveis.last_button_handle]
+    .find((valor): valor is string => typeof valor === 'string' && valor.trim() !== '')
+  if (!botaoId || (botaoId !== 'cta' && !botaoId.startsWith('btn'))) return null
+  const mensagem = typeof variaveis.last_message === 'string' ? variaveis.last_message.trim() : ''
+  return { botaoId, botaoTitulo: mensagem || null }
+}
+
 function mapMensagemBS(m: BlacksenderMensagem, botoesOferecidos?: string[], botaoClicado?: string): MensagemFluxo {
   if (botaoClicado) {
     return { id: m.id, direcao: 'entrada', criadoEm: m.criadoEmOrigem ?? m.recebidoEm, tipo: 'botao_clicado', botaoTitulo: botaoClicado }
@@ -132,19 +165,76 @@ function mapMensagemBS(m: BlacksenderMensagem, botoesOferecidos?: string[], bota
 
 /** Percorre a conversa inteira (não mensagem a mensagem) porque decidir se um inbound foi clique
  * de botão depende do que a mensagem outbound ANTERIOR ofereceu. */
-function mapMensagensBS(mensagens: BlacksenderMensagem[]): MensagemFluxo[] {
+function mapMensagensBS(mensagens: BlacksenderMensagem[], execucao?: Execucao | null): MensagemFluxo[] {
   let botoesPendentes: string[] = []
-  return mensagens.map((m) => {
+  const resultado = mensagens.map((m) => {
     if (m.direcao === 'outbound') {
       const botoesOferecidos = extrairBotoesOferecidos(m.bruto)
       botoesPendentes = botoesOferecidos
       return mapMensagemBS(m, botoesOferecidos)
     }
-    const conteudoNormalizado = (m.conteudo ?? '').trim().toLowerCase()
-    const botaoClicado = botoesPendentes.find((b) => b.trim().toLowerCase() === conteudoNormalizado)
-    botoesPendentes = []
+    const conteudoNormalizado = normalizarBotao(m.conteudo ?? '')
+    const botaoClicado = botoesPendentes.find((b) => normalizarBotao(b) === conteudoNormalizado)
+    // Uma resposta livre não consome os botões pendentes; o próximo outbound troca o conjunto.
+    // Sem isso, um texto intermediário podia esconder um clique válido que veio logo depois.
+    if (botaoClicado) botoesPendentes = []
     return mapMensagemBS(m, undefined, botaoClicado)
   })
+
+  if (!execucao) return resultado
+  const clique = extrairCliqueInferido(execucao)
+  if (!clique) return resultado
+
+  const tituloNormalizado = clique.botaoTitulo ? normalizarBotao(clique.botaoTitulo) : null
+  const jaExiste = resultado.some((m) => {
+    if (m.direcao !== 'entrada' || m.tipo !== 'botao_clicado') return false
+    if (!tituloNormalizado) return m.botaoTitulo === 'CTA'
+    return normalizarBotao(m.botaoTitulo ?? '') === tituloNormalizado
+  })
+  if (jaExiste) return resultado
+
+  // Recupera a oferta correspondente para inserir o clique no ponto cronológico correto, entre
+  // a mensagem que ofereceu o botão e a próxima mensagem do fluxo. Para CTA de link, procura a
+  // oferta de CTA pelo payload bruto; para quick reply, pelo texto do botão.
+  let ofertaIndex = -1
+  let tituloOferta = clique.botaoTitulo
+  for (let i = resultado.length - 1; i >= 0; i--) {
+    const m = resultado[i]
+    if (m.direcao !== 'saida' || !m.botoesOferecidos || m.botoesOferecidos.length === 0) continue
+    const bruta = mensagens[i]
+    if (clique.botaoId === 'cta') {
+      const cta = extrairCtaOferecida(bruta?.bruto)
+      if (cta) {
+        ofertaIndex = i
+        tituloOferta = cta
+        break
+      }
+    } else if (!tituloNormalizado) {
+      ofertaIndex = i
+      tituloOferta = m.botoesOferecidos[0] ?? null
+      break
+    } else if (m.botoesOferecidos.some((b) => normalizarBotao(b) === tituloNormalizado)) {
+      ofertaIndex = i
+      break
+    }
+  }
+
+  const referencia = ofertaIndex >= 0
+    ? resultado[ofertaIndex].criadoEm
+    : execucao.atualizadoEmOrigem ?? execucao.criadoEmOrigem ?? new Date().toISOString()
+  const referenciaMs = Date.parse(referencia)
+  const criadoEm = Number.isFinite(referenciaMs) ? new Date(referenciaMs + 1).toISOString() : referencia
+  const mensagemInferida: MensagemFluxo = {
+    id: `inferred-${execucao.id}-${clique.botaoId}`,
+    direcao: 'entrada',
+    criadoEm,
+    tipo: 'botao_clicado',
+    botaoTitulo: tituloOferta ?? 'CTA',
+    inferido: true,
+  }
+  if (ofertaIndex >= 0) resultado.splice(ofertaIndex + 1, 0, mensagemInferida)
+  else resultado.push(mensagemInferida)
+  return resultado
 }
 
 export function PainelAnaliseFunilBlacksender({
@@ -182,11 +272,25 @@ export function PainelAnaliseFunilBlacksender({
 
   useEffect(() => {
     if (!aberto || !flowId) return
-    setDados(null)
-    fetch(`/api/blacksender/fluxos/${flowId}?data=${dataReferencia}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setDados(d))
-      .catch(() => setDados(null))
+    let ativo = true
+    let buscando = false
+
+    const carregar = () => {
+      if (buscando) return
+      buscando = true
+      fetch(`/api/blacksender/fluxos/${flowId}?data=${dataReferencia}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (ativo && d) setDados(d) })
+        .catch(() => { /* mantém o último snapshot enquanto a API estiver indisponível */ })
+        .finally(() => { buscando = false })
+    }
+
+    void carregar()
+    const intervalo = window.setInterval(carregar, INTERVALO_ATUALIZACAO_MS)
+    return () => {
+      ativo = false
+      window.clearInterval(intervalo)
+    }
   }, [aberto, flowId, dataReferencia])
 
   useEffect(() => {
@@ -276,17 +380,49 @@ export function PainelAnaliseFunilBlacksender({
     setFunisComparados((prev) => prev.filter((id) => id !== flowIdRemovido))
   }
 
+  // Um contato pode ter mais de uma execução (reentrou no fluxo). Guarda a execução mais recente
+  // para usar os metadados de clique quando a mensagem inbound não existir no espelho do Nico.
+  const ultimaExecucaoPorContato = useMemo(() => {
+    const mapa = new Map<string, Execucao>()
+    for (const e of dados?.execucoes ?? []) {
+      if (!e.contactId) continue
+      const atual = mapa.get(e.contactId)
+      if (!atual || (e.criadoEmOrigem ?? '') > (atual.criadoEmOrigem ?? '')) mapa.set(e.contactId, e)
+    }
+    return mapa
+  }, [dados])
+
   function selecionarLead(contactId: string) {
     setLeadSelecionadoId(contactId)
-    if (mensagensPorLead[contactId] !== undefined) return
-    fetch(`/api/blacksender/leads/${contactId}/conversa`)
-      .then((r) => (r.ok ? r.json() : { mensagens: [] }))
-      .then((d) => {
-        const mensagens = mapMensagensBS((d.mensagens ?? []) as BlacksenderMensagem[])
-        setMensagensPorLead((prev) => ({ ...prev, [contactId]: mensagens }))
-      })
-      .catch(() => setMensagensPorLead((prev) => ({ ...prev, [contactId]: [] })))
   }
+
+  useEffect(() => {
+    if (!aberto || !leadSelecionadoId) return
+    let ativo = true
+    let buscando = false
+    const execucao = ultimaExecucaoPorContato.get(leadSelecionadoId)
+
+    const carregarConversa = () => {
+      if (buscando) return
+      buscando = true
+      fetch(`/api/blacksender/leads/${leadSelecionadoId}/conversa`)
+        .then((r) => (r.ok ? r.json() : { mensagens: [] }))
+        .then((d) => {
+          if (!ativo) return
+          const mensagens = mapMensagensBS((d.mensagens ?? []) as BlacksenderMensagem[], execucao)
+          setMensagensPorLead((prev) => ({ ...prev, [leadSelecionadoId]: mensagens }))
+        })
+        .catch(() => { /* mantém a última conversa carregada em caso de falha temporária */ })
+        .finally(() => { buscando = false })
+    }
+
+    void carregarConversa()
+    const intervalo = window.setInterval(carregarConversa, INTERVALO_ATUALIZACAO_MS)
+    return () => {
+      ativo = false
+      window.clearInterval(intervalo)
+    }
+  }, [aberto, leadSelecionadoId, ultimaExecucaoPorContato])
 
   // Um contato pode ter mais de uma execução (reentrou no fluxo) — agrega pela última atividade,
   // mesmo papel que a query "últimos 50 leads" cumpre no lado SendPulse.

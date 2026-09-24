@@ -504,6 +504,14 @@ export interface BlacksenderFlow {
   bruto: unknown
 }
 
+export interface BlacksenderNumeroResumo {
+  leadsHoje: number
+  leadsPorDia: Array<{ data: string; total: number }>
+  primeiroLeadEm: string | null
+  ultimoLeadEm: string | null
+  funis: number
+}
+
 /** Número (whatsapp_channels) do Black Sender, mesmo princípio de BlacksenderLead. `bruto` nunca
  * tem access_token/meta_app_secret — filtrado na origem (ver blacksender-bridge/src/poller.ts). */
 export interface BlacksenderCanal {
@@ -520,6 +528,10 @@ export interface BlacksenderCanal {
   qualityRating: string | null
   fotoUrl: string | null
   criadoEmOrigem: string | null
+  /** Primeira vez que este canal foi visto pelo bridge (não é a data de criação no Black Sender). */
+  primeiroVistoEm?: string | null
+  /** Último heartbeat/evento recebido do bridge; continua no banco mesmo se o canal cair. */
+  ultimoVistoEm?: string | null
   recebidoEm: string
   bruto: unknown
 }

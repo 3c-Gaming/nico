@@ -291,6 +291,8 @@ export const blacksenderCanais = pgTable('blacksender_canais', {
   qualityRating: text('quality_rating'),
   fotoUrl: text('foto_url'),
   criadoEmOrigem: text('criado_em_origem'),
+  primeiroVistoEm: text('primeiro_visto_em'),
+  ultimoVistoEm: text('ultimo_visto_em'),
   recebidoEm: text('recebido_em').notNull(),
   bruto: jsonb('bruto'),
 })

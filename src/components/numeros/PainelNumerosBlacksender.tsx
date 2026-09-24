@@ -1,19 +1,17 @@
 'use client'
 
-// Seção enxuta pros números (canais WhatsApp) da Black Sender, ao lado dos bots SendPulse na
-// tela de Números — mesmo princípio do painel de Funis Black Sender: self-contained, não tenta
-// encaixar no pipeline de NumeroSendpulse/monitoramento (bot-test, aquecimento) que é 100%
-// SendPulse. "Teste" de saúde aqui não precisa do esquema de bot-test (mandar ping e esperar
-// resposta) — já temos a última mensagem que o PRÓPRIO número mandou (outbound), então "tá vivo"
-// = mandou mensagem recentemente. Editar o número em si continua sendo no painel da Black Sender.
-//
-// Fixar/desafixar mostra o número no grid "Números Em Atividade" da home, junto com os bots
-// SendPulse (ver CardNumeroBlacksender) — não numa seção própria aqui.
+// Seção dos números (canais WhatsApp) da Black Sender na tela de Números. O relatório usa
+// flow_runs/leads persistidos no banco, então um número que cai do bridge continua aparecendo
+// com o último estado conhecido e o histórico de aquecimento.
 
-import { useState, useEffect, useSyncExternalStore } from 'react'
-import { Layers, Pin } from 'lucide-react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { BarChart3, Layers, Pin } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
 import { getState, togglePinNumero } from '@/lib/store'
-import type { BlacksenderCanal } from '@/types'
+import type { BlacksenderCanal, BlacksenderNumeroResumo } from '@/types'
+
+const INTERVALO_ATUALIZACAO_MS = 15_000
+const LIMITE_SEM_SINAL_MS = 5 * 60_000
 
 // getState().pinnedNumeros é mutado in-place (push/splice, ver togglePinNumero) — a referência do
 // array nunca muda, só o conteúdo, então o snapshot do useSyncExternalStore precisa ser um valor
@@ -39,8 +37,42 @@ const QUALITY_LABEL: Record<string, string> = {
   RED: 'Baixa',
 }
 
-interface CanalComAtividade extends BlacksenderCanal {
+interface CanalComAtividade extends BlacksenderCanal, BlacksenderNumeroResumo {
   ultimaMensagemEnviada: { conteudo: string | null; criadoEmOrigem: string } | null
+}
+
+function dataValida(iso: string | null | undefined): Date | null {
+  if (!iso) return null
+  const data = new Date(iso)
+  return Number.isNaN(data.getTime()) ? null : data
+}
+
+function formatarDataHora(iso: string | null | undefined): string {
+  const data = dataValida(iso)
+  if (!data) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(data)
+}
+
+function formatarDataCurta(iso: string): string {
+  // Datas YYYY-MM-DD não têm horário; usar meio-dia evita que o UTC apareça como dia anterior.
+  const data = dataValida(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso)
+  if (!data) return iso
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(data)
+}
+
+function tempoRelativo(iso: string | null | undefined): { texto: string; cor: string } {
+  const data = dataValida(iso)
+  if (!data) return { texto: '—', cor: 'text-[var(--text-muted)]' }
+  const diffMs = Date.now() - data.getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1) return { texto: 'agora', cor: 'text-green-500' }
+  if (diffMin < 60) return { texto: `há ${diffMin}min`, cor: 'text-green-500' }
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return { texto: `há ${diffH}h`, cor: 'text-amber-400' }
+  const diffD = Math.floor(diffH / 24)
+  return { texto: `há ${diffD}d`, cor: 'text-[var(--text-muted)]' }
 }
 
 function StatusSaude({ canal }: { canal: BlacksenderCanal }) {
@@ -60,39 +92,170 @@ function QualityBadge({ rating }: { rating: string | null }) {
   return <span className={`text-xs font-medium ${cor}`}>{label}</span>
 }
 
-function tempoRelativo(iso: string): { texto: string; cor: string } {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const diffMin = Math.floor(diffMs / 60_000)
-  if (diffMin < 1) return { texto: 'agora', cor: 'text-green-500' }
-  if (diffMin < 60) return { texto: `há ${diffMin}min`, cor: 'text-green-500' }
-  const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return { texto: `há ${diffH}h`, cor: 'text-amber-400' }
-  const diffD = Math.floor(diffH / 24)
-  return { texto: `há ${diffD}d`, cor: 'text-[var(--text-muted)]' }
+function StatusNumero({ canal, agoraMs }: { canal: CanalComAtividade; agoraMs: number | null }) {
+  const ultimoVisto = dataValida(canal.ultimoVistoEm ?? canal.recebidoEm)
+  const semSinal = !!ultimoVisto && agoraMs !== null && agoraMs - ultimoVisto.getTime() > LIMITE_SEM_SINAL_MS
+  const ativo = canal.status === 'active' && canal.healthStatus === 'available' && !semSinal
+  const inativo = canal.status === 'inactive' || canal.healthStatus === 'blocked' || canal.healthStatus === 'unavailable'
+
+  if (ativo) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-500" title={formatarDataHora(canal.ultimoVistoEm ?? canal.recebidoEm)}>
+        <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+        Ativo
+      </span>
+    )
+  }
+  if (semSinal) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400" title={`Sem novo heartbeat desde ${formatarDataHora(canal.ultimoVistoEm ?? canal.recebidoEm)}`}>
+        <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+        Sem sinal
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-500" title={canal.healthReason ?? formatarDataHora(canal.ultimoVistoEm ?? canal.recebidoEm)}>
+      <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+      {inativo ? 'Inativo' : 'Desconhecido'}
+    </span>
+  )
 }
 
-function UltimaMensagemEnviada({ dado }: { dado: CanalComAtividade['ultimaMensagemEnviada'] }) {
-  if (!dado) return <span className="text-xs text-[var(--text-muted)]/40">Nunca enviou</span>
-  const { texto, cor } = tempoRelativo(dado.criadoEmOrigem)
+function LeadsRecentes({ dados }: { dados: Array<{ data: string; total: number }> }) {
+  if (dados.length === 0) return <span className="text-xs text-[var(--text-muted)]/50">—</span>
+  const recentes = dados.slice(-7)
   return (
-    <span className={`text-xs font-medium ${cor}`} title={dado.conteudo ?? undefined}>
-      {texto}
+    <span
+      className="font-mono text-[11px] text-[var(--text-secondary)] whitespace-nowrap"
+      title={dados.map((d) => `${formatarDataCurta(d.data)}: ${d.total}`).join(' · ')}
+    >
+      {recentes.map((d) => `${formatarDataCurta(d.data)}: ${d.total}`).join(' · ')}
     </span>
+  )
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+      <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
+      <div className="mt-1 text-sm font-medium text-[var(--text-primary)]">{value}</div>
+    </div>
+  )
+}
+
+function DetalhesNumero({ canal, agoraMs, onClose }: { canal: CanalComAtividade; agoraMs: number | null; onClose: () => void }) {
+  const ultimoLead = tempoRelativo(canal.ultimoLeadEm)
+  const ultimaMensagem = canal.ultimaMensagemEnviada
+    ? tempoRelativo(canal.ultimaMensagemEnviada.criadoEmOrigem).texto
+    : 'Nunca enviou'
+  const diasReverso = canal.leadsPorDia.slice().reverse()
+
+  return (
+    <Modal open onClose={onClose} title={`Aquecimento · ${canal.nome || canal.telefone || canal.id}`} width="760px">
+      <div className="space-y-5">
+        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <StatusNumero canal={canal} agoraMs={agoraMs} />
+          <span className="text-[var(--text-muted)]">·</span>
+          <span className="font-mono">{canal.telefone || 'sem número'}</span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <InfoCard label="Adicionado ao bridge" value={formatarDataHora(canal.primeiroVistoEm ?? canal.criadoEmOrigem)} />
+          <InfoCard label="Primeiro lead" value={formatarDataHora(canal.primeiroLeadEm)} />
+          <InfoCard label="Leads hoje" value={String(canal.leadsHoje)} />
+          <InfoCard label="Funis observados" value={String(canal.funis)} />
+          <InfoCard label="Último lead" value={ultimoLead.texto} />
+          <InfoCard label="Última msg enviada" value={ultimaMensagem} />
+          <InfoCard label="Último sinal do bridge" value={formatarDataHora(canal.ultimoVistoEm ?? canal.recebidoEm)} />
+          <InfoCard label="Provedor" value={canal.provedor || '—'} />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Leads por dia</h3>
+            <span className="text-[11px] text-[var(--text-muted)]">{canal.leadsPorDia.length} dia(s) registrado(s)</span>
+          </div>
+          <p className="mb-2 text-[11px] text-[var(--text-muted)]">
+            Lead = contato distinto que entrou em um flow run; reentrada no mesmo dia conta uma vez.
+          </p>
+          {canal.leadsPorDia.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-[var(--border)] p-6 text-center text-xs text-[var(--text-muted)]">
+              Nenhum lead registrado para este número.
+            </p>
+          ) : (
+            <div className="max-h-80 overflow-y-auto rounded-lg border border-[var(--border)]">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-[var(--bg-elevated)]">
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left px-3 py-2 text-[11px] font-medium text-[var(--text-muted)]">Data</th>
+                    <th className="text-right px-3 py-2 text-[11px] font-medium text-[var(--text-muted)]">Leads</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diasReverso.map((linha) => (
+                    <tr key={linha.data} className="border-b border-[var(--border)] last:border-0">
+                      <td className="px-3 py-2 font-mono text-xs text-[var(--text-secondary)]">{formatarDataCurta(linha.data)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-sm font-semibold text-[var(--text-primary)]">{linha.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-3 text-xs">
+          <div className="flex items-center justify-between gap-2"><span className="text-[var(--text-muted)]">Saúde</span><StatusSaude canal={canal} /></div>
+          <div className="flex items-center justify-between gap-2"><span className="text-[var(--text-muted)]">Qualidade</span><QualityBadge rating={canal.qualityRating} /></div>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
 export function PainelNumerosBlacksender() {
   const [canais, setCanais] = useState<CanalComAtividade[] | null>(null)
+  const [canalSelecionadoId, setCanalSelecionadoId] = useState<string | null>(null)
+  const [agoraMs, setAgoraMs] = useState<number | null>(null)
+  const [erroAtualizacao, setErroAtualizacao] = useState(false)
 
   useEffect(() => {
-    fetch('/api/blacksender/canais')
-      .then((r) => (r.ok ? r.json() : { canais: [] }))
-      .then((d) => setCanais((d.canais ?? []).filter((c: CanalComAtividade) => c.status === 'active')))
-      .catch(() => setCanais([]))
+    let ativo = true
+    let buscando = false
+    const carregar = () => {
+      if (buscando) return
+      buscando = true
+      setAgoraMs(Date.now())
+      fetch('/api/blacksender/canais')
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          return r.json()
+        })
+        .then((d) => {
+          if (!ativo) return
+          setErroAtualizacao(false)
+          setCanais(d.canais ?? [])
+        })
+        .catch(() => {
+          // Uma falha temporória não pode apagar o histórico que já está em tela.
+          if (ativo) setErroAtualizacao(true)
+        })
+        .finally(() => { buscando = false })
+    }
+    void carregar()
+    const intervalo = window.setInterval(carregar, INTERVALO_ATUALIZACAO_MS)
+    return () => {
+      ativo = false
+      window.clearInterval(intervalo)
+    }
   }, [])
 
   usePinnedNumerosChave()
   const pinnedNumeros = getState().pinnedNumeros
+  const canalSelecionado = canalSelecionadoId
+    ? canais?.find((canal) => canal.id === canalSelecionadoId) ?? null
+    : null
 
   if (canais !== null && canais.length === 0) return null
 
@@ -104,6 +267,11 @@ export function PainelNumerosBlacksender() {
           Números — Black Sender
           {canais && <span className="text-xs font-normal text-[var(--text-muted)]">{canais.length}</span>}
         </h2>
+        {erroAtualizacao ? (
+          <span className="text-[11px] text-red-400">Falha ao atualizar — mostrando o último histórico</span>
+        ) : (
+          <span className="text-[11px] text-[var(--text-muted)]">Atualiza a cada 15s</span>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -111,45 +279,72 @@ export function PainelNumerosBlacksender() {
           <thead>
             <tr className="border-b border-[var(--glass-border)]">
               <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Nome / Número</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Provedor</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Saúde</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Qualidade da conta no WhatsApp Business — cai se tiver muito bloqueio/denúncia">Qualidade</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Última mensagem que o próprio número enviou — se está mandando, tá vivo">Última msg enviada</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Status</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]" title="Primeira vez que o canal foi visto pelo bridge">Adicionado</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">1º lead</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Hoje</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Leads por dia</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Funis</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Último lead</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-muted)]">Qualidade</th>
               <th className="text-right py-3 px-3 text-xs font-medium text-[var(--text-muted)]"></th>
             </tr>
           </thead>
           <tbody>
             {canais === null ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-xs text-[var(--text-muted)]">Carregando...</td>
+                <td colSpan={10} className="py-6 text-center text-xs text-[var(--text-muted)]">Carregando...</td>
               </tr>
             ) : (
               canais.map((c) => {
                 const pinado = pinnedNumeros.includes(c.id)
+                const ultimoLead = tempoRelativo(c.ultimoLeadEm)
                 return (
-                  <tr key={c.id} className="glass bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors">
+                  <tr
+                    key={c.id}
+                    onClick={() => setCanalSelecionadoId(c.id)}
+                    className="glass cursor-pointer bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hover:bg-[var(--glass-hover-bg)] transition-colors"
+                  >
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${c.status === 'active' ? 'bg-green-500' : 'bg-red-400'}`} />
                         <div>
                           <div className="font-medium text-[var(--text-primary)]">{c.nome || '—'}</div>
                           <div className="text-xs text-[var(--text-muted)] font-mono">{c.telefone || '—'}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-[var(--text-secondary)]">{c.provedor || '—'}</td>
-                    <td className="py-3 px-3"><StatusSaude canal={c} /></td>
+                    <td className="py-3 px-3"><StatusNumero canal={c} agoraMs={agoraMs} /></td>
+                    <td className="py-3 px-3 text-xs text-[var(--text-secondary)]" title={formatarDataHora(c.primeiroVistoEm ?? c.criadoEmOrigem)}>
+                      {formatarDataHora(c.primeiroVistoEm ?? c.criadoEmOrigem)}
+                    </td>
+                    <td className="py-3 px-3 text-xs text-[var(--text-secondary)]" title={formatarDataHora(c.primeiroLeadEm)}>
+                      {formatarDataHora(c.primeiroLeadEm)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-semibold text-[var(--text-primary)]">{c.leadsHoje}</td>
+                    <td className="py-3 px-3"><LeadsRecentes dados={c.leadsPorDia} /></td>
+                    <td className="py-3 px-3 text-right font-mono font-semibold text-[var(--text-primary)]">{c.funis}</td>
+                    <td className="py-3 px-3 text-xs font-medium" title={formatarDataHora(c.ultimoLeadEm)}>
+                      <span className={ultimoLead.cor}>{ultimoLead.texto}</span>
+                    </td>
                     <td className="py-3 px-3"><QualityBadge rating={c.qualityRating} /></td>
-                    <td className="py-3 px-3"><UltimaMensagemEnviada dado={c.ultimaMensagemEnviada} /></td>
                     <td className="py-3 px-3 text-right">
-                      <button
-                        onClick={() => togglePinNumero(c.id)}
-                        className="p-1 rounded transition-colors"
-                        style={{ color: pinado ? 'var(--d1)' : 'var(--text-muted)' }}
-                        title={pinado ? 'Desafixar da Home' : 'Fixar na Home'}
-                      >
-                        <Pin size={13} fill={pinado ? 'currentColor' : 'none'} />
-                      </button>
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setCanalSelecionadoId(c.id) }}
+                          className="p-1 rounded transition-colors text-[var(--text-muted)] hover:text-[var(--d1)] hover:bg-[var(--bg-elevated)]"
+                          title="Ver relatório de aquecimento"
+                        >
+                          <BarChart3 size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); togglePinNumero(c.id) }}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: pinado ? 'var(--d1)' : 'var(--text-muted)' }}
+                          title={pinado ? 'Desafixar da Home' : 'Fixar na Home'}
+                        >
+                          <Pin size={13} fill={pinado ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -158,6 +353,8 @@ export function PainelNumerosBlacksender() {
           </tbody>
         </table>
       </div>
+
+      {canalSelecionado && <DetalhesNumero canal={canalSelecionado} agoraMs={agoraMs} onClose={() => setCanalSelecionadoId(null)} />}
     </section>
   )
 }
