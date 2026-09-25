@@ -36,33 +36,46 @@ export function extrairCanalId(bruto: unknown): string | null {
   return typeof v === 'string' ? v : null
 }
 
-/** Funil de conversão da jornada (mesma visão do FunilConversaoChart do SendPulse, mas com tags
- * que vêm prontas da Black Sender em vez de configuradas manualmente): usa só a execução mais
- * recente de cada contato (assume `execucoes` já ordenado por criado_em_origem desc, como
- * listarBlacksenderFlowRuns devolve — o primeiro que aparece por contactId é o mais atual), soma
- * quantos contatos únicos já acumularam cada tag, e ordena por contagem desc (a etapa de entrada
- * sempre tem mais leads que as seguintes) com a posição média dentro da jornada como desempate.
- * `contatosFiltro`, se passado, restringe a contagem só a esses contactIds (ex: só os leads novos
- * de um dia específico) — sem isso, considera todos os contatos que já passaram pelo fluxo.
- * Aproximação: se o fluxo tiver ramos paralelos no mesmo nível (ex: duas CTAs diferentes saindo
- * do mesmo ponto), elas aparecem como etapas sequenciais em vez de lado a lado — sem grafo
- * completo do fluxo não dá pra distinguir os dois casos só pelas tags acumuladas. */
-export function calcularEstagiosTag(execucoes: BlacksenderFlowRun[], contatosFiltro?: Set<string>): EstagioFunil[] {
+function agregarTagsDaJornada(execucoes: BlacksenderFlowRun[], filtro?: Set<string>) {
   const contagemPorTag = new Map<string, number>()
   const somaPosicaoPorTag = new Map<string, number>()
   const contatosVistos = new Set<string>()
   for (const e of execucoes) {
     if (!e.contactId || contatosVistos.has(e.contactId)) continue
-    if (contatosFiltro && !contatosFiltro.has(e.contactId)) continue
+    if (filtro && !filtro.has(e.contactId)) continue
     contatosVistos.add(e.contactId)
     extrairTagsDaJornada(e.bruto).forEach((tag, posicao) => {
       contagemPorTag.set(tag, (contagemPorTag.get(tag) ?? 0) + 1)
       somaPosicaoPorTag.set(tag, (somaPosicaoPorTag.get(tag) ?? 0) + posicao)
     })
   }
-  return [...contagemPorTag.entries()]
-    .map(([tag, contagem]) => ({ tag, contagem, posicaoMedia: somaPosicaoPorTag.get(tag)! / contagem }))
-    .sort((a, b) => b.contagem - a.contagem || a.posicaoMedia - b.posicaoMedia)
+  return { contagemPorTag, somaPosicaoPorTag }
+}
+
+/** Funil de conversão da jornada (mesma visão do FunilConversaoChart do SendPulse, mas com tags
+ * que vêm prontas da Black Sender em vez de configuradas manualmente): usa só a execução mais
+ * recente de cada contato (assume `execucoes` já ordenado por criado_em_origem desc, como
+ * listarBlacksenderFlowRuns devolve — o primeiro que aparece por contactId é o mais atual), soma
+ * quantos contatos únicos já acumularam cada tag, e ordena por contagem desc (a etapa de entrada
+ * sempre tem mais leads que as seguintes) com a posição média dentro da jornada como desempate.
+ * `contatosFiltro`, se passado, restringe a CONTAGEM só a esses contactIds (ex: só os leads novos
+ * de um dia específico) — mas a lista de etapas (quais tags existem e em que ordem) sempre vem do
+ * fluxo inteiro. Sem essa separação, um filtro em que ninguém ainda alcançou as etapas finais (ex:
+ * leads de hoje que só chegaram até o meio da jornada) fazia essas etapas desaparecerem do funil
+ * em vez de aparecer zeradas.
+ * Aproximação: se o fluxo tiver ramos paralelos no mesmo nível (ex: duas CTAs diferentes saindo
+ * do mesmo ponto), elas aparecem como etapas sequenciais em vez de lado a lado — sem grafo
+ * completo do fluxo não dá pra distinguir os dois casos só pelas tags acumuladas. */
+export function calcularEstagiosTag(execucoes: BlacksenderFlowRun[], contatosFiltro?: Set<string>): EstagioFunil[] {
+  const geral = agregarTagsDaJornada(execucoes)
+  const filtrado = contatosFiltro ? agregarTagsDaJornada(execucoes, contatosFiltro) : geral
+  return [...geral.contagemPorTag.entries()]
+    .map(([tag]) => ({
+      tag,
+      contagem: filtrado.contagemPorTag.get(tag) ?? 0,
+      posicaoMedia: geral.somaPosicaoPorTag.get(tag)! / geral.contagemPorTag.get(tag)!,
+    }))
+    .sort((a, b) => geral.contagemPorTag.get(b.tag)! - geral.contagemPorTag.get(a.tag)! || a.posicaoMedia - b.posicaoMedia)
     .map(({ tag, contagem }) => ({ tag, contagem }))
 }
 
