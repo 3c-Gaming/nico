@@ -170,7 +170,7 @@ async function pollContatos() {
 async function pollFlowRuns() {
   const cursorAnterior = ultimoPollFlowRuns
   const runs = await rest<Record<string, unknown>>(
-    `flow_runs?select=*&updated_at=gt.${cursorAnterior}&order=updated_at.asc&limit=500`,
+    `flow_runs?select=*&updated_at=gt.${encodeURIComponent(cursorAnterior)}&order=updated_at.asc&limit=500`,
   )
   await encaminharEmLotes(runs, 'flow_runs_realtime', 'flow_runs', () => 'UPDATE')
   ultimoPollFlowRuns = maiorTimestamp(runs, ['updated_at'], cursorAnterior)
@@ -178,8 +178,9 @@ async function pollFlowRuns() {
 
 async function pollConversas() {
   const cursorAnterior = ultimoPollConversas
+  const cursorCodificado = encodeURIComponent(cursorAnterior)
   const conversas = await rest<Record<string, unknown>>(
-    `conversations?select=*&or=(created_at.gt.${cursorAnterior},last_message_at.gt.${cursorAnterior})&order=created_at.asc&limit=500`,
+    `conversations?select=*&or=(created_at.gt.${cursorCodificado},last_message_at.gt.${cursorCodificado})&order=created_at.asc&limit=500`,
   )
   await encaminharEmLotes(conversas, 'conversas_realtime', 'conversations', () => 'UPDATE')
   ultimoPollConversas = maiorTimestamp(conversas, ['created_at', 'last_message_at'], cursorAnterior)
@@ -188,7 +189,7 @@ async function pollConversas() {
 async function pollMensagens() {
   const cursorAnterior = ultimoPollMensagens
   const mensagens = await rest<Record<string, unknown>>(
-    `messages?select=${CAMPOS_MENSAGEM}&created_at=gt.${cursorAnterior}&order=created_at.asc&limit=500`,
+    `messages?select=${CAMPOS_MENSAGEM}&created_at=gt.${encodeURIComponent(cursorAnterior)}&order=created_at.asc&limit=500`,
   )
   await encaminharEmLotes(mensagens, 'mensagens_realtime', 'messages', () => 'INSERT')
   ultimoPollMensagens = maiorTimestamp(mensagens, ['created_at'], cursorAnterior)
@@ -197,7 +198,7 @@ async function pollMensagens() {
 async function pollFlows() {
   const cursorAnterior = ultimoPollFlows
   const flows = await rest<Record<string, unknown>>(
-    `flows?select=*&updated_at=gt.${cursorAnterior}&order=updated_at.asc&limit=200`,
+    `flows?select=*&updated_at=gt.${encodeURIComponent(cursorAnterior)}&order=updated_at.asc&limit=200`,
   )
   await encaminharEmLotes(flows, 'flows_realtime', 'flows', () => 'UPDATE')
   ultimoPollFlows = maiorTimestamp(flows, ['updated_at'], cursorAnterior)
